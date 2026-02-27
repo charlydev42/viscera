@@ -16,7 +16,7 @@ public:
 private:
     juce::ToggleButton onToggle;
     ModSlider sizeKnob, revMixKnob;
-    juce::Slider dampKnob, widthKnob, pdlyKnob;
+    ModSlider dampKnob, widthKnob, pdlyKnob;
     juce::Label sizeLabel, dampLabel, widthLabel, pdlyLabel, revMixLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttach;

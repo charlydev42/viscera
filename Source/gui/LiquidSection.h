@@ -15,7 +15,7 @@ public:
 
 private:
     juce::ToggleButton onToggle;
-    juce::Slider rateKnob, toneKnob, feedKnob;
+    ModSlider rateKnob, toneKnob, feedKnob;
     ModSlider depthKnob, mixKnob;
     juce::Label rateLabel, depthLabel, toneLabel, feedLabel, mixLabel;
 

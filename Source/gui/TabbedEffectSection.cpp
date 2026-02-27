@@ -82,7 +82,7 @@ void TabbedEffectSection::paint(juce::Graphics& g)
     for (int i = 0; i < 4; ++i)
     {
         auto pb = panelBounds[i];
-        g.setColour(juce::Colour(VisceraLookAndFeel::kPanelColor).darker(0.15f));
+        g.setColour(juce::Colours::white);
         g.fillRoundedRectangle(pb.toFloat(), 3.0f);
 
         g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.5f));

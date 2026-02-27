@@ -13,14 +13,17 @@ ReverbSection::ReverbSection(juce::AudioProcessorValueTreeState& apvts)
     sizeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "REV_SIZE", sizeKnob);
 
+    dampKnob.initMod(apvts, bb::LFODest::RevDamp);
     setupKnob(dampKnob, dampLabel, "Damp");
     dampAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "REV_DAMP", dampKnob);
 
+    widthKnob.initMod(apvts, bb::LFODest::RevWidth);
     setupKnob(widthKnob, widthLabel, "Width");
     widthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "REV_WIDTH", widthKnob);
 
+    pdlyKnob.initMod(apvts, bb::LFODest::RevPdly);
     setupKnob(pdlyKnob, pdlyLabel, "PDly");
     pdlyAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "REV_PDLY", pdlyKnob);

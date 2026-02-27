@@ -20,6 +20,7 @@ public:
     static inline const bb::VoiceParams* voiceParamsPtr = nullptr;
 
     bb::LFODest getDest() const { return myDest; }
+    bool isMapped = false;  // true when at least one LFO targets this knob
 
     // Call after construction to enable LFO modulation overlay
     void initMod(juce::AudioProcessorValueTreeState& apvts, bb::LFODest dest)
@@ -100,9 +101,9 @@ public:
         }
 
         static const juce::Colour lfoColors[] = {
-            juce::Colour(0xFFE57373), // LFO1 — red
-            juce::Colour(0xFF8BC34A), // LFO2 — green
-            juce::Colour(0xFF64B5F6)  // LFO3 — blue
+            juce::Colour(0xFF8BC34A), // LFO1 — #8BC34A
+            juce::Colour(0xFF8BC34A), // LFO2 — #8BC34A
+            juce::Colour(0xFF8BC34A)  // LFO3 — #8BC34A
         };
 
         auto bounds = getLocalBounds().toFloat().reduced(1.0f);
@@ -123,7 +124,7 @@ public:
         float baseRotAngle = rotStart + proportion * rotRange;  // rotary-space
 
         // --- Couche 1: Range arcs (Serum-style, anchored to knob position) ---
-        float arcR = radius - 1.0f;
+        float arcR = radius - 3.0f;
 
         // Collect arc bounds for ghost tick clamping (in rotary space)
         float ghostClampMin = baseRotAngle;
@@ -184,7 +185,7 @@ public:
             float outerR = arcR + 2.0f;
             float cosA = std::cos(screenAngle);
             float sinA = std::sin(screenAngle);
-            g.setColour(juce::Colour(VisceraLookAndFeel::kKnobMarker).withAlpha(0.9f));
+            g.setColour(juce::Colour(0xFF909098).withAlpha(0.7f));
             g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
                        centre.x + cosA * outerR, centre.y + sinA * outerR, 2.0f);
         }
@@ -259,7 +260,26 @@ private:
     int ringDragSlot = -1;  // 0-3
     float ringDragStartAmt = 0.0f;
 
-    void timerCallback() override { repaint(); }
+    void timerCallback() override
+    {
+        // Update mapped flag
+        bool mapped = false;
+        if (statePtr && myDest != bb::LFODest::None)
+        {
+            for (int l = 0; l < 3 && !mapped; ++l)
+            {
+                auto pfx = "LFO" + juce::String(l + 1) + "_";
+                for (int s = 1; s <= 4 && !mapped; ++s)
+                {
+                    auto* raw = statePtr->getRawParameterValue(pfx + "DEST" + juce::String(s));
+                    if (raw && static_cast<int>(raw->load()) == static_cast<int>(myDest))
+                        mapped = true;
+                }
+            }
+        }
+        isMapped = mapped;
+        repaint();
+    }
 
     // --- Ring drag helpers ---
     bool hitTestRingDrag(juce::Point<float> pos)
@@ -371,6 +391,18 @@ private:
             case bb::LFODest::RubWarp:       return voiceParamsPtr->lfoModRubWarp.load(std::memory_order_relaxed);
             case bb::LFODest::RubMix:        return voiceParamsPtr->lfoModRubMix.load(std::memory_order_relaxed);
             case bb::LFODest::PEnvAmt:       return voiceParamsPtr->lfoModPEnvAmt.load(std::memory_order_relaxed);
+            case bb::LFODest::RevDamp:       return voiceParamsPtr->lfoModRevDamp.load(std::memory_order_relaxed);
+            case bb::LFODest::RevWidth:      return voiceParamsPtr->lfoModRevWidth.load(std::memory_order_relaxed);
+            case bb::LFODest::RevPdly:       return voiceParamsPtr->lfoModRevPdly.load(std::memory_order_relaxed);
+            case bb::LFODest::DlyDamp:       return voiceParamsPtr->lfoModDlyDamp.load(std::memory_order_relaxed);
+            case bb::LFODest::DlySpread:     return voiceParamsPtr->lfoModDlySpread.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqRate:       return voiceParamsPtr->lfoModLiqRate.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqTone:       return voiceParamsPtr->lfoModLiqTone.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqFeed:       return voiceParamsPtr->lfoModLiqFeed.load(std::memory_order_relaxed);
+            case bb::LFODest::RubTone:       return voiceParamsPtr->lfoModRubTone.load(std::memory_order_relaxed);
+            case bb::LFODest::RubStretch:    return voiceParamsPtr->lfoModRubStretch.load(std::memory_order_relaxed);
+            case bb::LFODest::RubFeed:       return voiceParamsPtr->lfoModRubFeed.load(std::memory_order_relaxed);
+            case bb::LFODest::Porta:         return voiceParamsPtr->lfoModPorta.load(std::memory_order_relaxed);
             default: return 0.0f;
         }
     }

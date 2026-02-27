@@ -18,10 +18,12 @@ DelaySection::DelaySection(juce::AudioProcessorValueTreeState& apvts)
     feedAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "DLY_FEED", feedKnob);
 
+    dampKnob.initMod(apvts, bb::LFODest::DlyDamp);
     setupKnob(dampKnob, dampLabel, "Damp");
     dampAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "DLY_DAMP", dampKnob);
 
+    spreadKnob.initMod(apvts, bb::LFODest::DlySpread);
     setupKnob(spreadKnob, spreadLabel, "Sprd");
     spreadAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "DLY_SPREAD", spreadKnob);

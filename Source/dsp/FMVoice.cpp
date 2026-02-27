@@ -76,6 +76,8 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     bool isMono = params.mono->load() > 0.5f;
     bool shouldRetrig = params.retrig->load() > 0.5f;
     float portaTime = params.porta ? params.porta->load() : 0.0f;
+    portaTime = juce::jlimit(0.0f, 1.0f, portaTime
+                + params.lfoModPorta.load(std::memory_order_relaxed));
 
     if (portaTime < 0.001f || currentFreq <= 0.0)
         currentFreq = noteFreqHz;

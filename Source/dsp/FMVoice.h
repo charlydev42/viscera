@@ -41,6 +41,18 @@ enum class LFODest : int {
     RubWarp,       // ±rubber warp
     RubMix,        // ±rubber mix
     PEnvAmt,       // ±pitch env amount
+    RevDamp,       // ±reverb damping
+    RevWidth,      // ±reverb width
+    RevPdly,       // ±reverb predelay
+    DlyDamp,       // ±delay damping
+    DlySpread,     // ±delay spread
+    LiqRate,       // ±liquid rate
+    LiqTone,       // ±liquid tone
+    LiqFeed,       // ±liquid feedback
+    RubTone,       // ±rubber tone
+    RubStretch,    // ±rubber stretch
+    RubFeed,       // ±rubber feedback
+    Porta,         // ±portamento time
     Count
 };
 
@@ -154,6 +166,18 @@ struct VoiceParams
     std::atomic<float> lfoModRubWarp  { 0.0f };
     std::atomic<float> lfoModRubMix   { 0.0f };
     std::atomic<float> lfoModPEnvAmt  { 0.0f };
+    std::atomic<float> lfoModRevDamp  { 0.0f };
+    std::atomic<float> lfoModRevWidth { 0.0f };
+    std::atomic<float> lfoModRevPdly  { 0.0f };
+    std::atomic<float> lfoModDlyDamp  { 0.0f };
+    std::atomic<float> lfoModDlySpread { 0.0f };
+    std::atomic<float> lfoModLiqRate  { 0.0f };
+    std::atomic<float> lfoModLiqTone  { 0.0f };
+    std::atomic<float> lfoModLiqFeed  { 0.0f };
+    std::atomic<float> lfoModRubTone  { 0.0f };
+    std::atomic<float> lfoModRubStretch { 0.0f };
+    std::atomic<float> lfoModRubFeed  { 0.0f };
+    std::atomic<float> lfoModPorta    { 0.0f };
 
     // Per-LFO unipolar peak (for arc scaling in GUI)
     std::atomic<float> lfoPeak[3]    { {1.0f}, {1.0f}, {1.0f} };

@@ -82,7 +82,7 @@ private:
 
     // Main page effect mini-controls (On/Off toggle + Mix knob per effect)
     juce::ToggleButton fxToggle[4];      // DLY, REV, LIQ, RUB
-    juce::Slider       fxMixKnob[4];
+    ModSlider          fxMixKnob[4];
     juce::Label        fxLabel[4];
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> fxToggleAttach[4];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fxMixAttach[4];
@@ -97,6 +97,8 @@ private:
     juce::Rectangle<int> mainSectionBounds[3];
     // Individual knob card rects for main page painting
     juce::Rectangle<int> macroCardBounds[6];
+    // White panel bounds for main page background
+    juce::Rectangle<int> mainPanelBounds;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VisceraEditor)
 };

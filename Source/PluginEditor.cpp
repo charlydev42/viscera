@@ -152,6 +152,13 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
             fxMixKnob[i].setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
             fxMixKnob[i].setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+            {
+                static const bb::LFODest fxMixDests[4] = {
+                    bb::LFODest::DlyMix, bb::LFODest::RevMix,
+                    bb::LFODest::LiqMix, bb::LFODest::RubMix
+                };
+                fxMixKnob[i].initMod(processor.apvts, fxMixDests[i]);
+            }
             addChildComponent(fxMixKnob[i]);
             fxMixAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
                 processor.apvts, fxDefs[i].mixId, fxMixKnob[i]);
@@ -389,11 +396,55 @@ void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bo
 
 void VisceraEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillAll(juce::Colours::white);
 
     if (!showAdvanced)
     {
-        // Main page: effects grid draws its own headers
+        // Main page: white panel with drop shadow matching knob style
+        auto panelArea = mainPanelBounds.toFloat();
+        if (! panelArea.isEmpty())
+        {
+            // Light from top-left → shadow falls bottom-right
+            juce::DropShadow panelShadow(juce::Colour(0x30000000), 8, { 3, 4 });
+            panelShadow.drawForRectangle(g, mainPanelBounds);
+
+            // White base
+            g.setColour(juce::Colours::white);
+            g.fillRoundedRectangle(panelArea, 6.0f);
+
+            // Subtle radial gradient — light top-left, slightly darker edges
+            {
+                g.saveState();
+                juce::Path clipPath;
+                clipPath.addRoundedRectangle(panelArea, 6.0f);
+                g.reduceClipRegion(clipPath);
+
+                float lx = panelArea.getX() + panelArea.getWidth() * 0.3f;
+                float ly = panelArea.getY() + panelArea.getHeight() * 0.25f;
+                float r = juce::jmax(panelArea.getWidth(), panelArea.getHeight()) * 0.75f;
+
+                juce::ColourGradient depth(juce::Colour(0x00000000), lx, ly,
+                                           juce::Colour(0x08000000), lx + r, ly + r,
+                                           true);
+                depth.addColour(0.6, juce::Colour(0x00000000));
+                g.setGradientFill(depth);
+                g.fillRect(panelArea);
+
+                g.restoreState();
+            }
+        }
+
+        // Drop shadow under the oval visualizer — same light direction, discrete
+        if (! mainSectionBounds[0].isEmpty())
+        {
+            juce::Path ovalPath;
+            ovalPath.addEllipse(mainSectionBounds[0].toFloat());
+            juce::DropShadow vizShadow(juce::Colour(0x28000000), 8, { 3, 4 });
+            vizShadow.drawForPath(g, ovalPath);
+        }
+
+
+
     }
     else
     {
@@ -451,6 +502,7 @@ void VisceraEditor::resized()
         // =============================================
         // MAIN (PERFORM) PAGE — Oval viz + macro knobs + FX controls around ellipse
         // =============================================
+        mainPanelBounds = area;
         int knobSize = 58;
         int fxKnobSize = 44;
         int labelH = 14;
@@ -507,7 +559,7 @@ void VisceraEditor::resized()
 
             // Toggle (no text): small On/Off above the knob
             fxToggle[i].setButtonText("");
-            fxToggle[i].setBounds(kx + fxKnobSize / 2 - 8, ky - 14, 16, 14);
+            fxToggle[i].setBounds(kx + fxKnobSize / 2 - 8, ky - 22, 16, 14);
             // Mix knob
             fxMixKnob[i].setBounds(kx, ky, fxKnobSize, fxKnobSize);
             // Label below knob

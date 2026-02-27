@@ -8,6 +8,7 @@ LiquidSection::LiquidSection(juce::AudioProcessorValueTreeState& apvts)
     onAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, "LIQ_ON", onToggle);
 
+    rateKnob.initMod(apvts, bb::LFODest::LiqRate);
     setupKnob(rateKnob, rateLabel, "Rate");
     rateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "LIQ_RATE", rateKnob);
@@ -17,10 +18,12 @@ LiquidSection::LiquidSection(juce::AudioProcessorValueTreeState& apvts)
     depthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "LIQ_DEPTH", depthKnob);
 
+    toneKnob.initMod(apvts, bb::LFODest::LiqTone);
     setupKnob(toneKnob, toneLabel, "Tone");
     toneAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "LIQ_TONE", toneKnob);
 
+    feedKnob.initMod(apvts, bb::LFODest::LiqFeed);
     setupKnob(feedKnob, feedLabel, "Feed");
     feedAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "LIQ_FEED", feedKnob);
