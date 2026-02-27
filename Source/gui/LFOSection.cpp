@@ -274,7 +274,12 @@ static const juce::StringArray kDestNames {
     "RevSize", "RevMix",
     "LiqDpth", "LiqMix",
     "RubWarp", "RubMix",
-    "PEnvAmt"
+    "PEnvAmt",
+    "RevDamp", "RevWdth", "RevPdly",
+    "DlyDamp", "DlySprd",
+    "LiqRate", "LiqTone", "LiqFeed",
+    "RubTone", "RubStr", "RubFeed",
+    "Porta"
 };
 
 // --- RefreshButton ---

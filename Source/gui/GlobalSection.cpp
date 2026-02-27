@@ -37,6 +37,7 @@ GlobalSection::GlobalSection(juce::AudioProcessorValueTreeState& apvts)
         apvts, "DISP_AMT", disperserKnob);
 
     // Portamento knob
+    portaKnob.initMod(apvts, bb::LFODest::Porta);
     portaKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     portaKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(portaKnob);

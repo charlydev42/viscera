@@ -1,9 +1,21 @@
-// VisceraLookAndFeel.cpp — Dark warm theme with beveled knobs
+// VisceraLookAndFeel.cpp — Dark warm theme with filmstrip knobs
 #include "VisceraLookAndFeel.h"
+#include "ModSlider.h"
+#include <BinaryData.h>
 
 VisceraLookAndFeel::VisceraLookAndFeel()
 {
-    // Couleurs globales JUCE — dark theme
+    // Load filmstrip knob images from binary data
+    knobVirgin = juce::ImageCache::getFromMemory(BinaryData::Knob_virgin_png,
+                                                  BinaryData::Knob_virgin_pngSize);
+    knobCircle = juce::ImageCache::getFromMemory(BinaryData::Knob_empty_circle_png,
+                                                  BinaryData::Knob_empty_circle_pngSize);
+    knobBlue   = juce::ImageCache::getFromMemory(BinaryData::Knob_Blue_png,
+                                                  BinaryData::Knob_Blue_pngSize);
+    knobCircleGreen = juce::ImageCache::getFromMemory(BinaryData::Knob_circle_green_png,
+                                                       BinaryData::Knob_circle_green_pngSize);
+
+    // Couleurs globales JUCE — light theme
     setColour(juce::ResizableWindow::backgroundColourId, juce::Colour(kBgColor));
     setColour(juce::Slider::textBoxTextColourId, juce::Colour(kTextColor));
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -11,50 +23,36 @@ VisceraLookAndFeel::VisceraLookAndFeel()
     setColour(juce::ComboBox::backgroundColourId, juce::Colour(kPanelColor));
     setColour(juce::ComboBox::textColourId, juce::Colour(kTextColor));
     setColour(juce::ComboBox::outlineColourId, juce::Colour(kToggleOff));
-    setColour(juce::PopupMenu::backgroundColourId, juce::Colour(kPanelColor));
+    setColour(juce::PopupMenu::backgroundColourId, juce::Colours::white);
     setColour(juce::PopupMenu::textColourId, juce::Colour(kTextColor));
     setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(kAccentColor));
+    setColour(juce::TextButton::textColourOffId, juce::Colour(kTextColor));
+    setColour(juce::TextButton::textColourOnId, juce::Colour(kTextColor));
+    setColour(juce::TextButton::buttonColourId, juce::Colours::transparentWhite);
 }
 
-// Dual-ring beveled knob with depth
+// Filmstrip knob — pick image based on slider type
 void VisceraLookAndFeel::drawRotarySlider(juce::Graphics& g,
     int x, int y, int width, int height,
-    float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
-    juce::Slider&)
+    float sliderPos, float /*rotaryStartAngle*/, float /*rotaryEndAngle*/,
+    juce::Slider& slider)
 {
-    float size = static_cast<float>(juce::jmin(width, height));
-    float margin = size * 0.1f;
-    float knobSize = size - margin * 2.0f;
+    // Mapped ModSliders use circle (white ring), others use circle green
+    auto* mod = dynamic_cast<ModSlider*>(&slider);
+    const auto& img = (mod && mod->isMapped) ? knobCircle : knobCircleGreen;
+    if (! img.isValid()) return;
 
-    float cx = static_cast<float>(x) + static_cast<float>(width)  * 0.5f;
-    float cy = static_cast<float>(y) + static_cast<float>(height) * 0.5f;
+    int frameH = img.getHeight() / kNumFrames;
+    int frameW = img.getWidth();
+    int frameIdx = juce::jlimit(0, kNumFrames - 1, juce::roundToInt(sliderPos * (kNumFrames - 1)));
 
-    float knobRadius = knobSize * 0.5f;
+    // Destination: square centered in bounds
+    int side = juce::jmin(width, height);
+    int dx = x + (width  - side) / 2;
+    int dy = y + (height - side) / 2;
 
-    // Outer ring (border) — darker than body
-    g.setColour(juce::Colour(kKnobColor).darker(0.2f));
-    g.fillEllipse(cx - knobRadius, cy - knobRadius, knobSize, knobSize);
-
-    // Inner fill — lighter knob body
-    float innerRadius = knobRadius - 2.0f;
-    g.setColour(juce::Colour(kKnobColor));
-    g.fillEllipse(cx - innerRadius, cy - innerRadius, innerRadius * 2.0f, innerRadius * 2.0f);
-
-    // Central concave circle — slightly darker
-    float centerRadius = knobRadius * 0.30f;
-    g.setColour(juce::Colour(kKnobColor).darker(0.1f));
-    g.fillEllipse(cx - centerRadius, cy - centerRadius, centerRadius * 2.0f, centerRadius * 2.0f);
-
-    // Marker line — from center circle edge to outer edge
-    float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
-    float cosA = std::cos(angle - juce::MathConstants<float>::halfPi);
-    float sinA = std::sin(angle - juce::MathConstants<float>::halfPi);
-    float markerInner = centerRadius;
-    float markerOuter = knobRadius - 2.0f;
-
-    g.setColour(juce::Colour(kKnobMarker));
-    g.drawLine(cx + cosA * markerInner, cy + sinA * markerInner,
-               cx + cosA * markerOuter, cy + sinA * markerOuter, 3.0f);
+    g.drawImage(img, dx, dy, side, side,
+                0, frameIdx * frameH, frameW, frameH);
 }
 
 // Toggle button : petit carré coloré

@@ -356,7 +356,12 @@ VisceraProcessor::createParameterLayout()
                                       "RevSize", "RevMix",
                                       "LiqDpth", "LiqMix",
                                       "RubWarp", "RubMix",
-                                      "PEnvAmt" };
+                                      "PEnvAmt",
+                                      "RevDamp", "RevWdth", "RevPdly",
+                                      "DlyDamp", "DlySprd",
+                                      "LiqRate", "LiqTone", "LiqFeed",
+                                      "RubTone", "RubStr", "RubFeed",
+                                      "Porta" };
 
         for (int n = 1; n <= 3; ++n)
         {
@@ -555,6 +560,30 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                         std::memory_order_relaxed);
         voiceParams.lfoModPEnvAmt.store(modSums[static_cast<int>(bb::LFODest::PEnvAmt)],
                                          std::memory_order_relaxed);
+        voiceParams.lfoModRevDamp.store(modSums[static_cast<int>(bb::LFODest::RevDamp)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModRevWidth.store(modSums[static_cast<int>(bb::LFODest::RevWidth)],
+                                          std::memory_order_relaxed);
+        voiceParams.lfoModRevPdly.store(modSums[static_cast<int>(bb::LFODest::RevPdly)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModDlyDamp.store(modSums[static_cast<int>(bb::LFODest::DlyDamp)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModDlySpread.store(modSums[static_cast<int>(bb::LFODest::DlySpread)],
+                                           std::memory_order_relaxed);
+        voiceParams.lfoModLiqRate.store(modSums[static_cast<int>(bb::LFODest::LiqRate)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModLiqTone.store(modSums[static_cast<int>(bb::LFODest::LiqTone)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModLiqFeed.store(modSums[static_cast<int>(bb::LFODest::LiqFeed)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModRubTone.store(modSums[static_cast<int>(bb::LFODest::RubTone)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModRubStretch.store(modSums[static_cast<int>(bb::LFODest::RubStretch)],
+                                            std::memory_order_relaxed);
+        voiceParams.lfoModRubFeed.store(modSums[static_cast<int>(bb::LFODest::RubFeed)],
+                                         std::memory_order_relaxed);
+        voiceParams.lfoModPorta.store(modSums[static_cast<int>(bb::LFODest::Porta)],
+                                       std::memory_order_relaxed);
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
@@ -568,8 +597,14 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                          + voiceParams.lfoModLiqDepth.load(std::memory_order_relaxed));
         float liqMix   = juce::jlimit(0.0f, 1.0f, liqMixParam->load()
                          + voiceParams.lfoModLiqMix.load(std::memory_order_relaxed));
-        liquidChorus.setParameters(liqRateParam->load(), liqDepth,
-                                   liqToneParam->load(), liqFeedParam->load(),
+        float liqRate = juce::jlimit(0.0f, 1.0f, liqRateParam->load()
+                       + voiceParams.lfoModLiqRate.load(std::memory_order_relaxed));
+        float liqTone = juce::jlimit(0.0f, 1.0f, liqToneParam->load()
+                        + voiceParams.lfoModLiqTone.load(std::memory_order_relaxed));
+        float liqFeed = juce::jlimit(0.0f, 1.0f, liqFeedParam->load()
+                        + voiceParams.lfoModLiqFeed.load(std::memory_order_relaxed));
+        liquidChorus.setParameters(liqRate, liqDepth,
+                                   liqTone, liqFeed,
                                    liqMix);
         liquidChorus.process(buffer.getWritePointer(0), buffer.getWritePointer(1), numSamples);
     }
@@ -581,8 +616,14 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                         + voiceParams.lfoModRubWarp.load(std::memory_order_relaxed));
         float rubMix  = juce::jlimit(0.0f, 1.0f, rubMixParam->load()
                         + voiceParams.lfoModRubMix.load(std::memory_order_relaxed));
-        rubberComb.setParameters(rubToneParam->load(), rubStretchParam->load(),
-                                 rubWarp, rubMix, rubFeedParam->load());
+        float rubTone = juce::jlimit(0.0f, 1.0f, rubToneParam->load()
+                       + voiceParams.lfoModRubTone.load(std::memory_order_relaxed));
+        float rubStretch = juce::jlimit(0.0f, 1.0f, rubStretchParam->load()
+                           + voiceParams.lfoModRubStretch.load(std::memory_order_relaxed));
+        float rubFeed = juce::jlimit(0.0f, 1.0f, rubFeedParam->load()
+                        + voiceParams.lfoModRubFeed.load(std::memory_order_relaxed));
+        rubberComb.setParameters(rubTone, rubStretch,
+                                 rubWarp, rubMix, rubFeed);
         rubberComb.process(buffer.getWritePointer(0), buffer.getWritePointer(1), numSamples);
     }
 
@@ -600,10 +641,14 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                         + voiceParams.lfoModDlyFeed.load(std::memory_order_relaxed));
         float dlyMix  = juce::jlimit(0.0f, 1.0f, dlyMixParam->load()
                         + voiceParams.lfoModDlyMix.load(std::memory_order_relaxed));
+        float dlyDamp   = juce::jlimit(0.0f, 1.0f, dlyDampParam->load()
+                          + voiceParams.lfoModDlyDamp.load(std::memory_order_relaxed));
+        float dlySpread = juce::jlimit(0.0f, 1.0f, dlySpreadParam->load()
+                          + voiceParams.lfoModDlySpread.load(std::memory_order_relaxed));
         stereoDelay.setParameters(dlyTime, dlyFeed,
-                                  dlyDampParam->load(), dlyMix,
+                                  dlyDamp, dlyMix,
                                   dlyPingParam->load() > 0.5f,
-                                  dlySpreadParam->load());
+                                  dlySpread);
         stereoDelay.process(buffer.getWritePointer(0), buffer.getWritePointer(1), numSamples);
     }
 
@@ -619,8 +664,14 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                         + voiceParams.lfoModRevSize.load(std::memory_order_relaxed));
         float revMix  = juce::jlimit(0.0f, 1.0f, revMixParam->load()
                         + voiceParams.lfoModRevMix.load(std::memory_order_relaxed));
-        plateReverb.setParameters(revSize, revDampParam->load(), revMix,
-                                  revWidthParam->load(), revPdlyParam->load());
+        float revDamp  = juce::jlimit(0.0f, 1.0f, revDampParam->load()
+                         + voiceParams.lfoModRevDamp.load(std::memory_order_relaxed));
+        float revWidth = juce::jlimit(0.0f, 1.0f, revWidthParam->load()
+                         + voiceParams.lfoModRevWidth.load(std::memory_order_relaxed));
+        float revPdly  = juce::jlimit(0.0f, 200.0f, revPdlyParam->load()
+                         + voiceParams.lfoModRevPdly.load(std::memory_order_relaxed) * 200.0f);
+        plateReverb.setParameters(revSize, revDamp, revMix,
+                                  revWidth, revPdly);
         plateReverb.process(buffer.getWritePointer(0), buffer.getWritePointer(1), numSamples);
     }
 

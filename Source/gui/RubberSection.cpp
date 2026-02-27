@@ -8,14 +8,17 @@ RubberSection::RubberSection(juce::AudioProcessorValueTreeState& apvts)
     onAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, "RUB_ON", onToggle);
 
+    toneKnob.initMod(apvts, bb::LFODest::RubTone);
     setupKnob(toneKnob, toneLabel, "Tone");
     toneAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "RUB_TONE", toneKnob);
 
+    stretchKnob.initMod(apvts, bb::LFODest::RubStretch);
     setupKnob(stretchKnob, stretchLabel, "Strch");
     stretchAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "RUB_STRETCH", stretchKnob);
 
+    feedKnob.initMod(apvts, bb::LFODest::RubFeed);
     setupKnob(feedKnob, feedLabel, "Feed");
     feedAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "RUB_FEED", feedKnob);

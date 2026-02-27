@@ -15,7 +15,7 @@ public:
 
 private:
     ModSlider volumeKnob, driveKnob, disperserKnob;
-    juce::Slider portaKnob;
+    ModSlider portaKnob;
     juce::Label volumeLabel, driveLabel, disperserLabel, portaLabel;
     juce::ToggleButton monoToggle, retrigToggle;
 

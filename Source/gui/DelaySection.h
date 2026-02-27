@@ -16,7 +16,7 @@ public:
 private:
     juce::ToggleButton onToggle, ppToggle;
     ModSlider timeKnob, feedKnob, dlyMixKnob;
-    juce::Slider dampKnob, spreadKnob;
+    ModSlider dampKnob, spreadKnob;
     juce::Label timeLabel, feedLabel, dampLabel, spreadLabel, dlyMixLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttach, ppAttach;

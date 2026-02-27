@@ -15,7 +15,7 @@ public:
 
 private:
     juce::ToggleButton onToggle;
-    juce::Slider toneKnob, stretchKnob, feedKnob;
+    ModSlider toneKnob, stretchKnob, feedKnob;
     ModSlider warpKnob, mixKnob;
     juce::Label toneLabel, stretchLabel, feedLabel, warpLabel, mixLabel;
 

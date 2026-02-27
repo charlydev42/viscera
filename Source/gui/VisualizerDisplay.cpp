@@ -62,10 +62,132 @@ void VisualizerDisplay::paint(juce::Graphics& g)
     clipPath.addEllipse(ellipse);
     g.reduceClipRegion(clipPath);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
-    g.fillAll();
+    // ======= Glass bubble — photorealistic, light top-left =======
 
+    float cx = ellipse.getCentreX();
+    float cy = ellipse.getCentreY();
+    float rx = ellipse.getWidth() * 0.5f;
+    float ry = ellipse.getHeight() * 0.5f;
+
+    // 1) Base — warm-white lit side, cool-grey shadow side
+    {
+        juce::ColourGradient base(juce::Colour(0xFFFEFEFF), cx - rx * 0.18f, cy - ry * 0.15f,
+                                  juce::Colour(0xFFE6E7ED), cx + rx * 0.55f, cy + ry * 0.55f,
+                                  true);
+        base.addColour(0.35, juce::Colour(0xFFFAFAFC));
+        base.addColour(0.65, juce::Colour(0xFFF2F2F6));
+        base.addColour(0.85, juce::Colour(0xFFEAEBF0));
+        g.setGradientFill(base);
+        g.fillEllipse(ellipse);
+    }
+
+    // 2) Fresnel rim darkening — glass edges reflect more (Schlick approx feel)
+    {
+        juce::ColourGradient fresnel(juce::Colour(0x00000000), cx, cy,
+                                     juce::Colour(0x0E000008), cx, cy + ry,
+                                     true);
+        fresnel.addColour(0.65, juce::Colour(0x00000000));
+        fresnel.addColour(0.82, juce::Colour(0x06000004));
+        g.setGradientFill(fresnel);
+        g.fillEllipse(ellipse);
+    }
+
+    // 3) Shadow hemisphere — cool-tinted shadow on bottom-right
+    {
+        juce::ColourGradient shadow(juce::Colour(0x00000000), cx - rx * 0.20f, cy - ry * 0.20f,
+                                    juce::Colour(0x14040610), cx + rx * 0.48f, cy + ry * 0.48f,
+                                    true);
+        shadow.addColour(0.50, juce::Colour(0x00000000));
+        shadow.addColour(0.75, juce::Colour(0x08020408));
+        g.setGradientFill(shadow);
+        g.fillEllipse(ellipse);
+    }
+
+    // 4) Warm light wash — broad, very soft from top-left
+    {
+        juce::ColourGradient warmWash(juce::Colour(0x0EFFFEF8), cx - rx * 0.38f, cy - ry * 0.38f,
+                                      juce::Colour(0x00FFFFFF), cx + rx * 0.20f, cy + ry * 0.20f,
+                                      true);
+        g.setGradientFill(warmWash);
+        g.fillEllipse(ellipse);
+    }
+
+    // --- Draw content (stereo viz) ---
     drawStereo(g, displayArea);
+
+    // 5) Primary specular — broad diffuse glow
+    {
+        float hlW = rx * 0.80f;
+        float hlH = ry * 0.32f;
+        float hlX = cx - rx * 0.55f;
+        float hlY = cy - ry * 0.78f;
+        juce::ColourGradient spec(juce::Colour(0x44FFFFFF), hlX + hlW * 0.36f, hlY + hlH * 0.2f,
+                                  juce::Colour(0x00FFFFFF), hlX + hlW * 0.52f, hlY + hlH * 1.3f,
+                                  false);
+        spec.addColour(0.25, juce::Colour(0x30FFFFFF));
+        spec.addColour(0.55, juce::Colour(0x10FFFFFF));
+        g.setGradientFill(spec);
+        g.fillEllipse(hlX, hlY, hlW, hlH);
+    }
+
+    // 6) Specular core — tight bright kernel, slightly off-center in the glow
+    {
+        float coreW = rx * 0.22f;
+        float coreH = ry * 0.08f;
+        float coreX = cx - rx * 0.34f - coreW * 0.5f;
+        float coreY = cy - ry * 0.58f - coreH * 0.5f;
+        juce::ColourGradient core(juce::Colour(0x5CFFFFFF), coreX + coreW * 0.5f, coreY + coreH * 0.4f,
+                                  juce::Colour(0x00FFFFFF), coreX + coreW * 0.5f, coreY + coreH * 1.6f,
+                                  false);
+        core.addColour(0.3, juce::Colour(0x38FFFFFF));
+        g.setGradientFill(core);
+        g.fillEllipse(coreX, coreY, coreW, coreH);
+    }
+
+    // 7) Edge catch — thin bright line wrapping the light-facing rim
+    {
+        juce::Path rimArc;
+        rimArc.addCentredArc(cx, cy, rx - 1.0f, ry - 1.0f, 0.0f,
+                             -2.3f, -0.5f, true);
+        juce::ColourGradient edgeCatch(juce::Colour(0x38FFFFFF), cx - rx, cy - ry * 0.5f,
+                                       juce::Colour(0x08FFFFFF), cx - rx * 0.2f, cy - ry,
+                                       false);
+        g.setGradientFill(edgeCatch);
+        g.strokePath(rimArc, juce::PathStrokeType(0.7f));
+    }
+
+    // 8) Secondary caustic — internal light bounce, bottom-right, warm-tinted
+    {
+        float c2W = rx * 0.16f;
+        float c2H = ry * 0.06f;
+        float c2X = cx + rx * 0.15f;
+        float c2Y = cy + ry * 0.48f;
+        juce::ColourGradient caustic(juce::Colour(0x0CFFFFF8), c2X + c2W * 0.5f, c2Y,
+                                     juce::Colour(0x00FFFFFF), c2X + c2W * 0.5f, c2Y + c2H * 1.5f,
+                                     false);
+        g.setGradientFill(caustic);
+        g.fillEllipse(c2X, c2Y, c2W, c2H);
+    }
+
+    // 9) Opposite rim catch — very faint light wrapping around the dark side
+    {
+        juce::Path wrapArc;
+        wrapArc.addCentredArc(cx, cy, rx - 1.0f, ry - 1.0f, 0.0f,
+                              0.8f, 2.0f, true);
+        g.setColour(juce::Colour(0x0AFFFFFF));
+        g.strokePath(wrapArc, juce::PathStrokeType(0.5f));
+    }
+
+    // 10) Full rim — very thin, almost invisible structure line
+    {
+        juce::ColourGradient rim(juce::Colour(0x30FFFFFF), ellipse.getX(), ellipse.getY(),
+                                 juce::Colour(0x10000008), ellipse.getRight(), ellipse.getBottom(),
+                                 false);
+        rim.addColour(0.35, juce::Colour(0x1CFFFFFF));
+        rim.addColour(0.65, juce::Colour(0x08A0A0A8));
+        g.setGradientFill(rim);
+        g.drawEllipse(ellipse.reduced(0.5f), 0.6f);
+    }
 }
 
 void VisualizerDisplay::drawScope(juce::Graphics& g, juce::Rectangle<int> area)
