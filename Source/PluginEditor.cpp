@@ -86,15 +86,22 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     addAndMakeVisible(algoLabel);
     updateAlgoLabel();
 
-    // Randomize button
-    randomBtn.setButtonText("?");
-    randomBtn.onClick = [this] { randomizeParams(); };
-    addAndMakeVisible(randomBtn);
+    // Wire randomize to PresetBrowser's ? button
+    presetBrowser.onRandomize = [this] { randomizeParams(); };
 
     // Page toggle button
     pageToggleBtn.setButtonText("Edit");
     pageToggleBtn.onClick = [this] { setPage(!showAdvanced); };
     addAndMakeVisible(pageToggleBtn);
+
+    // Keyboard toggle for main page
+    kbToggleBtn.setButtonText("KB");
+    kbToggleBtn.onClick = [this] {
+        showKeyboardOnMain = !showKeyboardOnMain;
+        keyboard.setVisible(showAdvanced || showKeyboardOnMain);
+        resized();
+    };
+    addAndMakeVisible(kbToggleBtn);
 
     // Macro knobs for main page
     {
@@ -103,9 +110,9 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
             { "VOLUME",      "Volume", bb::LFODest::Volume       },
             { "DRIVE",       "Drive",  bb::LFODest::Drive        },
             { "FILT_CUTOFF", "Cutoff", bb::LFODest::FilterCutoff },
-            { "FILT_RES",    "Res",    bb::LFODest::FilterRes    },
+            { "FILT_RES",    "Reso",   bb::LFODest::FilterRes    },
             { "DISP_AMT",    "Fold",   bb::LFODest::FoldAmt      },
-            { "CAR_NOISE",   "Noise",  bb::LFODest::CarNoise     },
+            { "CAR_SPREAD",  "Spread", bb::LFODest::CarSpread    },
         };
 
         for (int i = 0; i < 6; ++i)
@@ -126,12 +133,48 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         }
     }
 
+    // Effect mini-controls for main page (On/Off toggle + Mix knob)
+    {
+        struct FxDef { const char* onId; const char* mixId; const char* name; };
+        const FxDef fxDefs[4] = {
+            { "DLY_ON", "DLY_MIX", "Delay" },
+            { "REV_ON", "REV_MIX", "Reverb" },
+            { "LIQ_ON", "LIQ_MIX", "Liquid" },
+            { "RUB_ON", "RUB_MIX", "Rubber" },
+        };
+
+        for (int i = 0; i < 4; ++i)
+        {
+            fxToggle[i].setButtonText(fxDefs[i].name);
+            addChildComponent(fxToggle[i]);
+            fxToggleAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+                processor.apvts, fxDefs[i].onId, fxToggle[i]);
+
+            fxMixKnob[i].setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+            fxMixKnob[i].setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+            addChildComponent(fxMixKnob[i]);
+            fxMixAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+                processor.apvts, fxDefs[i].mixId, fxMixKnob[i]);
+
+            fxLabel[i].setText(fxDefs[i].name, juce::dontSendNotification);
+            fxLabel[i].setJustificationType(juce::Justification::centred);
+            fxLabel[i].setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
+            fxLabel[i].setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kAccentColor));
+            addChildComponent(fxLabel[i]);
+        }
+    }
+
     startTimerHz(5);
 
     setSize(920, 660);
 
     // Start on main (perform) page
     setPage(false);
+
+    // Load first preset so sound matches displayed name
+    // (done here after all attachments are created)
+    if (proc.getCurrentPresetIndex() == 0 && !proc.isUserPreset())
+        proc.loadPreset(0);
 }
 
 VisceraEditor::~VisceraEditor()
@@ -279,6 +322,7 @@ void VisceraEditor::setPage(bool advanced)
     pitchEnvSection.setVisible(advanced);
     shaperSection.setVisible(advanced);
     globalSection.setVisible(advanced);
+    logoImage.setVisible(advanced);
 
     // Main-only components
     for (int i = 0; i < 6; ++i)
@@ -286,12 +330,23 @@ void VisceraEditor::setPage(bool advanced)
         macroKnobs[i].setVisible(!advanced);
         macroLabels[i].setVisible(!advanced);
     }
+    for (int i = 0; i < 4; ++i)
+    {
+        fxToggle[i].setVisible(!advanced);
+        fxMixKnob[i].setVisible(!advanced);
+        fxLabel[i].setVisible(!advanced);
+    }
 
     // Visualizer only on main page
     visualizerDisplay.setVisible(!advanced);
 
-    // Effects: tabbed on main, stacked on edit
-    tabbedEffects.setStacked(advanced);
+    // Effects: hidden on main (we use mini-controls), stacked on edit
+    tabbedEffects.setVisible(advanced);
+    tabbedEffects.setLayout(TabbedEffectSection::Stacked);
+
+    // Keyboard: always on edit page, toggle on main page
+    keyboard.setVisible(advanced || showKeyboardOnMain);
+    kbToggleBtn.setVisible(!advanced);
 
     // Both pages: effects, preset, keyboard, logo, algo, randomize, toggle
 
@@ -338,8 +393,7 @@ void VisceraEditor::paint(juce::Graphics& g)
 
     if (!showAdvanced)
     {
-        // Minimal main page: no panel backgrounds, just the effects header
-        drawSectionHeader(g, mainSectionBounds[2], "Effects");
+        // Main page: effects grid draws its own headers
     }
     else
     {
@@ -359,31 +413,35 @@ void VisceraEditor::resized()
     auto area = getLocalBounds().reduced(4);
     titleLabel.setBounds(0, 0, 0, 0); // hidden
 
-    // === Top bar: [Logo] [< Algo >] [?] [Preset Browser] [Edit] ===
+    // === Top bar: [< Algo >] [Preset Browser (< combo > ? +)] [KB] [Edit] ===
     int barH = 26;
     int sp = 4;
     auto topBar = area.removeFromTop(barH);
 
-    logoImage.setBounds(topBar.removeFromLeft(36).reduced(1));
-    topBar.removeFromLeft(sp);
+    // Logo moved to centre column (advanced page)
 
     algoLeftBtn.setBounds(topBar.removeFromLeft(22));
     algoLabel.setBounds(topBar.removeFromLeft(58));
     algoRightBtn.setBounds(topBar.removeFromLeft(22));
     topBar.removeFromLeft(sp);
 
-    randomBtn.setBounds(topBar.removeFromLeft(22));
-    topBar.removeFromLeft(sp);
-
     pageToggleBtn.setBounds(topBar.removeFromRight(40));
     topBar.removeFromRight(sp);
+    if (!showAdvanced)
+    {
+        kbToggleBtn.setBounds(topBar.removeFromRight(28));
+        topBar.removeFromRight(sp);
+    }
 
     presetBrowser.setBounds(topBar);
     area.removeFromTop(4);
 
     // === Keyboard at bottom ===
-    keyboard.setBounds(area.removeFromBottom(50));
-    area.removeFromBottom(4);
+    if (showAdvanced || showKeyboardOnMain)
+    {
+        keyboard.setBounds(area.removeFromBottom(50));
+        area.removeFromBottom(4);
+    }
 
     int gap = 6;
     int headerH = 16;
@@ -391,44 +449,69 @@ void VisceraEditor::resized()
     if (!showAdvanced)
     {
         // =============================================
-        // MAIN (PERFORM) PAGE — Dashboard: large viz left, stacked knobs right
+        // MAIN (PERFORM) PAGE — Oval viz + macro knobs + FX controls around ellipse
         // =============================================
-        int effectsH = 80;
-        int cardGap = 6;
+        int knobSize = 58;
+        int fxKnobSize = 44;
+        int labelH = 14;
 
-        // Effects strip: full width at bottom
-        auto effectsStrip = area.removeFromBottom(effectsH);
-        mainSectionBounds[2] = effectsStrip;
-        tabbedEffects.setBounds(effectsStrip.withTrimmedTop(headerH).reduced(4, 0));
+        // Oval visualizer centered — fills most of the screen
+        int vizW = static_cast<int>(area.getWidth() * 0.72f);
+        int vizH = static_cast<int>(area.getHeight() * 0.68f);
+        auto vizBounds = area.withSizeKeepingCentre(vizW, vizH);
+        vizBounds.translate(0, -30);
+        mainSectionBounds[0] = vizBounds;
+        visualizerDisplay.setBounds(vizBounds);
 
-        area.removeFromBottom(gap);
+        float cx = static_cast<float>(vizBounds.getCentreX());
+        float cy = static_cast<float>(vizBounds.getCentreY());
+        constexpr float pi = juce::MathConstants<float>::pi;
 
-        // Split remaining area: 70% left (visualizer), 30% right (knob cards)
-        int leftW = static_cast<int>(area.getWidth() * 0.70f);
-        auto leftCol = area.removeFromLeft(leftW);
-        area.removeFromLeft(gap);
-        auto rightCol = area;
+        // --- Macro knobs: 3 left, 3 right (along sides of ellipse) ---
+        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.2f;
+        float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * 0.85f;
 
-        // Left: visualizer fills the column
-        mainSectionBounds[0] = leftCol;
-        visualizerDisplay.setBounds(leftCol.reduced(8));
+        // Left: Cutoff(2), Res(3), Spread(5)  |  Right: Drive(1), Fold(4), Volume(0)
+        float leftAngles[3]  = { 150.0f * pi / 180.0f, 180.0f * pi / 180.0f, 210.0f * pi / 180.0f };
+        float rightAngles[3] = {  30.0f * pi / 180.0f,   0.0f * pi / 180.0f, 330.0f * pi / 180.0f };
+        int leftIdx[3]  = { 2, 3, 5 };
+        int rightIdx[3] = { 1, 4, 0 };
 
-        // Right: 6 stacked knob cards
-        int cardH = (rightCol.getHeight() - 5 * cardGap) / 6;
-        for (int i = 0; i < 6; ++i)
+        auto placeKnob = [&](int idx, float angle)
         {
-            auto card = rightCol.removeFromTop(cardH);
-            macroCardBounds[i] = card;
+            int kx = static_cast<int>(cx + macroRx * std::cos(angle)) - knobSize / 2;
+            int ky = static_cast<int>(cy - macroRy * std::sin(angle)) - knobSize / 2;
+            macroKnobs[idx].setBounds(kx, ky, knobSize, knobSize);
+            macroLabels[idx].setBounds(kx - 6, ky + knobSize, knobSize + 12, labelH);
+            macroCardBounds[idx] = { kx, ky, knobSize, knobSize + labelH };
+        };
 
-            // Knob: card area minus bottom label strip, with padding
-            auto knobArea = card.withTrimmedBottom(14).reduced(6, 4);
-            macroKnobs[i].setBounds(knobArea);
+        for (int i = 0; i < 3; ++i)
+        {
+            placeKnob(leftIdx[i], leftAngles[i]);
+            placeKnob(rightIdx[i], rightAngles[i]);
+        }
 
-            // Label: bottom 14px of card
-            macroLabels[i].setBounds(card.getX(), card.getBottom() - 14, card.getWidth(), 14);
+        // --- Effect mini-controls: outer orbit, bottom arc ---
+        float fxRx = macroRx + 24.0f;
+        float fxRy = macroRy + 20.0f;
+        // 4 effects centered at bottom: ~252°, 264°, 276°, 288°
+        float fxAngles[4] = { 252.0f * pi / 180.0f, 264.0f * pi / 180.0f,
+                               276.0f * pi / 180.0f, 288.0f * pi / 180.0f };
 
-            if (i < 5)
-                rightCol.removeFromTop(cardGap);
+        for (int i = 0; i < 4; ++i)
+        {
+            float angle = fxAngles[i];
+            int kx = static_cast<int>(cx + fxRx * std::cos(angle)) - fxKnobSize / 2;
+            int ky = static_cast<int>(cy - fxRy * std::sin(angle)) - fxKnobSize / 2;
+
+            // Toggle (no text): small On/Off above the knob
+            fxToggle[i].setButtonText("");
+            fxToggle[i].setBounds(kx + fxKnobSize / 2 - 8, ky - 14, 16, 14);
+            // Mix knob
+            fxMixKnob[i].setBounds(kx, ky, fxKnobSize, fxKnobSize);
+            // Label below knob
+            fxLabel[i].setBounds(kx - 8, ky + fxKnobSize, fxKnobSize + 16, labelH);
         }
     }
     else
@@ -455,10 +538,22 @@ void VisceraEditor::resized()
             section.setBounds(block.withTrimmedTop(headerH).reduced(4, 0));
         };
 
+        // === CENTRE COLUMN heights (computed first so left can align) ===
+        int vibratoH = 70;
+        int filterH = 80;
+        int pitchH = 150;
+        int logoH = 80;
+        int lfoH = totalH - vibratoH - filterH - pitchH - logoH - gap * 4;
+
+        // Filter top Y in centre column = vibratoH + gap + lfoH + gap + logoH + gap
+        int filterTopOffset = vibratoH + gap + lfoH + gap + logoH + gap;
+
         // === LEFT COLUMN: Mod1 → Mod2 → Carrier (FM chain) ===
-        // Mod sections are the reference: headerH + 6 + 28 + 2 + 48 + 2 + 48 + 4 = 154
+        // Carrier should align its top with filter in centre column
         {
-            int modH = 154;
+            // mod1 + gap + mod2 + gap = filterTopOffset → carrier aligns with filter
+            int modH = (filterTopOffset - gap * 2) / 2;
+
             placeSection(leftCol, modH, mod1Section, 0);
             leftCol.removeFromTop(gap);
             placeSection(leftCol, modH, mod2Section, 1);
@@ -467,16 +562,14 @@ void VisceraEditor::resized()
             carrierSection.setBounds(leftCol.withTrimmedTop(headerH).reduced(4, 0));
         }
 
-        // === CENTRE COLUMN: Vibrato | LFO Assign | Filter + Pitch Env ===
+        // === CENTRE COLUMN: Vibrato | LFO Assign | Logo | Filter + Pitch Env ===
         {
-            int vibratoH = 70;
-            int filterH = 80;
-            int pitchH = 150;
-            int lfoH = totalH - vibratoH - filterH - pitchH - gap * 3;
 
             placeSection(centreCol, vibratoH, modMatrixSection, 3);
             centreCol.removeFromTop(gap);
             placeSection(centreCol, lfoH, lfoSection, 4);
+            centreCol.removeFromTop(gap);
+            logoImage.setBounds(centreCol.removeFromTop(logoH));
             centreCol.removeFromTop(gap);
             placeSection(centreCol, filterH, filterSection, 5);
             centreCol.removeFromTop(gap);

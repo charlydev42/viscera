@@ -29,6 +29,27 @@ ReverbSection::ReverbSection(juce::AudioProcessorValueTreeState& apvts)
     setupKnob(revMixKnob, revMixLabel, "Mix");
     revMixAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "REV_MIX", revMixKnob);
+
+    startTimerHz(5);
+}
+
+void ReverbSection::timerCallback()
+{
+    auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
+        if (knob.isMouseOverOrDragging())
+            label.setText(juce::String(static_cast<int>(knob.getValue() * 100)) + "%", juce::dontSendNotification);
+        else
+            label.setText(name, juce::dontSendNotification);
+    };
+    showPct(sizeKnob, sizeLabel, "Size");
+    showPct(dampKnob, dampLabel, "Damp");
+    showPct(widthKnob, widthLabel, "Width");
+    showPct(revMixKnob, revMixLabel, "Mix");
+
+    if (pdlyKnob.isMouseOverOrDragging())
+        pdlyLabel.setText(juce::String(static_cast<int>(pdlyKnob.getValue())) + "ms", juce::dontSendNotification);
+    else
+        pdlyLabel.setText("PDly", juce::dontSendNotification);
 }
 
 void ReverbSection::setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text)

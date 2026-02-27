@@ -4,12 +4,14 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
 
-class FilterSection : public juce::Component
+class FilterSection : public juce::Component,
+                      private juce::Timer
 {
 public:
     FilterSection(juce::AudioProcessorValueTreeState& apvts);
     ~FilterSection() override = default;
     void resized() override;
+    void timerCallback() override;
 
 private:
     juce::ToggleButton onToggle;

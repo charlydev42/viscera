@@ -63,8 +63,7 @@ private:
     juce::StringArray algoNames;
     void updateAlgoLabel();
 
-    // Randomize button
-    juce::TextButton randomBtn;
+    // Randomize logic (wired to PresetBrowser's ? button)
     void randomizeParams();
 
     // Two-page UI state
@@ -72,10 +71,21 @@ private:
     juce::TextButton pageToggleBtn;
     void setPage(bool advanced);
 
-    // Main page macro knobs (Volume, Drive, Cutoff, Res, Fold, Noise)
+    // Main page keyboard toggle
+    bool showKeyboardOnMain = false;
+    juce::TextButton kbToggleBtn;
+
+    // Main page macro knobs (Volume, Drive, Cutoff, Res, Fold, Spread)
     ModSlider macroKnobs[6];
     juce::Label macroLabels[6];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> macroAttach[6];
+
+    // Main page effect mini-controls (On/Off toggle + Mix knob per effect)
+    juce::ToggleButton fxToggle[4];      // DLY, REV, LIQ, RUB
+    juce::Slider       fxMixKnob[4];
+    juce::Label        fxLabel[4];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> fxToggleAttach[4];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fxMixAttach[4];
 
     // Section header painting helper
     void drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bounds,

@@ -1,4 +1,4 @@
-// TabbedEffectSection.cpp — Tabbed or stacked container for Delay/Reverb/Liquid/Rubber
+// TabbedEffectSection.cpp — Tabbed, stacked, or grid container for Delay/Reverb/Liquid/Rubber
 #include "TabbedEffectSection.h"
 #include "VisceraLookAndFeel.h"
 
@@ -25,24 +25,25 @@ TabbedEffectSection::TabbedEffectSection(juce::AudioProcessorValueTreeState& apv
     switchTab(0);
 }
 
-void TabbedEffectSection::setStacked(bool stacked)
+void TabbedEffectSection::setLayout(Layout layout)
 {
-    if (stackedMode == stacked) return;
-    stackedMode = stacked;
+    if (currentLayout == layout) return;
+    currentLayout = layout;
+    stackedMode = (layout == Stacked);
 
     for (int i = 0; i < 4; ++i)
-        tabButtons[i].setVisible(!stacked);
+        tabButtons[i].setVisible(layout == Tabbed);
 
-    if (stacked)
+    if (layout == Tabbed)
+    {
+        switchTab(activeTab);
+    }
+    else
     {
         delaySection.setVisible(true);
         reverbSection.setVisible(true);
         liquidSection.setVisible(true);
         rubberSection.setVisible(true);
-    }
-    else
-    {
-        switchTab(activeTab);
     }
 
     resized();
@@ -73,10 +74,10 @@ void TabbedEffectSection::switchTab(int tab)
 
 void TabbedEffectSection::paint(juce::Graphics& g)
 {
-    if (!stackedMode) return;
+    if (currentLayout == Tabbed) return;
 
     static const char* names[] = { "Delay", "Reverb", "Liquid", "Rubber" };
-    int headerH = 14;
+    int headerH = 12;
 
     for (int i = 0; i < 4; ++i)
     {
@@ -89,7 +90,7 @@ void TabbedEffectSection::paint(juce::Graphics& g)
 
         g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
-        g.drawText(names[i], pb.getX(), pb.getY() + 1, pb.getWidth(), headerH,
+        g.drawText(names[i], pb.getX(), pb.getY(), pb.getWidth(), headerH,
                    juce::Justification::centred);
     }
 }
@@ -99,10 +100,10 @@ void TabbedEffectSection::resized()
     auto area = getLocalBounds();
     juce::Component* sections[] = { &delaySection, &reverbSection, &liquidSection, &rubberSection };
 
-    if (stackedMode)
+    if (currentLayout == Stacked)
     {
-        int gap = 3;
-        int headerH = 14;
+        int gap = 1;
+        int headerH = 12;
         int panelH = (area.getHeight() - gap * 3) / 4;
 
         for (int i = 0; i < 4; ++i)
@@ -111,6 +112,26 @@ void TabbedEffectSection::resized()
             panelBounds[i] = panel;
             sections[i]->setBounds(panel.withTrimmedTop(headerH).reduced(2, 0));
             if (i < 3) area.removeFromTop(gap);
+        }
+    }
+    else if (currentLayout == Grid)
+    {
+        // 2x2 grid: top row [Delay | Reverb], bottom row [Liquid | Rubber]
+        int headerH = 12;
+        int gap = 3;
+        int rowH = (area.getHeight() - gap) / 2;
+        int colW = (area.getWidth() - gap) / 2;
+
+        for (int i = 0; i < 4; ++i)
+        {
+            int col = i % 2;
+            int row = i / 2;
+            auto panel = juce::Rectangle<int>(
+                area.getX() + col * (colW + gap),
+                area.getY() + row * (rowH + gap),
+                colW, rowH);
+            panelBounds[i] = panel;
+            sections[i]->setBounds(panel.withTrimmedTop(headerH).reduced(2, 0));
         }
     }
     else

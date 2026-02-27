@@ -16,6 +16,7 @@ VisceraProcessor::VisceraProcessor()
     synth.addSound(new bb::FMSound());
     auto* voice = new bb::FMVoice(voiceParams);
     synth.addVoice(voice);
+
 }
 
 // --- Cacher les pointeurs atomiques vers les paramètres ---
@@ -257,7 +258,7 @@ VisceraProcessor::createParameterLayout()
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("pitchenv", "Pitch Envelope", "|");
         g->addChild(std::make_unique<juce::AudioParameterBool>("PENV_ON", "Pitch Env On", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_AMT", "Pitch Env Amount",
-            juce::NormalisableRange<float>(-48.0f, 48.0f, 0.1f), 0.0f));
+            juce::NormalisableRange<float>(-96.0f, 96.0f, 0.1f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_A", "Pitch Env Attack",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.001f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_D", "Pitch Env Decay",
@@ -586,7 +587,12 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 
     // --- Post-synth FX: Delay (spatial) ---
-    if (dlyOnParam->load() > 0.5f && buffer.getNumChannels() >= 2)
+    {
+        bool dlyOn = dlyOnParam->load() > 0.5f;
+        if (dlyOn && !dlyWasOn) stereoDelay.reset();
+        dlyWasOn = dlyOn;
+    }
+    if (dlyWasOn && buffer.getNumChannels() >= 2)
     {
         float dlyTime = juce::jlimit(0.01f, 2.0f, dlyTimeParam->load()
                         + voiceParams.lfoModDlyTime.load(std::memory_order_relaxed) * 0.5f);
@@ -602,7 +608,12 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 
     // --- Post-synth FX: Plate Reverb (spatial) ---
-    if (revOnParam->load() > 0.5f && buffer.getNumChannels() >= 2)
+    {
+        bool revOn = revOnParam->load() > 0.5f;
+        if (revOn && !revWasOn) plateReverb.reset();
+        revWasOn = revOn;
+    }
+    if (revWasOn && buffer.getNumChannels() >= 2)
     {
         float revSize = juce::jlimit(0.0f, 1.0f, revSizeParam->load()
                         + voiceParams.lfoModRevSize.load(std::memory_order_relaxed));
@@ -744,6 +755,71 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
     }
 }
 
+// --- User presets ---
+juce::File VisceraProcessor::getUserPresetsDir()
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                   .getChildFile("Viscera").getChildFile("Presets");
+    dir.createDirectory();
+    return dir;
+}
+
+juce::StringArray VisceraProcessor::getUserPresetNames() const
+{
+    juce::StringArray names;
+    auto dir = getUserPresetsDir();
+    for (auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.xml"))
+        names.add(f.getFileNameWithoutExtension());
+    names.sort(true);
+    return names;
+}
+
+void VisceraProcessor::saveUserPreset(const juce::String& name)
+{
+    auto state = apvts.copyState();
+    state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
+    state.setProperty("lfo1Table", globalLFO[0].serializeTable(), nullptr);
+    state.setProperty("lfo2Table", globalLFO[1].serializeTable(), nullptr);
+    state.setProperty("lfo3Table", globalLFO[2].serializeTable(), nullptr);
+    state.setProperty("lfo1Curve", globalLFO[0].serializeCurve(), nullptr);
+    state.setProperty("lfo2Curve", globalLFO[1].serializeCurve(), nullptr);
+    state.setProperty("lfo3Curve", globalLFO[2].serializeCurve(), nullptr);
+
+    auto xml = state.createXml();
+    if (xml)
+    {
+        auto file = getUserPresetsDir().getChildFile(name + ".xml");
+        xml->writeTo(file);
+    }
+}
+
+void VisceraProcessor::loadUserPreset(const juce::String& name)
+{
+    auto file = getUserPresetsDir().getChildFile(name + ".xml");
+    if (!file.existsAsFile()) return;
+
+    auto xml = juce::parseXML(file);
+    if (xml && xml->hasTagName(apvts.state.getType()))
+    {
+        auto tree = juce::ValueTree::fromXml(*xml);
+        if (tree.hasProperty("shaperTable"))
+            volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
+        for (int n = 0; n < 3; ++n)
+        {
+            auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
+            auto tableKey = "lfo" + juce::String(n + 1) + "Table";
+            if (tree.hasProperty(curveKey))
+                globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
+            else if (tree.hasProperty(tableKey))
+                globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
+        }
+        migrateOldPitchParams(tree);
+        apvts.replaceState(tree);
+        isUserPresetLoaded = true;
+        currentUserPresetName = name;
+    }
+}
+
 // --- Migration anciens presets : MOD_PITCH → COARSE+FINE ou FIXED_FREQ ---
 void VisceraProcessor::migrateOldPitchParams(juce::ValueTree& tree)
 {
@@ -859,7 +935,8 @@ const juce::StringArray& VisceraProcessor::getPresetNames()
         "metal bell", "saw lead", "dark drone", "bright pluck",
         "fm organ", "digital harsh", "sync lead", "wobble bass",
         "alien fx", "crystal", "chaos engine", "soft texture",
-        "microwave kick"
+        "microwave kick",
+        "glide kick"
     };
     return names;
 }
@@ -876,6 +953,8 @@ void VisceraProcessor::loadPreset(int index)
             apvts.replaceState(juce::ValueTree::fromXml(*xml));
     }
     currentPreset = index;
+    isUserPresetLoaded = false;
+    currentUserPresetName.clear();
 }
 
 // --- Presets factory (16 presets) ---
@@ -2341,6 +2420,93 @@ const char* VisceraProcessor::getPresetXML(int index)
   <PARAM id="REV_MIX" value="0"/>
   <PARAM id="VOLUME" value="0.65"/>
   <PARAM id="DRIVE" value="6.0"/>
+  <PARAM id="MONO" value="1"/>
+  <PARAM id="RETRIG" value="1"/>
+  <PARAM id="SHAPER_ON" value="0"/>
+  <PARAM id="SHAPER_SYNC" value="0"/>
+  <PARAM id="SHAPER_RATE" value="4.0"/>
+  <PARAM id="SHAPER_DEPTH" value="0.75"/>
+  <PARAM id="DISP_AMT" value="0"/>
+  <PARAM id="LIQ_ON" value="0"/>
+  <PARAM id="LIQ_RATE" value="0.8"/>
+  <PARAM id="LIQ_DEPTH" value="0.5"/>
+  <PARAM id="LIQ_TONE" value="0.5"/>
+  <PARAM id="LIQ_FEED" value="0.2"/>
+  <PARAM id="LIQ_MIX" value="0.6"/>
+  <PARAM id="RUB_ON" value="0"/>
+  <PARAM id="RUB_TONE" value="0.5"/>
+  <PARAM id="RUB_STRETCH" value="0.3"/>
+  <PARAM id="RUB_WARP" value="0"/>
+  <PARAM id="RUB_MIX" value="0.6"/>
+</VisceraState>)",
+
+        // 17: glide kick — portamento-style pitch drop kick
+        R"(<VisceraState>
+  <PARAM id="MOD1_WAVE" value="0"/>
+  <PARAM id="MOD1_PITCH" value="0"/>
+  <PARAM id="MOD1_KB" value="1"/>
+  <PARAM id="MOD1_LEVEL" value="0.3"/>
+  <PARAM id="MOD1_COARSE" value="1"/>
+  <PARAM id="MOD1_FINE" value="0"/>
+  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
+  <PARAM id="MOD1_MULTI" value="4"/>
+  <PARAM id="ENV1_A" value="0.001"/>
+  <PARAM id="ENV1_D" value="0.12"/>
+  <PARAM id="ENV1_S" value="0.0"/>
+  <PARAM id="ENV1_R" value="0.08"/>
+  <PARAM id="MOD2_WAVE" value="0"/>
+  <PARAM id="MOD2_PITCH" value="0"/>
+  <PARAM id="MOD2_KB" value="1"/>
+  <PARAM id="MOD2_LEVEL" value="0.15"/>
+  <PARAM id="MOD2_COARSE" value="1"/>
+  <PARAM id="MOD2_FINE" value="0"/>
+  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
+  <PARAM id="MOD2_MULTI" value="4"/>
+  <PARAM id="ENV2_A" value="0.001"/>
+  <PARAM id="ENV2_D" value="0.18"/>
+  <PARAM id="ENV2_S" value="0.0"/>
+  <PARAM id="ENV2_R" value="0.1"/>
+  <PARAM id="CAR_WAVE" value="0"/>
+  <PARAM id="CAR_OCTAVE" value="-1"/>
+  <PARAM id="ENV3_A" value="0.001"/>
+  <PARAM id="ENV3_D" value="0.5"/>
+  <PARAM id="ENV3_S" value="0.0"/>
+  <PARAM id="ENV3_R" value="0.2"/>
+  <PARAM id="CAR_DRIFT" value="0"/>
+  <PARAM id="CAR_NOISE" value="0"/>
+  <PARAM id="CAR_SPREAD" value="0"/>
+  <PARAM id="CAR_COARSE" value="0"/>
+  <PARAM id="CAR_FINE" value="0"/>
+  <PARAM id="CAR_FIXED_FREQ" value="440"/>
+  <PARAM id="CAR_KB" value="1"/>
+  <PARAM id="TREMOR" value="0"/>
+  <PARAM id="VEIN" value="0"/>
+  <PARAM id="FLUX" value="0"/>
+  <PARAM id="FM_ALGO" value="0"/>
+  <PARAM id="XOR_ON" value="0"/>
+  <PARAM id="SYNC" value="0"/>
+  <PARAM id="PENV_ON" value="1"/>
+  <PARAM id="PENV_AMT" value="36"/>
+  <PARAM id="PENV_A" value="0.001"/>
+  <PARAM id="PENV_D" value="0.12"/>
+  <PARAM id="PENV_S" value="0"/>
+  <PARAM id="PENV_R" value="0.08"/>
+  <PARAM id="FILT_ON" value="1"/>
+  <PARAM id="FILT_CUTOFF" value="3000"/>
+  <PARAM id="FILT_RES" value="0.15"/>
+  <PARAM id="FILT_TYPE" value="0"/>
+  <PARAM id="DLY_ON" value="0"/>
+  <PARAM id="DLY_TIME" value="0.3"/>
+  <PARAM id="DLY_FEED" value="0.3"/>
+  <PARAM id="DLY_DAMP" value="0.3"/>
+  <PARAM id="DLY_MIX" value="0"/>
+  <PARAM id="DLY_PING" value="0"/>
+  <PARAM id="REV_ON" value="0"/>
+  <PARAM id="REV_SIZE" value="0.3"/>
+  <PARAM id="REV_DAMP" value="0.5"/>
+  <PARAM id="REV_MIX" value="0"/>
+  <PARAM id="VOLUME" value="0.6"/>
+  <PARAM id="DRIVE" value="2.0"/>
   <PARAM id="MONO" value="1"/>
   <PARAM id="RETRIG" value="1"/>
   <PARAM id="SHAPER_ON" value="0"/>

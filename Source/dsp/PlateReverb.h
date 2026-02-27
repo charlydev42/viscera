@@ -253,8 +253,9 @@ private:
         float process(float input, float coeff) noexcept
         {
             float delayed = delay.read();
-            float output = -input * coeff + delayed;
-            delay.write(input + delayed * coeff);
+            float v = input + delayed * coeff;
+            float output = -coeff * v + delayed;
+            delay.write(v);
             return output;
         }
 
@@ -263,8 +264,9 @@ private:
             int readDelay = delay.len + modOffset;
             readDelay = std::clamp(readDelay, 1, delay.len);
             float delayed = delay.readAt(readDelay);
-            float output = -input * coeff + delayed;
-            delay.write(input + delayed * coeff);
+            float v = input + delayed * coeff;
+            float output = -coeff * v + delayed;
+            delay.write(v);
             return output;
         }
 

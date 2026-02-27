@@ -136,6 +136,12 @@ void ModulatorSection::timerCallback()
             fineLabel.setText("0ct", juce::dontSendNotification);
     }
 
+    // Level label
+    if (levelKnob.isMouseOverOrDragging())
+        levelLabel.setText(juce::String(static_cast<int>(levelKnob.getValue() * 100)) + "%", juce::dontSendNotification);
+    else
+        levelLabel.setText("Level", juce::dontSendNotification);
+
     // ADSR labels: show name normally, precise value when dragging
     static const char* adsrNames[] = { "A", "D", "S", "R" };
     for (int i = 0; i < 4; ++i)

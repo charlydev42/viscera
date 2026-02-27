@@ -53,7 +53,7 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
     float totalTime = attack + decay + sustainHold + release;
     if (totalTime < 0.01f) totalTime = 0.01f;
     float pps = w / totalTime;
-    float ampScale = (h * 0.45f) / 48.0f;
+    float ampScale = (h * 0.45f) / 96.0f;
 
     float peakY = baseline - amount * ampScale;
     float sustainY = baseline - amount * sustain * ampScale;
@@ -123,6 +123,15 @@ PitchEnvSection::PitchEnvSection(juce::AudioProcessorValueTreeState& apvts)
 
 void PitchEnvSection::timerCallback()
 {
+    // Amt label
+    if (amtKnob.isMouseOverOrDragging())
+    {
+        int st = static_cast<int>(amtKnob.getValue());
+        amtLabel.setText((st > 0 ? "+" : "") + juce::String(st) + "st", juce::dontSendNotification);
+    }
+    else
+        amtLabel.setText("Amt", juce::dontSendNotification);
+
     static const char* adsrNames[] = { "A", "D", "S", "R" };
     for (int i = 0; i < 4; ++i)
     {

@@ -36,6 +36,27 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible(resLabel);
     resAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "FILT_RES", resKnob);
+
+    startTimerHz(5);
+}
+
+void FilterSection::timerCallback()
+{
+    if (cutoffKnob.isMouseOverOrDragging())
+    {
+        float v = static_cast<float>(cutoffKnob.getValue());
+        if (v >= 1000.0f)
+            cutoffLabel.setText(juce::String(v / 1000.0f, 1) + "kHz", juce::dontSendNotification);
+        else
+            cutoffLabel.setText(juce::String(static_cast<int>(v)) + "Hz", juce::dontSendNotification);
+    }
+    else
+        cutoffLabel.setText("Cutoff", juce::dontSendNotification);
+
+    if (resKnob.isMouseOverOrDragging())
+        resLabel.setText(juce::String(static_cast<int>(resKnob.getValue() * 100)) + "%", juce::dontSendNotification);
+    else
+        resLabel.setText("Res", juce::dontSendNotification);
 }
 
 void FilterSection::resized()
