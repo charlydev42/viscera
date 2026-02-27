@@ -457,7 +457,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         outputR = hemoFoldR.tick(outputR);
 
         // --- Volume + drive saturation + soft clipper ---
-        float drv = juce::jlimit(0.0f, 1.0f, driveParam + gLfoModDrive);
+        float drv = juce::jlimit(1.0f, 10.0f, driveParam + gLfoModDrive * 9.0f);
         outputL *= vol;  outputL *= drv;  outputL = std::tanh(outputL);
         outputR *= vol;  outputR *= drv;  outputR = std::tanh(outputR);
 

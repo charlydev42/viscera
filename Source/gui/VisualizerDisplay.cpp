@@ -56,9 +56,14 @@ void VisualizerDisplay::resized()
 void VisualizerDisplay::paint(juce::Graphics& g)
 {
     auto displayArea = getLocalBounds();
+    auto ellipse = displayArea.toFloat();
+
+    juce::Path clipPath;
+    clipPath.addEllipse(ellipse);
+    g.reduceClipRegion(clipPath);
 
     g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
-    g.fillRect(displayArea);
+    g.fillAll();
 
     drawStereo(g, displayArea);
 }
@@ -223,11 +228,11 @@ void VisualizerDisplay::drawStereo(juce::Graphics& g, juce::Rectangle<int> area)
 
     // Vanishing point: center-top of the display
     float vpX = x + w * 0.5f;
-    float vpY = y + h * 0.12f;
-    // Front center: where the newest frame draws
+    float vpY = y + h * 0.15f;
+    // Front center: true center of the display
     float frontX = x + w * 0.5f;
-    float frontY = y + h * 0.55f;
-    float frontScale = std::min(w, h) * 0.42f;
+    float frontY = y + h * 0.5f;
+    float frontScale = h * 0.42f;
 
     // Check if any trail frame has signal (avoid drawing guides on silence)
     bool hasSignal = false;
@@ -236,9 +241,7 @@ void VisualizerDisplay::drawStereo(juce::Graphics& g, juce::Rectangle<int> area)
             if (std::abs(trailHistory[f][i].mid) >= 1e-4f || std::abs(trailHistory[f][i].side) >= 1e-4f)
                 hasSignal = true;
 
-    if (!hasSignal)
-        return;
-
+    // Always draw crosshair guides (visible even without signal)
     // Subtle crosshair at front center
     g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff).withAlpha(0.15f));
     g.drawVerticalLine(static_cast<int>(frontX), frontY - frontScale * 0.6f, frontY + frontScale * 0.6f);
@@ -283,6 +286,9 @@ void VisualizerDisplay::drawStereo(juce::Graphics& g, juce::Rectangle<int> area)
             g.fillRect(px, py, ptSize, ptSize);
         }
     }
+
+    if (!hasSignal)
+        return;
 
     // --- Subtle labels ---
     g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff).withAlpha(0.3f));

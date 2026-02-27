@@ -3,12 +3,14 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
-class ModMatrixSection : public juce::Component
+class ModMatrixSection : public juce::Component,
+                         private juce::Timer
 {
 public:
     ModMatrixSection(juce::AudioProcessorValueTreeState& apvts);
     ~ModMatrixSection() override = default;
     void resized() override;
+    void timerCallback() override;
 
 private:
     juce::Slider tremorKnob, veinKnob, fluxKnob;

@@ -290,6 +290,11 @@ void VolumeShaperSection::timerCallback()
     int syncIdx = getSyncParam();
     if (syncIdx > 0 && static_cast<int>(syncKnob.getValue()) != syncIdx)
         syncKnob.setValue(syncIdx, juce::dontSendNotification);
+
+    if (depthKnob.isMouseOverOrDragging())
+        depthLabel.setText(juce::String(static_cast<int>(depthKnob.getValue() * 100)) + "%", juce::dontSendNotification);
+    else
+        depthLabel.setText("Depth", juce::dontSendNotification);
 }
 
 int VolumeShaperSection::getSyncParam() const

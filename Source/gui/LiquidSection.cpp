@@ -29,6 +29,23 @@ LiquidSection::LiquidSection(juce::AudioProcessorValueTreeState& apvts)
     setupKnob(mixKnob, mixLabel, "Mix");
     mixAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "LIQ_MIX", mixKnob);
+
+    startTimerHz(5);
+}
+
+void LiquidSection::timerCallback()
+{
+    auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
+        if (knob.isMouseOverOrDragging())
+            label.setText(juce::String(static_cast<int>(knob.getValue() * 100)) + "%", juce::dontSendNotification);
+        else
+            label.setText(name, juce::dontSendNotification);
+    };
+    showPct(rateKnob, rateLabel, "Rate");
+    showPct(depthKnob, depthLabel, "Depth");
+    showPct(toneKnob, toneLabel, "Tone");
+    showPct(feedKnob, feedLabel, "Feed");
+    showPct(mixKnob, mixLabel, "Mix");
 }
 
 void LiquidSection::setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text)

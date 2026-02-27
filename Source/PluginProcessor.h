@@ -46,10 +46,18 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
     // Noms des presets factory
-    static constexpr int kNumPresets = 17;
+    static constexpr int kNumPresets = 18;
     static const juce::StringArray& getPresetNames();
     void loadPreset(int index);
     int getCurrentPresetIndex() const { return currentPreset; }
+
+    // User presets
+    static juce::File getUserPresetsDir();
+    juce::StringArray getUserPresetNames() const;
+    void saveUserPreset(const juce::String& name);
+    void loadUserPreset(const juce::String& name);
+    bool isUserPreset() const { return isUserPresetLoaded; }
+    const juce::String& getUserPresetName() const { return currentUserPresetName; }
 
     // Global LFO phase getter (for GUI display)
     float getGlobalLFOPhase(int index) const
@@ -69,6 +77,8 @@ private:
 
     juce::Synthesiser synth;
     int currentPreset = 0;
+    bool isUserPresetLoaded = false;
+    juce::String currentUserPresetName;
 
     // 3 global assignable LFOs
     bb::LFO globalLFO[3];
@@ -88,6 +98,8 @@ private:
 
     bb::StereoDelay stereoDelay;
     bb::PlateReverb plateReverb;
+    bool revWasOn = false;
+    bool dlyWasOn = false;
     std::atomic<float>* dlyTimeParam  = nullptr;
     std::atomic<float>* dlyFeedParam  = nullptr;
     std::atomic<float>* dlyDampParam  = nullptr;

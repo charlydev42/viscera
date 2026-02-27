@@ -56,6 +56,35 @@ GlobalSection::GlobalSection(juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible(retrigToggle);
     retrigAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, "RETRIG", retrigToggle);
+
+    startTimerHz(5);
+}
+
+void GlobalSection::timerCallback()
+{
+    auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
+        if (knob.isMouseOverOrDragging())
+            label.setText(juce::String(static_cast<int>(knob.getValue() * 100)) + "%", juce::dontSendNotification);
+        else
+            label.setText(name, juce::dontSendNotification);
+    };
+    showPct(volumeKnob, volumeLabel, "Volume");
+    if (driveKnob.isMouseOverOrDragging())
+        driveLabel.setText(juce::String(driveKnob.getValue(), 1) + "x", juce::dontSendNotification);
+    else
+        driveLabel.setText("Drive", juce::dontSendNotification);
+    showPct(disperserKnob, disperserLabel, "Fold");
+
+    if (portaKnob.isMouseOverOrDragging())
+    {
+        float v = static_cast<float>(portaKnob.getValue());
+        if (v < 1.0f)
+            portaLabel.setText(juce::String(v * 1000.0f, 0) + "ms", juce::dontSendNotification);
+        else
+            portaLabel.setText(juce::String(v, 2) + "s", juce::dontSendNotification);
+    }
+    else
+        portaLabel.setText("Porta", juce::dontSendNotification);
 }
 
 void GlobalSection::resized()

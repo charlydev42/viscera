@@ -21,7 +21,7 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
     g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(b, 3.0f);
 
-    auto inner = b.reduced(3.0f);
+    auto inner = b.reduced(3.0f, 1.0f);   // horizontal padding only; vertical tight
     float w = inner.getWidth();
     float h = inner.getHeight();
     float x0 = inner.getX();
@@ -202,6 +202,17 @@ void CarrierSection::timerCallback()
     else
         fineLabel.setText("0ct", juce::dontSendNotification);
 
+    // Drift / Noise / Spread labels
+    auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
+        if (knob.isMouseOverOrDragging())
+            label.setText(juce::String(static_cast<int>(knob.getValue() * 100)) + "%", juce::dontSendNotification);
+        else
+            label.setText(name, juce::dontSendNotification);
+    };
+    showPct(driftKnob, driftLabel, "Drift");
+    showPct(noiseKnob, noiseLabel, "Noise");
+    showPct(spreadKnob, spreadLabel, "Spread");
+
     // ADSR labels: show name normally, precise value when dragging
     static const char* adsrNames[] = { "A", "D", "S", "R" };
     for (int i = 0; i < 4; ++i)
@@ -243,13 +254,12 @@ void CarrierSection::setupKnob(juce::Slider& knob)
 void CarrierSection::resized()
 {
     auto area = getLocalBounds().reduced(4);
-    area.removeFromTop(2); // minimal padding
 
     int labelH = 12;
     int knobH = 36;
 
-    // Row 1: Wave combo + Fixed + XOR + Sync (no label)
-    auto topBar = area.removeFromTop(28);
+    // Row 1: Wave combo + Fixed + XOR + Sync
+    auto topBar = area.removeFromTop(26);
     waveCombo.setBounds(topBar.removeFromLeft(80).reduced(1));
     topBar.removeFromLeft(4);
     int toggleW = topBar.getWidth() / 3;
@@ -257,7 +267,7 @@ void CarrierSection::resized()
     xorToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
     syncToggle.setBounds(topBar.reduced(1));
 
-    area.removeFromTop(6);
+    area.removeFromTop(2);
 
     // Row 2 (pitch + character knobs): [Coarse/Freq] [Fine] [Drift] [Noise] [Spread]
     auto knobRow1 = area.removeFromTop(knobH + labelH);
@@ -284,7 +294,7 @@ void CarrierSection::resized()
     spreadLabel.setBounds(spreadArea.removeFromBottom(labelH));
     spreadKnob.setBounds(spreadArea.reduced(2, 0));
 
-    area.removeFromTop(6);
+    area.removeFromTop(2);
 
     // Bottom: ADSR knobs
     auto knobRow2 = area.removeFromBottom(knobH + labelH);
@@ -296,8 +306,8 @@ void CarrierSection::resized()
         adsrKnobs[i].setBounds(col.reduced(2, 0));
     }
 
-    area.removeFromBottom(6);
+    area.removeFromBottom(2);
 
-    // ENV3 display — shrink by 15px, centred in remaining space
-    envDisplay.setBounds(area.reduced(0, 8));
+    // ENV3 display
+    envDisplay.setBounds(area.reduced(0, 2));
 }

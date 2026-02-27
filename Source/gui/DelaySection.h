@@ -4,12 +4,14 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
 
-class DelaySection : public juce::Component
+class DelaySection : public juce::Component,
+                     private juce::Timer
 {
 public:
     DelaySection(juce::AudioProcessorValueTreeState& apvts);
     ~DelaySection() override = default;
     void resized() override;
+    void timerCallback() override;
 
 private:
     juce::ToggleButton onToggle, ppToggle;

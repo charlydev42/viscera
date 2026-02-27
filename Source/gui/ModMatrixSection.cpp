@@ -14,6 +14,21 @@ ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
     setupKnob(fluxKnob, fluxLabel, "Flux");
     fluxAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "FLUX", fluxKnob);
+
+    startTimerHz(5);
+}
+
+void ModMatrixSection::timerCallback()
+{
+    auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
+        if (knob.isMouseOverOrDragging())
+            label.setText(juce::String(static_cast<int>(knob.getValue() * 100)) + "%", juce::dontSendNotification);
+        else
+            label.setText(name, juce::dontSendNotification);
+    };
+    showPct(tremorKnob, tremorLabel, "Tremor");
+    showPct(veinKnob, veinLabel, "Vein");
+    showPct(fluxKnob, fluxLabel, "Flux");
 }
 
 void ModMatrixSection::setupKnob(juce::Slider& knob, juce::Label& label,

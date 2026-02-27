@@ -4,12 +4,14 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
 
-class LiquidSection : public juce::Component
+class LiquidSection : public juce::Component,
+                      private juce::Timer
 {
 public:
     LiquidSection(juce::AudioProcessorValueTreeState& apvts);
     ~LiquidSection() override = default;
     void resized() override;
+    void timerCallback() override;
 
 private:
     juce::ToggleButton onToggle;

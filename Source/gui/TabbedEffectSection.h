@@ -1,4 +1,4 @@
-// TabbedEffectSection.h — Delay/Reverb/Liquid/Rubber: tabbed (main) or stacked (edit)
+// TabbedEffectSection.h — Delay/Reverb/Liquid/Rubber: tabbed/stacked/grid layout
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -13,14 +13,17 @@ public:
     TabbedEffectSection(juce::AudioProcessorValueTreeState& apvts);
     ~TabbedEffectSection() override = default;
 
-    void setStacked(bool stacked);
+    enum Layout { Tabbed, Stacked, Grid };
+    void setLayout(Layout layout);
+    void setStacked(bool stacked) { setLayout(stacked ? Stacked : Tabbed); }
     void resized() override;
     void paint(juce::Graphics& g) override;
 
 private:
     void switchTab(int tab);
 
-    bool stackedMode = false;
+    Layout currentLayout = Tabbed;
+    bool stackedMode = false; // kept for compat
     int activeTab = 0;
     juce::TextButton tabButtons[4];
 

@@ -35,6 +35,34 @@ DelaySection::DelaySection(juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible(ppToggle);
     ppAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, "DLY_PING", ppToggle);
+
+    startTimerHz(5);
+}
+
+void DelaySection::timerCallback()
+{
+    auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
+        if (knob.isMouseOverOrDragging())
+            label.setText(juce::String(static_cast<int>(knob.getValue() * 100)) + "%", juce::dontSendNotification);
+        else
+            label.setText(name, juce::dontSendNotification);
+    };
+
+    if (timeKnob.isMouseOverOrDragging())
+    {
+        float v = static_cast<float>(timeKnob.getValue());
+        if (v < 1.0f)
+            timeLabel.setText(juce::String(v * 1000.0f, 0) + "ms", juce::dontSendNotification);
+        else
+            timeLabel.setText(juce::String(v, 2) + "s", juce::dontSendNotification);
+    }
+    else
+        timeLabel.setText("Time", juce::dontSendNotification);
+
+    showPct(feedKnob, feedLabel, "Fdbk");
+    showPct(dampKnob, dampLabel, "Damp");
+    showPct(spreadKnob, spreadLabel, "Sprd");
+    showPct(dlyMixKnob, dlyMixLabel, "Mix");
 }
 
 void DelaySection::setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text)

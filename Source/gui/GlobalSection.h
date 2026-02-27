@@ -4,12 +4,14 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
 
-class GlobalSection : public juce::Component
+class GlobalSection : public juce::Component,
+                      private juce::Timer
 {
 public:
     GlobalSection(juce::AudioProcessorValueTreeState& apvts);
     ~GlobalSection() override = default;
     void resized() override;
+    void timerCallback() override;
 
 private:
     ModSlider volumeKnob, driveKnob, disperserKnob;

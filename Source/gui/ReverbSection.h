@@ -1,15 +1,17 @@
-// ReverbSection.h — Reverb controls (On/Off, Size, Damp, Mix)
+// ReverbSection.h — Reverb controls (On/Off, Size, Damp, Width, PDly, Mix)
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
 
-class ReverbSection : public juce::Component
+class ReverbSection : public juce::Component,
+                      private juce::Timer
 {
 public:
     ReverbSection(juce::AudioProcessorValueTreeState& apvts);
     ~ReverbSection() override = default;
     void resized() override;
+    void timerCallback() override;
 
 private:
     juce::ToggleButton onToggle;
