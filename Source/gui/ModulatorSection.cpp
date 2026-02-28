@@ -15,7 +15,11 @@ ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
         apvts, prefix + "_WAVE", waveCombo);
     // waveLabel hidden (removed for cleaner look)
 
-    // --- Coarse knob (ratio mode) ---
+    // --- Coarse knob (ratio mode, LFO assignable) ---
+    {
+        bb::LFODest coarseDest = (prefix == "MOD1") ? bb::LFODest::Mod1Coarse : bb::LFODest::Mod2Coarse;
+        coarseKnob.initMod(apvts, coarseDest);
+    }
     setupKnob(coarseKnob);
     coarseAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, prefix + "_COARSE", coarseKnob);
@@ -75,14 +79,20 @@ ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
     levelAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, prefix + "_LEVEL", levelKnob);
 
-    // --- ADSR knobs ---
-    static const char* adsrNames[] = { "A", "D", "S", "R" };
-    for (int i = 0; i < 4; ++i)
+    // --- ADSR knobs (LFO assignable) ---
     {
-        setupKnob(adsrKnobs[i], adsrLabels[i], adsrNames[i]);
-        juce::String paramId = envPrefix + "_" + adsrNames[i];
-        adsrAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            apvts, paramId, adsrKnobs[i]);
+        static const char* adsrNames[] = { "A", "D", "S", "R" };
+        bb::LFODest envDests1[] = { bb::LFODest::Env1A, bb::LFODest::Env1D, bb::LFODest::Env1S, bb::LFODest::Env1R };
+        bb::LFODest envDests2[] = { bb::LFODest::Env2A, bb::LFODest::Env2D, bb::LFODest::Env2S, bb::LFODest::Env2R };
+        auto* dests = (prefix == "MOD1") ? envDests1 : envDests2;
+        for (int i = 0; i < 4; ++i)
+        {
+            adsrKnobs[i].initMod(apvts, dests[i]);
+            setupKnob(adsrKnobs[i], adsrLabels[i], adsrNames[i]);
+            juce::String paramId = envPrefix + "_" + adsrNames[i];
+            adsrAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+                apvts, paramId, adsrKnobs[i]);
+        }
     }
 
     startTimerHz(5);

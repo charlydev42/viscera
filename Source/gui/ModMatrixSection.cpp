@@ -3,14 +3,17 @@
 
 ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
 {
+    tremorKnob.initMod(apvts, bb::LFODest::Tremor);
     setupKnob(tremorKnob, tremorLabel, "Tremor");
     tremorAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "TREMOR", tremorKnob);
 
+    veinKnob.initMod(apvts, bb::LFODest::Vein);
     setupKnob(veinKnob, veinLabel, "Vein");
     veinAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "VEIN", veinKnob);
 
+    fluxKnob.initMod(apvts, bb::LFODest::Flux);
     setupKnob(fluxKnob, fluxLabel, "Flux");
     fluxAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "FLUX", fluxKnob);

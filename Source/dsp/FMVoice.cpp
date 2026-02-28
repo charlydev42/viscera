@@ -181,7 +181,9 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     auto mod1WaveIdx     = static_cast<int>(params.mod1Wave->load());
     bool  mod1KB         = params.mod1KB->load() > 0.5f;
     float mod1LevelP     = mod1OnP ? params.mod1Level->load() : 0.0f;
-    int   mod1CoarseIdx  = static_cast<int>(params.mod1Coarse->load());
+    int   mod1CoarseIdx  = juce::jlimit(0, kMaxCoarseIdx,
+        static_cast<int>(params.mod1Coarse->load()
+            + params.lfoModMod1Coarse.load(std::memory_order_relaxed) * 24.0f));
     float mod1FineCents  = params.mod1Fine->load()
                            + params.lfoModMod1Fine.load(std::memory_order_relaxed) * 100.0f;
     float mod1FixedHz    = params.mod1FixedFreq->load();
@@ -191,14 +193,20 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     auto mod2WaveIdx     = static_cast<int>(params.mod2Wave->load());
     bool  mod2KB         = params.mod2KB->load() > 0.5f;
     float mod2LevelP     = mod2OnP ? params.mod2Level->load() : 0.0f;
-    int   mod2CoarseIdx  = static_cast<int>(params.mod2Coarse->load());
+    int   mod2CoarseIdx  = juce::jlimit(0, kMaxCoarseIdx,
+        static_cast<int>(params.mod2Coarse->load()
+            + params.lfoModMod2Coarse.load(std::memory_order_relaxed) * 24.0f));
     float mod2FineCents  = params.mod2Fine->load()
                            + params.lfoModMod2Fine.load(std::memory_order_relaxed) * 100.0f;
     float mod2FixedHz    = params.mod2FixedFreq->load();
     int   mod2MultiVal   = static_cast<int>(params.mod2Multi->load());
 
     auto carWaveIdx      = static_cast<int>(params.carWave->load());
-    int   carCoarseIdx   = params.carCoarse ? static_cast<int>(params.carCoarse->load()) : 1;
+    int   carCoarseIdx   = params.carCoarse
+        ? juce::jlimit(0, kMaxCoarseIdx,
+            static_cast<int>(params.carCoarse->load()
+                + params.lfoModCarCoarse.load(std::memory_order_relaxed) * 24.0f))
+        : 1;
     float carFineCents   = (params.carFine ? params.carFine->load() : 0.0f)
                            + params.lfoModCarFine.load(std::memory_order_relaxed) * 100.0f;
     float carFixedHz     = params.carFixedFreq ? params.carFixedFreq->load() : 440.0f;
@@ -206,9 +214,12 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     float carNoiseP      = params.carNoise ? params.carNoise->load() : 0.0f;
     float carSpreadP     = params.carSpread ? params.carSpread->load() : 0.0f;
 
-    float tremorAmount = params.tremor->load();  // LFO → pitch (0-1)
-    float veinAmount   = params.vein->load();    // LFO → filter cutoff (0-1)
-    float fluxAmount   = params.flux->load();    // LFO → mod index (0-1)
+    float tremorAmount = juce::jlimit(0.0f, 1.0f, params.tremor->load()
+                         + params.lfoModTremor.load(std::memory_order_relaxed));
+    float veinAmount   = juce::jlimit(0.0f, 1.0f, params.vein->load()
+                         + params.lfoModVein.load(std::memory_order_relaxed));
+    float fluxAmount   = juce::jlimit(0.0f, 1.0f, params.flux->load()
+                         + params.lfoModFlux.load(std::memory_order_relaxed));
 
     // Global LFO modulation sums (from PluginProcessor)
     float gLfoModPitch   = params.lfoModPitch.load(std::memory_order_relaxed);
@@ -257,15 +268,27 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     smoothCarNoise.setTargetValue(carNoiseP);
     smoothCarSpread.setTargetValue(carSpreadP);
 
-    // Mettre à jour les paramètres d'enveloppe
-    env1.setParameters(params.env1A->load(), params.env1D->load(),
-                       params.env1S->load(), params.env1R->load());
-    env2.setParameters(params.env2A->load(), params.env2D->load(),
-                       params.env2S->load(), params.env2R->load());
-    env3.setParameters(params.env3A->load(), params.env3D->load(),
-                       params.env3S->load(), params.env3R->load());
-    pitchEnv.setParameters(params.pitchEnvA->load(), params.pitchEnvD->load(),
-                           params.pitchEnvS->load(), params.pitchEnvR->load());
+    // Mettre à jour les paramètres d'enveloppe (+ LFO modulation)
+    env1.setParameters(
+        std::max(0.001f, params.env1A->load() + params.lfoModEnv1A.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, params.env1D->load() + params.lfoModEnv1D.load(std::memory_order_relaxed) * 5.0f),
+        juce::jlimit(0.0f, 1.0f, params.env1S->load() + params.lfoModEnv1S.load(std::memory_order_relaxed)),
+        std::max(0.001f, params.env1R->load() + params.lfoModEnv1R.load(std::memory_order_relaxed) * 8.0f));
+    env2.setParameters(
+        std::max(0.001f, params.env2A->load() + params.lfoModEnv2A.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, params.env2D->load() + params.lfoModEnv2D.load(std::memory_order_relaxed) * 5.0f),
+        juce::jlimit(0.0f, 1.0f, params.env2S->load() + params.lfoModEnv2S.load(std::memory_order_relaxed)),
+        std::max(0.001f, params.env2R->load() + params.lfoModEnv2R.load(std::memory_order_relaxed) * 8.0f));
+    env3.setParameters(
+        std::max(0.001f, params.env3A->load() + params.lfoModEnv3A.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, params.env3D->load() + params.lfoModEnv3D.load(std::memory_order_relaxed) * 5.0f),
+        juce::jlimit(0.0f, 1.0f, params.env3S->load() + params.lfoModEnv3S.load(std::memory_order_relaxed)),
+        std::max(0.001f, params.env3R->load() + params.lfoModEnv3R.load(std::memory_order_relaxed) * 8.0f));
+    pitchEnv.setParameters(
+        std::max(0.001f, params.pitchEnvA->load() + params.lfoModPEnvA.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, params.pitchEnvD->load() + params.lfoModPEnvD.load(std::memory_order_relaxed) * 5.0f),
+        juce::jlimit(0.0f, 1.0f, params.pitchEnvS->load() + params.lfoModPEnvS.load(std::memory_order_relaxed)),
+        std::max(0.001f, params.pitchEnvR->load() + params.lfoModPEnvR.load(std::memory_order_relaxed) * 8.0f));
 
     // HemoFold (wavefolder) + global LFO fold mod
     float foldAmt = juce::jlimit(0.0f, 1.0f, dispAmount + gLfoModFold);

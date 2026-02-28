@@ -86,7 +86,8 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts)
         apvts, "CAR_WAVE", waveCombo);
     // waveLabel hidden (removed for cleaner look)
 
-    // --- Coarse knob (ratio mode) ---
+    // --- Coarse knob (ratio mode, LFO assignable) ---
+    coarseKnob.initMod(apvts, bb::LFODest::CarCoarse);
     setupKnob(coarseKnob);
     coarseAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "CAR_COARSE", coarseKnob);
@@ -124,14 +125,18 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts)
     // Env display
     addAndMakeVisible(envDisplay);
 
-    // ADSR knobs
-    const juce::String adsrIds[] = { "ENV3_A", "ENV3_D", "ENV3_S", "ENV3_R" };
-    const juce::String adsrNamesList[] = { "A", "D", "S", "R" };
-    for (int i = 0; i < 4; ++i)
+    // ADSR knobs (LFO assignable)
     {
-        setupKnob(adsrKnobs[i], adsrLabels[i], adsrNamesList[i]);
-        adsrAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            apvts, adsrIds[i], adsrKnobs[i]);
+        const juce::String adsrIds[] = { "ENV3_A", "ENV3_D", "ENV3_S", "ENV3_R" };
+        const juce::String adsrNamesList[] = { "A", "D", "S", "R" };
+        bb::LFODest envDests[] = { bb::LFODest::Env3A, bb::LFODest::Env3D, bb::LFODest::Env3S, bb::LFODest::Env3R };
+        for (int i = 0; i < 4; ++i)
+        {
+            adsrKnobs[i].initMod(apvts, envDests[i]);
+            setupKnob(adsrKnobs[i], adsrLabels[i], adsrNamesList[i]);
+            adsrAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+                apvts, adsrIds[i], adsrKnobs[i]);
+        }
     }
 
     // Drift knob (LFO assignable)
