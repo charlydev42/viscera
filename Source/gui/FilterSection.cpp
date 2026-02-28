@@ -11,14 +11,14 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
     // Filter type ComboBox
     typeBox.addItemList({ "LP", "HP", "BP", "Notch" }, 1);
     addAndMakeVisible(typeBox);
-    typeLabel.setText("Type", juce::dontSendNotification);
-    typeLabel.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(typeLabel);
+    typeLabel.setVisible(false);
     typeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts, "FILT_TYPE", typeBox);
 
     cutoffKnob.initMod(apvts, bb::LFODest::FilterCutoff);
     cutoffKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    cutoffKnob.setSliderSnapsToMousePosition(false);
+    cutoffKnob.setMouseDragSensitivity(200);
     cutoffKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(cutoffKnob);
     cutoffLabel.setText("Cutoff", juce::dontSendNotification);
@@ -29,6 +29,8 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
 
     resKnob.initMod(apvts, bb::LFODest::FilterRes);
     resKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    resKnob.setSliderSnapsToMousePosition(false);
+    resKnob.setMouseDragSensitivity(200);
     resKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(resKnob);
     resLabel.setText("Res", juce::dontSendNotification);

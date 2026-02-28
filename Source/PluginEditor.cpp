@@ -128,7 +128,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         // 4. Kick GL to render with new bg, then re-show after a frame
         flubberVisualizer.triggerGLRepaint();
         juce::MessageManager::callAsync([this] {
-            flubberVisualizer.setVisible(true);
+            flubberVisualizer.setVisible(!showAdvanced);
         });
     };
     addAndMakeVisible(darkModeBtn);
@@ -208,13 +208,14 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // Start on main (perform) page
     setPage(false);
 
-    // Allow neumorphic shadows to overflow on widgets only (not containers)
+    // Allow neumorphic shadows to overflow on all interactive widgets
     std::function<void(juce::Component*)> enableUnclipped = [&](juce::Component* comp)
     {
         if (dynamic_cast<juce::Slider*>(comp) ||
             dynamic_cast<juce::ToggleButton*>(comp) ||
             dynamic_cast<juce::TextButton*>(comp) ||
-            dynamic_cast<juce::ComboBox*>(comp))
+            dynamic_cast<juce::ComboBox*>(comp) ||
+            dynamic_cast<juce::Label*>(comp))
         {
             comp->setPaintingIsUnclipped(true);
         }
@@ -222,6 +223,15 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
             enableUnclipped(child);
     };
     enableUnclipped(this);
+
+    // Top bar components: allow shadows to overflow their parent bounds
+    presetBrowser.setPaintingIsUnclipped(true);
+    algoLeftBtn.setPaintingIsUnclipped(true);
+    algoRightBtn.setPaintingIsUnclipped(true);
+    algoLabel.setPaintingIsUnclipped(true);
+    darkModeBtn.setPaintingIsUnclipped(true);
+    pageToggleBtn.setPaintingIsUnclipped(true);
+    kbToggleBtn.setPaintingIsUnclipped(true);
 
     // Load first preset so sound matches displayed name
     // (done here after all attachments are created)
@@ -412,12 +422,14 @@ void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bo
 {
     float cr = 8.0f;
 
-    // Neumorphic double shadow (raised)
+    // Neumorphic double shadow (raised, rounded to match panel)
     auto bf = bounds.toFloat();
+    juce::Path panelPath;
+    panelPath.addRoundedRectangle(bf, cr);
     juce::DropShadow lightSh(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.7f), 4, { -2, -2 });
-    lightSh.drawForRectangle(g, bounds);
+    lightSh.drawForPath(g, panelPath);
     juce::DropShadow darkSh(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.5f), 6, { 3, 3 });
-    darkSh.drawForRectangle(g, bounds);
+    darkSh.drawForPath(g, panelPath);
 
     // Fill whole panel
     g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor));
@@ -449,14 +461,7 @@ void VisceraEditor::paint(juce::Graphics& g)
 
     if (!showAdvanced)
     {
-        // Main page: neumorphic raised panel
-        auto panelArea = mainPanelBounds.toFloat();
-        if (! panelArea.isEmpty())
-        {
-            VisceraLookAndFeel::drawNeumorphicRect(g, panelArea, 8.0f, false);
-        }
-
-        // (no neumorphic shadow around visualizer — the oval shader handles its own edges)
+        // Main page: flat background, no neumorphic panel
     }
     else
     {

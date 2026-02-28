@@ -13,6 +13,7 @@ TabbedEffectSection::TabbedEffectSection(juce::AudioProcessorValueTreeState& apv
     {
         tabButtons[i].setButtonText(tabNames[i]);
         tabButtons[i].setClickingTogglesState(false);
+        tabButtons[i].setPaintingIsUnclipped(true);
         tabButtons[i].onClick = [this, i] { switchTab(i); };
         addAndMakeVisible(tabButtons[i]);
     }
@@ -79,12 +80,20 @@ void TabbedEffectSection::paint(juce::Graphics& g)
     for (int i = 0; i < 4; ++i)
     {
         auto pb = panelBounds[i];
-        VisceraLookAndFeel::drawNeumorphicRect(g, pb.toFloat(), 6.0f, false);
 
+        // Section label
         g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
         g.drawText(names[i], pb.getX(), pb.getY(), pb.getWidth(), headerH,
                    juce::Justification::centred);
+
+        // Thin separator line between effects (not above the first one)
+        if (i > 0)
+        {
+            float y = (float) pb.getY() - 1.0f;
+            g.setColour(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.25f));
+            g.drawHorizontalLine((int) y, (float) pb.getX() + 6, (float) pb.getRight() - 6);
+        }
     }
 }
 

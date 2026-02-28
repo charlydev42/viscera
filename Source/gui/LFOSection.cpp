@@ -324,6 +324,8 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
 
     // Rate knob
     rateKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    rateKnob.setSliderSnapsToMousePosition(false);
+    rateKnob.setMouseDragSensitivity(200);
     rateKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(rateKnob);
 
@@ -349,6 +351,8 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
 
     // Sync knob (fixed mode)
     syncKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    syncKnob.setSliderSnapsToMousePosition(false);
+    syncKnob.setMouseDragSensitivity(200);
     syncKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     syncKnob.setRange(1.0, 12.0, 1.0);
     syncKnob.onValueChange = [this] {

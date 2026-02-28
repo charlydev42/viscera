@@ -220,6 +220,8 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
 
     // Rate knob (free mode)
     rateKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    rateKnob.setSliderSnapsToMousePosition(false);
+    rateKnob.setMouseDragSensitivity(200);
     rateKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(rateKnob);
     rateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
@@ -231,6 +233,8 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
 
     // Sync knob (fixed mode)
     syncKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    syncKnob.setSliderSnapsToMousePosition(false);
+    syncKnob.setMouseDragSensitivity(200);
     syncKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     syncKnob.setRange(1.0, 9.0, 1.0);
     syncKnob.onValueChange = [this] {
@@ -247,6 +251,8 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
 
     // Depth knob
     depthKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    depthKnob.setSliderSnapsToMousePosition(false);
+    depthKnob.setMouseDragSensitivity(200);
     depthKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(depthKnob);
     depthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(

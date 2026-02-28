@@ -6,6 +6,8 @@ GlobalSection::GlobalSection(juce::AudioProcessorValueTreeState& apvts)
     // Volume knob
     volumeKnob.initMod(apvts, bb::LFODest::Volume);
     volumeKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    volumeKnob.setSliderSnapsToMousePosition(false);
+    volumeKnob.setMouseDragSensitivity(200);
     volumeKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(volumeKnob);
     volumeLabel.setText("Volume", juce::dontSendNotification);
@@ -17,6 +19,8 @@ GlobalSection::GlobalSection(juce::AudioProcessorValueTreeState& apvts)
     // Drive knob
     driveKnob.initMod(apvts, bb::LFODest::Drive);
     driveKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    driveKnob.setSliderSnapsToMousePosition(false);
+    driveKnob.setMouseDragSensitivity(200);
     driveKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(driveKnob);
     driveLabel.setText("Drive", juce::dontSendNotification);
@@ -28,6 +32,8 @@ GlobalSection::GlobalSection(juce::AudioProcessorValueTreeState& apvts)
     // Disperser knob
     disperserKnob.initMod(apvts, bb::LFODest::FoldAmt);
     disperserKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    disperserKnob.setSliderSnapsToMousePosition(false);
+    disperserKnob.setMouseDragSensitivity(200);
     disperserKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(disperserKnob);
     disperserLabel.setText("Fold", juce::dontSendNotification);
@@ -39,6 +45,8 @@ GlobalSection::GlobalSection(juce::AudioProcessorValueTreeState& apvts)
     // Portamento knob
     portaKnob.initMod(apvts, bb::LFODest::Porta);
     portaKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    portaKnob.setSliderSnapsToMousePosition(false);
+    portaKnob.setMouseDragSensitivity(200);
     portaKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(portaKnob);
     portaLabel.setText("Porta", juce::dontSendNotification);

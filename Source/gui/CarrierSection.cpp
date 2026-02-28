@@ -236,6 +236,8 @@ void CarrierSection::setupKnob(juce::Slider& knob, juce::Label& label,
                                  const juce::String& text)
 {
     knob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    knob.setSliderSnapsToMousePosition(false);
+    knob.setMouseDragSensitivity(200);
     knob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(knob);
     label.setText(text, juce::dontSendNotification);
@@ -247,6 +249,8 @@ void CarrierSection::setupKnob(juce::Slider& knob, juce::Label& label,
 void CarrierSection::setupKnob(juce::Slider& knob)
 {
     knob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    knob.setSliderSnapsToMousePosition(false);
+    knob.setMouseDragSensitivity(200);
     knob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(knob);
 }
