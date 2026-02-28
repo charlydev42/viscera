@@ -41,10 +41,12 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     addAndMakeVisible(lfoSection);
     addAndMakeVisible(globalSection);
 
-    // Clavier MIDI integre
+    // Clavier MIDI integre (standalone only)
+#if JUCE_STANDALONE_APPLICATION
     keyboard.setMidiChannel(1);
     keyboard.setOctaveForMiddleC(4);
     addAndMakeVisible(keyboard);
+#endif
 
     // Titre
     titleLabel.setText("Viscera", juce::dontSendNotification);
@@ -54,7 +56,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
     // Logo image from BinaryData (light/dark variants for advanced page)
     {
-        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_png, BinaryData::viscera_logo_light_pngSize);
+        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png, BinaryData::viscera_logo_light_nodolph_pngSize);
         logoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(logoImage);
@@ -104,7 +106,8 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     pageToggleBtn.onClick = [this] { setPage(!showAdvanced); };
     addAndMakeVisible(pageToggleBtn);
 
-    // Keyboard toggle for main page
+    // Keyboard toggle for main page (standalone only)
+#if JUCE_STANDALONE_APPLICATION
     kbToggleBtn.setButtonText("KB");
     kbToggleBtn.onClick = [this] {
         showKeyboardOnMain = !showKeyboardOnMain;
@@ -113,6 +116,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         resized();
     };
     addAndMakeVisible(kbToggleBtn);
+#endif
 
     // Dark mode toggle
     darkModeBtn.setButtonText("Dark");
@@ -128,8 +132,8 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         // Swap logos (advanced + main)
         {
             auto img = VisceraLookAndFeel::darkMode
-                ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_png, BinaryData::viscera_logo_dark_pngSize)
-                : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_png, BinaryData::viscera_logo_light_pngSize);
+                ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_nodolph_png, BinaryData::viscera_logo_dark_nodolph_pngSize)
+                : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png, BinaryData::viscera_logo_light_nodolph_pngSize);
             logoImage.setImage(img, juce::RectanglePlacement::centred);
 
             auto mainImg = VisceraLookAndFeel::darkMode
@@ -428,9 +432,11 @@ void VisceraEditor::setPage(bool advanced)
     tabbedEffects.setVisible(advanced);
     tabbedEffects.setLayout(TabbedEffectSection::Stacked);
 
-    // Keyboard: always on edit page, toggle on main page
+    // Keyboard: standalone only
+#if JUCE_STANDALONE_APPLICATION
     keyboard.setVisible(advanced || showKeyboardOnMain);
     kbToggleBtn.setVisible(!advanced);
+#endif
 
     // Both pages: effects, preset, keyboard, logo, algo, randomize, toggle
 
@@ -519,16 +525,19 @@ void VisceraEditor::resized()
     topBar.removeFromRight(sp);
     darkModeBtn.setBounds(topBar.removeFromRight(40));
     topBar.removeFromRight(sp);
+#if JUCE_STANDALONE_APPLICATION
     if (!showAdvanced)
     {
         kbToggleBtn.setBounds(topBar.removeFromRight(28));
         topBar.removeFromRight(sp);
     }
+#endif
 
     presetBrowser.setBounds(topBar);
     area.removeFromTop(4);
 
-    // === Keyboard at bottom (overlay, doesn't shrink area on main page) ===
+    // === Keyboard at bottom (standalone only) ===
+#if JUCE_STANDALONE_APPLICATION
     if (showAdvanced || showKeyboardOnMain)
     {
         if (showAdvanced)
@@ -543,6 +552,7 @@ void VisceraEditor::resized()
             keyboard.setBounds(kbBounds.removeFromBottom(50));
         }
     }
+#endif
 
     int gap = 6;
     int headerH = 16;
@@ -651,7 +661,7 @@ void VisceraEditor::resized()
         int vibratoH = 70;
         int filterH = 80;
         int pitchH = 150;
-        int logoH = 80;
+        int logoH = 60;
         int lfoH = totalH - vibratoH - filterH - pitchH - logoH - gap * 4;
 
         // Filter top Y in centre column = vibratoH + gap + lfoH + gap + logoH + gap
@@ -677,7 +687,7 @@ void VisceraEditor::resized()
             centreCol.removeFromTop(gap);
             placeSection(centreCol, lfoH, lfoSection, 4);
             centreCol.removeFromTop(gap);
-            logoImage.setBounds(centreCol.removeFromTop(logoH));
+            logoImage.setBounds(centreCol.removeFromTop(logoH).reduced(20, 6));
             centreCol.removeFromTop(gap);
             placeSection(centreCol, filterH, filterSection, 5);
             centreCol.removeFromTop(gap);
