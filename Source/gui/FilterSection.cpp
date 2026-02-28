@@ -70,9 +70,9 @@ void FilterSection::resized()
     auto knobRow = area.withSizeKeepingCentre(area.getWidth(), knobSize + labelH);
     int colW = knobRow.getWidth() / 4;
 
-    // On/Off toggle
+    // On/Off toggle — aligned with effect toggles
     auto onArea = knobRow.removeFromLeft(colW);
-    onToggle.setBounds(onArea.reduced(4, 8));
+    onToggle.setBounds(onArea.reduced(2, 8));
 
     // Type selector
     auto typeArea = knobRow.removeFromLeft(colW);

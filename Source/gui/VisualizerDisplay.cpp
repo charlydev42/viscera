@@ -26,7 +26,8 @@ VisualizerDisplay::VisualizerDisplay(bb::AudioVisualBuffer& bufferL,
     fftButton.setVisible(false);
     stereoButton.setVisible(false);
 
-    startTimerHz(30);
+    // Timer disabled — VisualizerDisplay replaced by FlubberVisualizer
+    // startTimerHz(30);
 }
 
 VisualizerDisplay::~VisualizerDisplay()

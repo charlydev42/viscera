@@ -290,8 +290,13 @@ private:
                 }
             }
         }
+
+        bool changed = (mapped != isMapped);
         isMapped = mapped;
-        repaint();
+
+        // Only repaint if mapped (ring overlay needs updating) or mapping just changed
+        if (mapped || changed)
+            repaint();
     }
 
     // --- Ring drag helpers ---
