@@ -157,7 +157,7 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
         auto inner = bounds.reduced(2.0f);
 
         // Midline (bipolar zero at y=0.5)
-        g.setColour(juce::Colours::white.withAlpha(0.15f));
+        g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.15f));
         float midLineY = inner.getY() + inner.getHeight() * 0.5f;
         g.drawHorizontalLine(static_cast<int>(midLineY), inner.getX(), inner.getRight());
 
@@ -254,7 +254,7 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
 
     // Phase cursor
     float cursorX = bounds.getX() + phase * w;
-    g.setColour(juce::Colours::white.withAlpha(0.6f));
+    g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.6f));
     g.drawLine(cursorX, bounds.getY(), cursorX, bounds.getBottom(), 1.0f);
 
     // Border
@@ -378,6 +378,7 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     for (int i = 0; i < 4; ++i)
     {
         slotButtons[i].setClickingTogglesState(false);
+        slotButtons[i].setName("lfoSlot");
         slotButtons[i].onClick = [this, i] {
             if (learnSlotIndex == i)
             {
@@ -395,12 +396,12 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
                                   juce::Colour(VisceraLookAndFeel::kTextColor));
         addAndMakeVisible(slotButtons[i]);
 
-        // Small "x" clear button
+        // Clear button — overlaid inside slot pill, no background
         slotClearBtns[i].setButtonText("x");
         slotClearBtns[i].setColour(juce::TextButton::buttonColourId,
                                     juce::Colours::transparentBlack);
         slotClearBtns[i].setColour(juce::TextButton::textColourOffId,
-                                    juce::Colour(VisceraLookAndFeel::kTextColor));
+                                    juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
         slotClearBtns[i].onClick = [this, i] {
             auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
             auto destId = pfx + "DEST" + juce::String(i + 1);
@@ -667,15 +668,15 @@ void LFOSection::resized()
 
     area.removeFromTop(2);
 
-    // Bottom row: 4 slot cells
+    // Bottom row: 4 slot cells — "x" sits inside the pill
     auto bottomRow = area.removeFromBottom(18);
     int cellW = bottomRow.getWidth() / 4;
     for (int i = 0; i < 4; ++i)
     {
         auto cell = bottomRow.removeFromLeft(cellW).reduced(1, 0);
         slotButtons[i].setBounds(cell);
-        // x button overlaid inside the slot, right-aligned
-        slotClearBtns[i].setBounds(cell.removeFromRight(16));
+        // "x" overlaid flush-right inside the pill
+        slotClearBtns[i].setBounds(cell.withLeft(cell.getRight() - 16));
         slotClearBtns[i].toFront(false);
     }
 

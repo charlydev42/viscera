@@ -69,14 +69,31 @@ void VisualizerDisplay::paint(juce::Graphics& g)
     float rx = ellipse.getWidth() * 0.5f;
     float ry = ellipse.getHeight() * 0.5f;
 
-    // 1) Base — warm-white lit side, cool-grey shadow side
+    // 1) Base — neumorphic grey lit side, cool-grey shadow side
     {
-        juce::ColourGradient base(juce::Colour(0xFFFEFEFF), cx - rx * 0.18f, cy - ry * 0.15f,
-                                  juce::Colour(0xFFE6E7ED), cx + rx * 0.55f, cy + ry * 0.55f,
+        juce::Colour baseLight, baseDark, baseMid1, baseMid2, baseMid3;
+        if (VisceraLookAndFeel::darkMode)
+        {
+            baseLight = juce::Colour(0xFF353C4A);
+            baseDark  = juce::Colour(0xFF2A3038);
+            baseMid1  = juce::Colour(0xFF323846);
+            baseMid2  = juce::Colour(0xFF2E3440);
+            baseMid3  = juce::Colour(0xFF2C323E);
+        }
+        else
+        {
+            baseLight = juce::Colour(0xFFECF0F3);
+            baseDark  = juce::Colour(0xFFD4D9E2);
+            baseMid1  = juce::Colour(0xFFE6EBF0);
+            baseMid2  = juce::Colour(0xFFDDE2E8);
+            baseMid3  = juce::Colour(0xFFD8DDE4);
+        }
+        juce::ColourGradient base(baseLight, cx - rx * 0.18f, cy - ry * 0.15f,
+                                  baseDark, cx + rx * 0.55f, cy + ry * 0.55f,
                                   true);
-        base.addColour(0.35, juce::Colour(0xFFFAFAFC));
-        base.addColour(0.65, juce::Colour(0xFFF2F2F6));
-        base.addColour(0.85, juce::Colour(0xFFEAEBF0));
+        base.addColour(0.35, baseMid1);
+        base.addColour(0.65, baseMid2);
+        base.addColour(0.85, baseMid3);
         g.setGradientFill(base);
         g.fillEllipse(ellipse);
     }

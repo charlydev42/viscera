@@ -89,7 +89,7 @@ public:
         // Drag hover highlight
         if (dragHover)
         {
-            g.setColour(juce::Colours::white.withAlpha(0.15f));
+            g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.15f));
             g.fillEllipse(getLocalBounds().toFloat().reduced(2));
         }
 
@@ -165,8 +165,15 @@ public:
                 {
                     arc.addCentredArc(centre.x, centre.y, arcR, arcR, 0,
                                       a1, a2, true);
-                    g.setColour(col.withAlpha(0.7f));
-                    g.strokePath(arc, juce::PathStrokeType(3.5f));
+                    // Soft bloom halo
+                    g.setColour(col.withAlpha(0.08f));
+                    g.strokePath(arc, juce::PathStrokeType(5.0f));
+                    // Core — sharp
+                    g.setColour(col.withAlpha(0.85f));
+                    g.strokePath(arc, juce::PathStrokeType(2.0f));
+                    // Hot center
+                    g.setColour(col.brighter(0.5f).withAlpha(0.35f));
+                    g.strokePath(arc, juce::PathStrokeType(0.8f));
                 }
             }
         }
@@ -185,9 +192,19 @@ public:
             float outerR = arcR + 2.0f;
             float cosA = std::cos(screenAngle);
             float sinA = std::sin(screenAngle);
-            g.setColour(juce::Colour(0xFF909098).withAlpha(0.7f));
+            auto tickCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+            // Bloom halo
+            g.setColour(tickCol.withAlpha(0.08f));
             g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
-                       centre.x + cosA * outerR, centre.y + sinA * outerR, 2.0f);
+                       centre.x + cosA * outerR, centre.y + sinA * outerR, 4.0f);
+            // Core — sharp
+            g.setColour(tickCol.withAlpha(0.75f));
+            g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
+                       centre.x + cosA * outerR, centre.y + sinA * outerR, 1.6f);
+            // Hot
+            g.setColour(tickCol.brighter(0.5f).withAlpha(0.35f));
+            g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
+                       centre.x + cosA * outerR, centre.y + sinA * outerR, 0.7f);
         }
     }
 
