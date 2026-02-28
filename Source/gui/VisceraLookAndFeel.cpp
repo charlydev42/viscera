@@ -449,19 +449,30 @@ void VisceraLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
 void VisceraLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
 {
     auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat();
-    float cr = 8.0f;
+    float cr = 14.0f;
+
+    // Clear to transparent first (window is non-opaque)
+    g.fillAll(juce::Colours::transparentBlack);
 
     // Drop shadow behind popup
-    juce::DropShadow shadow(juce::Colour(kShadowDark).withAlpha(0.5f), 10, { 0, 4 });
-    shadow.drawForRectangle(g, bounds.toNearestInt());
+    juce::DropShadow shadow(juce::Colour(kShadowDark).withAlpha(0.45f), 14, { 0, 4 });
+    shadow.drawForRectangle(g, bounds.reduced(4).toNearestInt());
 
-    // Rounded background
-    g.setColour(juce::Colour(kBgColor));
-    g.fillRoundedRectangle(bounds, cr);
+    // Slightly darker than panel background so the pill stands out
+    auto bgCol = juce::Colour(kBgColor);
+    auto pillCol = darkMode ? bgCol.brighter(0.06f) : bgCol.darker(0.03f);
+    g.setColour(pillCol);
+    g.fillRoundedRectangle(bounds.reduced(4), cr);
 
-    // Subtle border
-    g.setColour(juce::Colour(kShadowDark).withAlpha(0.15f));
-    g.drawRoundedRectangle(bounds.reduced(0.5f), cr, 1.0f);
+    // Visible border
+    g.setColour(juce::Colour(kShadowDark).withAlpha(darkMode ? 0.5f : 0.22f));
+    g.drawRoundedRectangle(bounds.reduced(4.5f), cr, 1.0f);
+}
+
+void VisceraLookAndFeel::preparePopupMenuWindow(juce::Component& newWindow)
+{
+    newWindow.setOpaque(false);
+    newWindow.setRepaintsOnMouseActivity(true);
 }
 
 void VisceraLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area,
@@ -520,4 +531,15 @@ void VisceraLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, boo
         idealWidth = static_cast<int>(font.getStringWidthFloat(text)) + 32;
         idealHeight = 26;
     }
+}
+
+int VisceraLookAndFeel::getPopupMenuBorderSize()
+{
+    return 10; // 4px transparent margin + 6px inner padding
+}
+
+int VisceraLookAndFeel::getMenuWindowFlags()
+{
+    // Remove default window border/shadow — we draw our own
+    return juce::ComponentPeer::windowIsTemporary;
 }

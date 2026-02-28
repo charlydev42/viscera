@@ -16,6 +16,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       tabbedEffects(processor.apvts),
       shaperSection(processor.apvts, processor.getVolumeShaper()),
       visualizerDisplay(processor.getVisualBuffer(), processor.getVisualBufferR()),
+      flubberVisualizer(processor.getVisualBuffer(), processor.getVisualBufferR()),
       lfoSection(processor.apvts, processor),
       globalSection(processor.apvts),
       keyboard(processor.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
@@ -35,7 +36,8 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     addAndMakeVisible(pitchEnvSection);
     addAndMakeVisible(tabbedEffects);
     addAndMakeVisible(shaperSection);
-    addAndMakeVisible(visualizerDisplay);
+    addAndMakeVisible(flubberVisualizer);
+    visualizerDisplay.setVisible(false);
     addAndMakeVisible(lfoSection);
     addAndMakeVisible(globalSection);
 
@@ -376,8 +378,8 @@ void VisceraEditor::setPage(bool advanced)
         fxLabel[i].setVisible(!advanced);
     }
 
-    // Visualizer only on main page
-    visualizerDisplay.setVisible(!advanced);
+    // Flubber visualizer only on main page
+    flubberVisualizer.setVisible(!advanced);
 
     // Effects: hidden on main (we use mini-controls), stacked on edit
     tabbedEffects.setVisible(advanced);
@@ -443,17 +445,7 @@ void VisceraEditor::paint(juce::Graphics& g)
             VisceraLookAndFeel::drawNeumorphicRect(g, panelArea, 8.0f, false);
         }
 
-        // Neumorphic shadow under the oval visualizer
-        if (! mainSectionBounds[0].isEmpty())
-        {
-            auto vizF = mainSectionBounds[0].toFloat();
-            juce::Path ovalPath;
-            ovalPath.addEllipse(vizF);
-            juce::DropShadow vizLight(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.6f), 6, { -3, -3 });
-            vizLight.drawForPath(g, ovalPath);
-            juce::DropShadow vizDark(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.45f), 6, { 3, 3 });
-            vizDark.drawForPath(g, ovalPath);
-        }
+        // (no neumorphic shadow around visualizer — the oval shader handles its own edges)
     }
     else
     {
@@ -498,11 +490,20 @@ void VisceraEditor::resized()
     presetBrowser.setBounds(topBar);
     area.removeFromTop(4);
 
-    // === Keyboard at bottom ===
+    // === Keyboard at bottom (overlay, doesn't shrink area on main page) ===
     if (showAdvanced || showKeyboardOnMain)
     {
-        keyboard.setBounds(area.removeFromBottom(50));
-        area.removeFromBottom(4);
+        if (showAdvanced)
+        {
+            keyboard.setBounds(area.removeFromBottom(50));
+            area.removeFromBottom(4);
+        }
+        else
+        {
+            // On main page: overlay at bottom, no layout impact
+            auto kbBounds = area;
+            keyboard.setBounds(kbBounds.removeFromBottom(50));
+        }
     }
 
     int gap = 6;
@@ -518,20 +519,20 @@ void VisceraEditor::resized()
         int fxKnobSize = 44;
         int labelH = 14;
 
-        // Oval visualizer centered — fills most of the screen
-        int vizW = static_cast<int>(area.getWidth() * 0.72f);
-        int vizH = static_cast<int>(area.getHeight() * 0.68f);
+        // Rectangular flubber visualizer centered
+        int vizW = static_cast<int>(area.getWidth() * 0.54f);
+        int vizH = static_cast<int>(area.getHeight() * 0.58f);
         auto vizBounds = area.withSizeKeepingCentre(vizW, vizH);
-        vizBounds.translate(0, -30);
+        vizBounds.translate(0, -62);
         mainSectionBounds[0] = vizBounds;
-        visualizerDisplay.setBounds(vizBounds);
+        flubberVisualizer.setBounds(vizBounds);
 
         float cx = static_cast<float>(vizBounds.getCentreX());
         float cy = static_cast<float>(vizBounds.getCentreY());
         constexpr float pi = juce::MathConstants<float>::pi;
 
         // --- Macro knobs: 3 left, 3 right (along sides of ellipse) ---
-        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.2f;
+        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.4f;
         float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * 0.85f;
 
         // Left: Cutoff(2), Res(3), Spread(5)  |  Right: Drive(1), Fold(4), Volume(0)
@@ -556,8 +557,8 @@ void VisceraEditor::resized()
         }
 
         // --- Effect mini-controls: outer orbit, bottom arc ---
-        float fxRx = macroRx + 24.0f;
-        float fxRy = macroRy + 20.0f;
+        float fxRx = macroRx + 28.0f;
+        float fxRy = macroRy + 22.0f;
         // 4 effects centered at bottom: ~252°, 264°, 276°, 288°
         float fxAngles[4] = { 252.0f * pi / 180.0f, 264.0f * pi / 180.0f,
                                276.0f * pi / 180.0f, 288.0f * pi / 180.0f };

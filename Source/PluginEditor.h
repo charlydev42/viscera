@@ -15,6 +15,7 @@
 #include "gui/TabbedEffectSection.h"
 #include "gui/VolumeShaperSection.h"
 #include "gui/VisualizerDisplay.h"
+#include "gui/FlubberVisualizer.h"
 #include "gui/LFOSection.h"
 #include "gui/ModSlider.h"
 
@@ -45,6 +46,7 @@ private:
     TabbedEffectSection tabbedEffects;
     VolumeShaperSection shaperSection;
     VisualizerDisplay visualizerDisplay;
+    FlubberVisualizer flubberVisualizer;
     LFOSection lfoSection;
     GlobalSection globalSection;
 
@@ -73,6 +75,7 @@ private:
 
     // Dark mode toggle
     juce::TextButton darkModeBtn;
+    bool darkModeTransitioning = false;
 
     // Main page keyboard toggle
     bool showKeyboardOnMain = false;

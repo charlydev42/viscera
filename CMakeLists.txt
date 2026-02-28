@@ -50,6 +50,7 @@ target_sources(Viscera PRIVATE
     Source/gui/RubberSection.cpp
     Source/gui/VolumeShaperSection.cpp
     Source/gui/VisualizerDisplay.cpp
+    Source/gui/FlubberVisualizer.cpp
     Source/gui/GlobalSection.cpp
     Source/gui/PresetBrowser.cpp
     Source/gui/VisceraLookAndFeel.cpp
@@ -76,6 +77,7 @@ target_link_libraries(Viscera
         juce::juce_audio_utils
         juce::juce_dsp
         juce::juce_gui_basics
+        juce::juce_opengl
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags

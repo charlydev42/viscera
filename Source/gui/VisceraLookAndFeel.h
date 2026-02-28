@@ -46,6 +46,12 @@ public:
                                     int standardMenuItemHeight, int& idealWidth,
                                     int& idealHeight) override;
 
+    int getPopupMenuBorderSize() override;
+    int getMenuWindowFlags() override;
+
+    // Make popup window transparent so no white rect behind rounded corners
+    void preparePopupMenuWindow(juce::Component& newWindow) override;
+
     // Filmstrip knob images
     juce::Image knobVirgin, knobCircle, knobBlue, knobCircleGreen;
 
