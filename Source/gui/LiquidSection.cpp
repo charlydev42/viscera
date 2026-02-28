@@ -64,7 +64,7 @@ void LiquidSection::setupKnob(juce::Slider& knob, juce::Label& label, const juce
 void LiquidSection::resized()
 {
     auto area = getLocalBounds().reduced(2);
-    area.removeFromTop(8);
+    area.removeFromTop(2);
     int knobSize = 36;
     int labelH = 12;
 
@@ -73,7 +73,7 @@ void LiquidSection::resized()
 
     // On/Off toggle
     auto onArea = knobRow.removeFromLeft(colW);
-    onToggle.setBounds(onArea.reduced(4, 6));
+    onToggle.setBounds(onArea.reduced(4, 8));
 
     auto layout = [&](juce::Slider& knob, juce::Label& label)
     {

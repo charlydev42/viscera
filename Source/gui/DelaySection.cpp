@@ -80,7 +80,7 @@ void DelaySection::setupKnob(juce::Slider& knob, juce::Label& label, const juce:
 void DelaySection::resized()
 {
     auto area = getLocalBounds().reduced(2);
-    area.removeFromTop(8);
+    area.removeFromTop(2);
     int knobSize = 36;
     int labelH = 12;
 
