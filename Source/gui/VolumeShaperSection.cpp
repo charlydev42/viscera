@@ -218,7 +218,8 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
     };
     addAndMakeVisible(fixedToggle);
 
-    // Rate knob (free mode)
+    // Rate knob (free mode, LFO assignable)
+    rateKnob.initMod(apvts, bb::LFODest::ShaperRate);
     rateKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     rateKnob.setSliderSnapsToMousePosition(false);
     rateKnob.setMouseDragSensitivity(200);
@@ -249,7 +250,8 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
     syncValueLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
     addAndMakeVisible(syncValueLabel);
 
-    // Depth knob
+    // Depth knob (LFO assignable)
+    depthKnob.initMod(apvts, bb::LFODest::ShaperDepth);
     depthKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     depthKnob.setSliderSnapsToMousePosition(false);
     depthKnob.setMouseDragSensitivity(200);

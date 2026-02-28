@@ -31,7 +31,7 @@ public:
 private:
     juce::ToggleButton onToggle;
     ModSlider amtKnob;
-    juce::Slider adsrKnobs[4];
+    ModSlider adsrKnobs[4];
     juce::Label amtLabel;
     juce::Label adsrLabels[4];
     PitchEnvDisplay envDisplay;

@@ -53,6 +53,30 @@ enum class LFODest : int {
     RubStretch,    // ±rubber stretch
     RubFeed,       // ±rubber feedback
     Porta,         // ±portamento time
+    Env1A,         // ±env1 attack time
+    Env1D,         // ±env1 decay time
+    Env1S,         // ±env1 sustain level
+    Env1R,         // ±env1 release time
+    Env2A,         // ±env2 attack time
+    Env2D,         // ±env2 decay time
+    Env2S,         // ±env2 sustain level
+    Env2R,         // ±env2 release time
+    Env3A,         // ±env3 attack time
+    Env3D,         // ±env3 decay time
+    Env3S,         // ±env3 sustain level
+    Env3R,         // ±env3 release time
+    PEnvA,         // ±pitch env attack
+    PEnvD,         // ±pitch env decay
+    PEnvS,         // ±pitch env sustain
+    PEnvR,         // ±pitch env release
+    ShaperRate,    // ±shaper rate
+    ShaperDepth,   // ±shaper depth
+    Mod1Coarse,    // ±mod1 coarse ratio
+    Mod2Coarse,    // ±mod2 coarse ratio
+    CarCoarse,     // ±carrier coarse ratio
+    Tremor,        // ±tremor (per-voice pitch vibrato amount)
+    Vein,          // ±vein (per-voice filter LFO amount)
+    Flux,          // ±flux (per-voice mod index LFO amount)
     Count
 };
 
@@ -178,6 +202,30 @@ struct VoiceParams
     std::atomic<float> lfoModRubStretch { 0.0f };
     std::atomic<float> lfoModRubFeed  { 0.0f };
     std::atomic<float> lfoModPorta    { 0.0f };
+    std::atomic<float> lfoModEnv1A    { 0.0f };
+    std::atomic<float> lfoModEnv1D    { 0.0f };
+    std::atomic<float> lfoModEnv1S    { 0.0f };
+    std::atomic<float> lfoModEnv1R    { 0.0f };
+    std::atomic<float> lfoModEnv2A    { 0.0f };
+    std::atomic<float> lfoModEnv2D    { 0.0f };
+    std::atomic<float> lfoModEnv2S    { 0.0f };
+    std::atomic<float> lfoModEnv2R    { 0.0f };
+    std::atomic<float> lfoModEnv3A    { 0.0f };
+    std::atomic<float> lfoModEnv3D    { 0.0f };
+    std::atomic<float> lfoModEnv3S    { 0.0f };
+    std::atomic<float> lfoModEnv3R    { 0.0f };
+    std::atomic<float> lfoModPEnvA    { 0.0f };
+    std::atomic<float> lfoModPEnvD    { 0.0f };
+    std::atomic<float> lfoModPEnvS    { 0.0f };
+    std::atomic<float> lfoModPEnvR    { 0.0f };
+    std::atomic<float> lfoModShaperRate  { 0.0f };
+    std::atomic<float> lfoModShaperDepth { 0.0f };
+    std::atomic<float> lfoModMod1Coarse  { 0.0f };
+    std::atomic<float> lfoModMod2Coarse  { 0.0f };
+    std::atomic<float> lfoModCarCoarse   { 0.0f };
+    std::atomic<float> lfoModTremor      { 0.0f };
+    std::atomic<float> lfoModVein        { 0.0f };
+    std::atomic<float> lfoModFlux        { 0.0f };
 
     // Per-LFO unipolar peak (for arc scaling in GUI)
     std::atomic<float> lfoPeak[3]    { {1.0f}, {1.0f}, {1.0f} };

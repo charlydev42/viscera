@@ -484,29 +484,34 @@ void VisceraLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectan
 {
     if (isSeparator)
     {
-        auto sepArea = area.reduced(8, 0);
-        g.setColour(juce::Colour(kShadowDark).withAlpha(0.2f));
+        auto sepArea = area.reduced(12, 0);
+        g.setColour(juce::Colour(kShadowDark).withAlpha(darkMode ? 0.4f : 0.15f));
         g.fillRect(sepArea.getX(), sepArea.getCentreY(), sepArea.getWidth(), 1);
         return;
     }
 
-    auto r = area.reduced(4, 1);
+    auto r = area.reduced(6, 1);
 
     if (isHighlighted && isActive)
     {
-        float pillCr = r.getHeight() * 0.5f;
-        g.setColour(juce::Colour(kAccentColor).withAlpha(0.2f));
+        float pillCr = 6.0f;
+        g.setColour(juce::Colour(kAccentColor).withAlpha(0.18f));
         g.fillRoundedRectangle(r.toFloat(), pillCr);
     }
 
+    // Destructive items (starting with cross symbol) get a red tint
+    bool isDestructive = text.startsWithChar(0x2716);
+
     auto textCol = isActive ? juce::Colour(kTextColor) : juce::Colour(kTextColor).withAlpha(0.4f);
     if (isHighlighted && isActive)
-        textCol = juce::Colour(kAccentColor);
+        textCol = isDestructive ? juce::Colour(0xFFE57373) : juce::Colour(kAccentColor);
+    else if (isDestructive && isActive)
+        textCol = juce::Colour(kTextColor).withAlpha(0.7f);
 
     g.setColour(textCol);
     g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
 
-    auto textArea = r.reduced(8, 0);
+    auto textArea = r.reduced(10, 0);
     g.drawText(text, textArea, juce::Justification::centredLeft);
 
     if (isTicked)
@@ -530,8 +535,8 @@ void VisceraLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, boo
     else
     {
         auto font = juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain);
-        idealWidth = static_cast<int>(font.getStringWidthFloat(text)) + 32;
-        idealHeight = 26;
+        idealWidth = static_cast<int>(font.getStringWidthFloat(text)) + 40;
+        idealHeight = 28;
     }
 }
 

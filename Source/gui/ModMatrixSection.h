@@ -2,6 +2,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "ModSlider.h"
 
 class ModMatrixSection : public juce::Component,
                          private juce::Timer
@@ -13,7 +14,7 @@ public:
     void timerCallback() override;
 
 private:
-    juce::Slider tremorKnob, veinKnob, fluxKnob;
+    ModSlider tremorKnob, veinKnob, fluxKnob;
     juce::Label tremorLabel, veinLabel, fluxLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> tremorAttach, veinAttach, fluxAttach;

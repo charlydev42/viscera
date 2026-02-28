@@ -19,6 +19,9 @@ public:
 
     void setLFOPointer(bb::LFO* ptr) { lfoPtr = ptr; }
 
+    // Callback to switch wave type to Custom when double-clicking in standard mode
+    std::function<void(int)> onWaveChange;
+
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
@@ -52,15 +55,19 @@ class LFOSection : public juce::Component,
 public:
     LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcessor& proc);
     ~LFOSection() override;
+    void paint(juce::Graphics& g) override;
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
     void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
 
 private:
     void timerCallback() override;
     void switchTab(int tab);
     void updateAssignmentLabels();
-    void showSlotPopup(int slotIdx); // 0-3
+    void showSlotPopup(int slotIdx);
+    void showAssignmentsPopup();
     void updateSyncDisplay();
     int getSyncParam() const;
     void setSyncParam(int idx);
@@ -101,9 +108,19 @@ private:
     };
     RefreshButton resetCurveBtn;
 
-    // Assignment slot buttons (clickable to edit / learn)
-    juce::TextButton slotButtons[4];
-    juce::TextButton slotClearBtns[4]; // small "x" to unmap
+    static constexpr int kNumSlots = 8;
+
+    // Assignment slot buttons (only visible when mapped)
+    juce::TextButton slotButtons[kNumSlots];
+    juce::TextButton slotClearBtns[kNumSlots]; // small "x" to unmap
+
+    // "+" button to add a new routing, "-" to remove last, count/hint label
+    juce::TextButton addSlotBtn;
+    juce::TextButton removeSlotBtn;
+    juce::Label countLabel;
+    juce::Label hintLabel;
+    juce::Rectangle<int> slotArea; // cached from resized()
+    void layoutSlots(); // dynamic layout of visible slots
 
     // APVTS attachments (re-created on tab switch)
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttach;

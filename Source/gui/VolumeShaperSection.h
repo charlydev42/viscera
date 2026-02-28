@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/VolumeShaper.h"
+#include "ModSlider.h"
 
 // Interactive drawable display for the shaper table (32 or 8 bars)
 class ShaperDisplay : public juce::Component,
@@ -50,7 +51,7 @@ private:
     juce::Label fixedLabel;
 
     // Rate knob (free mode)
-    juce::Slider rateKnob;
+    ModSlider rateKnob;
     juce::Label rateValueLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> rateAttach;
 
@@ -59,7 +60,7 @@ private:
     juce::Label syncValueLabel;
 
     // Depth knob
-    juce::Slider depthKnob;
+    ModSlider depthKnob;
     juce::Label depthLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> depthAttach;
 

@@ -26,8 +26,8 @@ private:
     juce::ComboBox waveCombo;
     juce::Label waveLabel;
 
-    // Coarse knob (ratio mode — visible when Fixed OFF)
-    juce::Slider coarseKnob;
+    // Coarse knob (ratio mode — visible when Fixed OFF, LFO assignable)
+    ModSlider coarseKnob;
     // Fixed freq knob (fixed mode — visible when Fixed ON)
     juce::Slider fixedFreqKnob;
     // Shared label that swaps between "Coarse" and "Freq"
@@ -44,7 +44,7 @@ private:
     ModSlider levelKnob;
     juce::Label levelLabel;
 
-    juce::Slider adsrKnobs[4];
+    ModSlider adsrKnobs[4];
     juce::Label adsrLabels[4];
 
     // Attachments

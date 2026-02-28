@@ -107,13 +107,17 @@ PitchEnvSection::PitchEnvSection(juce::AudioProcessorValueTreeState& apvts)
     amtAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "PENV_AMT", amtKnob);
 
-    static const char* adsrNames[] = { "A", "D", "S", "R" };
-    static const char* paramIds[]  = { "PENV_A", "PENV_D", "PENV_S", "PENV_R" };
-    for (int i = 0; i < 4; ++i)
     {
-        setupKnob(adsrKnobs[i], adsrLabels[i], adsrNames[i]);
-        adsrAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            apvts, paramIds[i], adsrKnobs[i]);
+        static const char* adsrNames[] = { "A", "D", "S", "R" };
+        static const char* paramIds[]  = { "PENV_A", "PENV_D", "PENV_S", "PENV_R" };
+        bb::LFODest envDests[] = { bb::LFODest::PEnvA, bb::LFODest::PEnvD, bb::LFODest::PEnvS, bb::LFODest::PEnvR };
+        for (int i = 0; i < 4; ++i)
+        {
+            adsrKnobs[i].initMod(apvts, envDests[i]);
+            setupKnob(adsrKnobs[i], adsrLabels[i], adsrNames[i]);
+            adsrAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+                apvts, paramIds[i], adsrKnobs[i]);
+        }
     }
 
     addAndMakeVisible(envDisplay);

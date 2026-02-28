@@ -10,6 +10,7 @@ class ModSlider : public juce::Slider,
                   public juce::DragAndDropTarget,
                   private juce::Timer
 {
+    static constexpr int kSlotsPerLFO = 8;
 public:
     ModSlider()
     {
@@ -22,6 +23,9 @@ public:
 
     // Static pointer to VoiceParams for reading live LFO modulation values
     static inline const bb::VoiceParams* voiceParamsPtr = nullptr;
+
+    // When true, all assignable ModSliders highlight to show they're valid drop targets
+    static inline bool showDropTargets = false;
 
     bb::LFODest getDest() const { return myDest; }
     bool isMapped = false;  // true when at least one LFO targets this knob
@@ -50,22 +54,43 @@ public:
     void itemDropped(const SourceDetails& details) override
     {
         dragHover = false;
+        showDropTargets = false;
         if (!statePtr) return;
         int lfoIdx = details.description.toString().getTrailingIntValue();
         if (lfoIdx < 0 || lfoIdx > 2) return;
 
         auto pfx = "LFO" + juce::String(lfoIdx + 1) + "_";
 
-        // Check if already assigned
-        for (int s = 1; s <= 4; ++s)
+        // Check if this exact LFO is already assigned to this knob
+        for (int s = 1; s <= kSlotsPerLFO; ++s)
         {
             auto destId = pfx + "DEST" + juce::String(s);
             int curDest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
             if (curDest == static_cast<int>(myDest))
-                return;
+                return; // already assigned, nothing to do
         }
 
-        for (int s = 1; s <= 4; ++s)
+        // Policy: max 1 LFO per knob — remove any existing assignment from ANY LFO
+        for (int l = 0; l < 3; ++l)
+        {
+            auto otherPfx = "LFO" + juce::String(l + 1) + "_";
+            for (int s = 1; s <= kSlotsPerLFO; ++s)
+            {
+                auto destId = otherPfx + "DEST" + juce::String(s);
+                auto amtId  = otherPfx + "AMT"  + juce::String(s);
+                int curDest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
+                if (curDest == static_cast<int>(myDest))
+                {
+                    statePtr->getParameter(destId)->setValueNotifyingHost(
+                        statePtr->getParameter(destId)->convertTo0to1(0.0f));
+                    statePtr->getParameter(amtId)->setValueNotifyingHost(
+                        statePtr->getParameter(amtId)->convertTo0to1(0.0f));
+                }
+            }
+        }
+
+        // Assign to first free slot on the dropped LFO
+        for (int s = 1; s <= kSlotsPerLFO; ++s)
         {
             auto destId = pfx + "DEST" + juce::String(s);
             auto amtId  = pfx + "AMT"  + juce::String(s);
@@ -95,13 +120,6 @@ public:
         {
             g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.15f));
             g.fillEllipse(getLocalBounds().toFloat().reduced(2));
-        }
-
-        // Learn mode: subtle outline on mappable knobs
-        if (onLearnClick)
-        {
-            g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.4f));
-            g.drawEllipse(getLocalBounds().toFloat().reduced(3.0f), 1.0f);
         }
 
         static const juce::Colour lfoColors[] = {
@@ -137,7 +155,7 @@ public:
         for (int l = 0; l < 3; ++l)
         {
             auto pfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= 4; ++s)
+            for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
                 auto destId = pfx + "DEST" + juce::String(s);
                 auto amtId  = pfx + "AMT"  + juce::String(s);
@@ -214,10 +232,11 @@ public:
             return;
         }
 
-        // Context menu on right-click
-        if (statePtr && e.mods.isPopupMenu())
+        // Context menu on right-click (always available on ModSliders)
+        if (e.mods.isPopupMenu())
         {
-            showContextMenu();
+            if (statePtr)
+                showContextMenu();
             return;
         }
 
@@ -272,6 +291,7 @@ private:
     int ringDragLfo = -1;   // 0-2
     int ringDragSlot = -1;  // 0-3
     float ringDragStartAmt = 0.0f;
+    bool wasShowingDropTargets = false; // track transition to clear residual glow
 
     void timerCallback() override
     {
@@ -282,7 +302,7 @@ private:
             for (int l = 0; l < 3 && !mapped; ++l)
             {
                 auto pfx = "LFO" + juce::String(l + 1) + "_";
-                for (int s = 1; s <= 4 && !mapped; ++s)
+                for (int s = 1; s <= kSlotsPerLFO && !mapped; ++s)
                 {
                     auto* raw = statePtr->getRawParameterValue(pfx + "DEST" + juce::String(s));
                     if (raw && static_cast<int>(raw->load()) == static_cast<int>(myDest))
@@ -294,8 +314,12 @@ private:
         bool changed = (mapped != isMapped);
         isMapped = mapped;
 
-        // Only repaint if mapped (ring overlay needs updating) or mapping just changed
-        if (mapped || changed)
+        // Detect drop-targets turning off — need one final repaint to clear the glow
+        bool dropTargetsJustEnded = (wasShowingDropTargets && !showDropTargets);
+        wasShowingDropTargets = showDropTargets;
+
+        // Repaint if mapped, state changed, drag targets showing, or targets just ended
+        if (mapped || changed || showDropTargets || dropTargetsJustEnded)
             repaint();
     }
 
@@ -327,7 +351,7 @@ private:
         for (int l = 0; l < 3; ++l)
         {
             auto pfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= 4; ++s)
+            for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
                 auto destId = pfx + "DEST" + juce::String(s);
                 auto* destRaw = statePtr->getRawParameterValue(destId);
@@ -421,6 +445,30 @@ private:
             case bb::LFODest::RubStretch:    return voiceParamsPtr->lfoModRubStretch.load(std::memory_order_relaxed);
             case bb::LFODest::RubFeed:       return voiceParamsPtr->lfoModRubFeed.load(std::memory_order_relaxed);
             case bb::LFODest::Porta:         return voiceParamsPtr->lfoModPorta.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1A:         return voiceParamsPtr->lfoModEnv1A.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1D:         return voiceParamsPtr->lfoModEnv1D.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1S:         return voiceParamsPtr->lfoModEnv1S.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1R:         return voiceParamsPtr->lfoModEnv1R.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2A:         return voiceParamsPtr->lfoModEnv2A.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2D:         return voiceParamsPtr->lfoModEnv2D.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2S:         return voiceParamsPtr->lfoModEnv2S.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2R:         return voiceParamsPtr->lfoModEnv2R.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3A:         return voiceParamsPtr->lfoModEnv3A.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3D:         return voiceParamsPtr->lfoModEnv3D.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3S:         return voiceParamsPtr->lfoModEnv3S.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3R:         return voiceParamsPtr->lfoModEnv3R.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvA:         return voiceParamsPtr->lfoModPEnvA.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvD:         return voiceParamsPtr->lfoModPEnvD.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvS:         return voiceParamsPtr->lfoModPEnvS.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvR:         return voiceParamsPtr->lfoModPEnvR.load(std::memory_order_relaxed);
+            case bb::LFODest::ShaperRate:    return voiceParamsPtr->lfoModShaperRate.load(std::memory_order_relaxed);
+            case bb::LFODest::ShaperDepth:   return voiceParamsPtr->lfoModShaperDepth.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod1Coarse:    return voiceParamsPtr->lfoModMod1Coarse.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod2Coarse:    return voiceParamsPtr->lfoModMod2Coarse.load(std::memory_order_relaxed);
+            case bb::LFODest::CarCoarse:     return voiceParamsPtr->lfoModCarCoarse.load(std::memory_order_relaxed);
+            case bb::LFODest::Tremor:        return voiceParamsPtr->lfoModTremor.load(std::memory_order_relaxed);
+            case bb::LFODest::Vein:          return voiceParamsPtr->lfoModVein.load(std::memory_order_relaxed);
+            case bb::LFODest::Flux:          return voiceParamsPtr->lfoModFlux.load(std::memory_order_relaxed);
             default: return 0.0f;
         }
     }
@@ -430,32 +478,54 @@ private:
         if (!statePtr) return;
         juce::PopupMenu menu;
 
-        // Collect assignments targeting this knob
-        struct Hit { int lfo; int slot; };
+        // Collect LFO assignments targeting this knob
+        struct Hit { int lfo; int slot; float amt; };
         Hit hits[12];
         int numHits = 0;
 
         for (int l = 0; l < 3; ++l)
         {
             auto pfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= 4; ++s)
+            for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
                 auto destId = pfx + "DEST" + juce::String(s);
+                auto amtId  = pfx + "AMT"  + juce::String(s);
                 int dest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
                 if (dest == static_cast<int>(myDest))
                 {
-                    hits[numHits] = { l, s };
-                    menu.addItem(numHits + 1, "x  Remove LFO" + juce::String(l + 1));
+                    float amt = statePtr->getRawParameterValue(amtId)->load();
+                    hits[numHits] = { l, s, amt };
+                    auto amtStr = juce::String(static_cast<int>(amt * 100.0f));
+                    menu.addItem(numHits + 1,
+                        juce::String::charToString(0x2716) + "  LFO" + juce::String(l + 1)
+                        + "  " + amtStr + "%");
                     ++numHits;
                 }
             }
         }
 
-        if (numHits == 0) return;
+        // Separator + Reset to Default (always available)
+        if (numHits > 0)
+            menu.addSeparator();
+        menu.addItem(100, juce::String::charToString(0x21BA) + "  Reset to Default");
 
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
             [this, hits, numHits](int result) {
-                if (!statePtr || result <= 0 || result > numHits) return;
+                if (!statePtr || result <= 0) return;
+
+                if (result == 100)
+                {
+                    // Reset slider to default value
+                    auto paramId = getComponentID();
+                    if (auto* param = statePtr->getParameter(paramId))
+                        param->setValueNotifyingHost(param->getDefaultValue());
+                    else
+                        setValue(getDoubleClickReturnValue(), juce::sendNotificationSync);
+                    repaint();
+                    return;
+                }
+
+                if (result > numHits) return;
                 auto h = hits[result - 1];
                 auto pfx = "LFO" + juce::String(h.lfo + 1) + "_";
                 auto destId = pfx + "DEST" + juce::String(h.slot);

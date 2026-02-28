@@ -104,6 +104,7 @@ void LFOWaveDisplay::mouseDrag(const juce::MouseEvent& e)
     {
         if (auto* container = findParentComponentOfClass<juce::DragAndDropContainer>())
         {
+            ModSlider::showDropTargets = true;
             juce::String dragDesc = "LFO_" + juce::String(lfoIdx);
             container->startDragging(dragDesc, this);
         }
@@ -114,15 +115,65 @@ void LFOWaveDisplay::mouseUp(const juce::MouseEvent&)
 {
     isDraggingPoint = false;
     dragPointIndex = -1;
+    ModSlider::showDropTargets = false;
     repaint();
 }
 
 void LFOWaveDisplay::mouseDoubleClick(const juce::MouseEvent& e)
 {
-    bool isCustom = (waveType == static_cast<int>(bb::LFOWaveType::Custom));
-    if (!isCustom || lfoPtr == nullptr) return;
+    if (lfoPtr == nullptr) return;
 
+    bool isCustom = (waveType == static_cast<int>(bb::LFOWaveType::Custom));
     auto inner = getLocalBounds().toFloat().reduced(4.0f);
+
+    if (!isCustom)
+    {
+        // Sample the current waveform shape into curve points
+        constexpr int kSamplePoints = 17; // enough points to capture the shape
+        std::vector<bb::CurvePoint> pts;
+        for (int i = 0; i < kSamplePoints; ++i)
+        {
+            float t = static_cast<float>(i) / static_cast<float>(kSamplePoints - 1);
+            float val = 0.0f;
+            switch (waveType)
+            {
+            case 0: // Sine
+                val = std::sin(t * juce::MathConstants<float>::twoPi);
+                val = (val + 1.0f) * 0.5f; // [-1,1] → [0,1]
+                break;
+            case 1: // Triangle
+                val = 2.0f * std::abs(2.0f * t - 1.0f) - 1.0f;
+                val = (val + 1.0f) * 0.5f;
+                break;
+            case 2: // Saw
+                val = (2.0f * t - 1.0f + 1.0f) * 0.5f; // → t
+                break;
+            case 3: // Square
+                val = (t < 0.5f) ? 1.0f : 0.0f;
+                break;
+            case 4: // S&H — just use flat midpoint
+                val = 0.5f;
+                break;
+            default: val = 0.5f; break;
+            }
+            pts.push_back({ t, juce::jlimit(0.0f, 1.0f, val) });
+        }
+
+        // Add the clicked point
+        auto clickPt = pixelToPoint(e.position, inner);
+        pts.push_back(clickPt);
+
+        // Set curve points (switches to custom shape internally)
+        lfoPtr->setCurvePoints(pts);
+
+        // Switch wave type to Custom via the combo/param
+        if (onWaveChange) onWaveChange(static_cast<int>(bb::LFOWaveType::Custom));
+
+        repaint();
+        return;
+    }
+
+    // Already in custom mode
     auto pts = lfoPtr->getCurvePoints();
 
     // Check if double-clicking an existing point (not endpoints) — delete it
@@ -288,7 +339,14 @@ static const juce::StringArray kDestNames {
     "DlyDamp", "DlySprd",
     "LiqRate", "LiqTone", "LiqFeed",
     "RubTone", "RubStr", "RubFeed",
-    "Porta"
+    "Porta",
+    "E1A", "E1D", "E1S", "E1R",
+    "E2A", "E2D", "E2S", "E2R",
+    "E3A", "E3D", "E3S", "E3R",
+    "PEA", "PED", "PES", "PER",
+    "ShpRate", "ShpDep",
+    "M1Coar", "M2Coar", "CCoar",
+    "Tremor", "Vein", "Flux"
 };
 
 // --- RefreshButton ---
@@ -323,7 +381,9 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
         tabButtons[i].setClickingTogglesState(false);
         tabButtons[i].setName(""); // prevent JUCE from showing component name as ghost text
         tabButtons[i].setTooltip("");
+        tabButtons[i].setPaintingIsUnclipped(true);
         tabButtons[i].onClick = [this, i] { switchTab(i); };
+        tabButtons[i].addMouseListener(this, false); // for drag to assign
         addAndMakeVisible(tabButtons[i]);
     }
 
@@ -379,6 +439,13 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     // Wave display
     addAndMakeVisible(waveDisplay);
 
+    // Callback: double-click on non-custom waveform → switch wave param to Custom
+    waveDisplay.onWaveChange = [this](int newWaveType) {
+        auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
+        if (auto* p = state.getParameter(pfx + "WAVE"))
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(newWaveType)));
+    };
+
     // Reset custom curve button
     resetCurveBtn.onClick = [this] {
         auto& lfo = processor.getGlobalLFO(activeTab);
@@ -387,42 +454,67 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     };
     addAndMakeVisible(resetCurveBtn);
 
-    // Slot buttons: show dest name or "+" for learn, click enters learn mode
-    for (int i = 0; i < 4; ++i)
+    // Slot buttons & clear buttons — hidden, managed internally
+    for (int i = 0; i < kNumSlots; ++i)
     {
-        slotButtons[i].setClickingTogglesState(false);
-        slotButtons[i].setName("lfoSlot");
-        slotButtons[i].onClick = [this, i] {
-            if (learnSlotIndex == i)
-            {
-                cancelLearnMode();
-                return;
-            }
-            auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
+        slotButtons[i].setVisible(false);
+        slotClearBtns[i].setVisible(false);
+    }
+
+    // "+" button — click enters learn mode + shows drop targets, right-click shows assignments popup
+    addSlotBtn.setButtonText("+");
+    addSlotBtn.setName("lfoSlot");
+    addSlotBtn.onClick = [this] {
+        if (learnSlotIndex >= 0) { cancelLearnMode(); ModSlider::showDropTargets = false; return; }
+        auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
+        for (int i = 0; i < kNumSlots; ++i)
+        {
             int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(i + 1)));
             if (dest == 0)
+            {
+                ModSlider::showDropTargets = true;
                 enterLearnMode(i);
-        };
-        addAndMakeVisible(slotButtons[i]);
+                return;
+            }
+        }
+    };
+    addSlotBtn.addMouseListener(this, false);
+    addAndMakeVisible(addSlotBtn);
 
-        // Clear button — overlaid inside slot pill, no background
-        slotClearBtns[i].setButtonText("x");
-        slotClearBtns[i].setColour(juce::TextButton::buttonColourId,
-                                    juce::Colours::transparentBlack);
-        slotClearBtns[i].onClick = [this, i] {
-            auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-            auto destId = pfx + "DEST" + juce::String(i + 1);
-            auto amtId  = pfx + "AMT"  + juce::String(i + 1);
-            if (auto* dp = state.getParameter(destId))
-                dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
-            if (auto* ap = state.getParameter(amtId))
-                ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
-        };
-        addAndMakeVisible(slotClearBtns[i]);
+    // "-" button — remove last LFO assignment on active tab
+    removeSlotBtn.setButtonText("-");
+    removeSlotBtn.setName("lfoSlot");
+    removeSlotBtn.onClick = [this] {
+        auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
+        for (int i = kNumSlots - 1; i >= 0; --i)
+        {
+            int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(i + 1)));
+            if (dest > 0)
+            {
+                auto destId = pfx + "DEST" + juce::String(i + 1);
+                auto amtId  = pfx + "AMT"  + juce::String(i + 1);
+                if (auto* dp = state.getParameter(destId))
+                    dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
+                if (auto* ap = state.getParameter(amtId))
+                    ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
+                break;
+            }
+        }
+    };
+    addAndMakeVisible(removeSlotBtn);
 
-        // Listen for right-click on slot button
-        slotButtons[i].addMouseListener(this, false);
-    }
+    // Count label
+    countLabel.setJustificationType(juce::Justification::centred);
+    countLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
+    countLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
+    addAndMakeVisible(countLabel);
+
+    // Hint label — right-justified, always visible
+    hintLabel.setText("drag to knob to assign", juce::dontSendNotification);
+    hintLabel.setJustificationType(juce::Justification::centredRight);
+    hintLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 8.5f, juce::Font::italic));
+    hintLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.3f));
+    addAndMakeVisible(hintLabel);
 
     // Initial tab
     switchTab(0);
@@ -507,6 +599,23 @@ void LFOSection::timerCallback()
     updateSyncDisplay();
     updateAssignmentLabels();
 
+    // Pulse the "+" button when in assignment mode (learn or drag)
+    if (ModSlider::showDropTargets || learnSlotIndex >= 0)
+    {
+        float pulse = 0.5f + 0.3f * std::sin(
+            static_cast<float>(juce::Time::getMillisecondCounterHiRes() * 0.004));
+        addSlotBtn.setColour(juce::TextButton::buttonColourId,
+            juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(pulse));
+        addSlotBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    }
+    else
+    {
+        addSlotBtn.setColour(juce::TextButton::buttonColourId,
+            juce::Colour(VisceraLookAndFeel::kPanelColor));
+        addSlotBtn.setColour(juce::TextButton::textColourOffId,
+            juce::Colour(VisceraLookAndFeel::kTextColor));
+    }
+
     // Auto-cancel learn mode if we lost focus
     if (learnSlotIndex >= 0 && !hasKeyboardFocus(true))
         cancelLearnMode();
@@ -545,32 +654,44 @@ void LFOSection::updateSyncDisplay()
 void LFOSection::updateAssignmentLabels()
 {
     auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
+    int numMapped = 0;
 
-    for (int s = 0; s < 4; ++s)
+    for (int s = 0; s < kNumSlots; ++s)
     {
         int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(s + 1)));
-
         if (dest > 0 && dest < kDestNames.size())
-        {
-            slotButtons[s].setButtonText(kDestNames[dest]);
-            slotClearBtns[s].setVisible(true);
-        }
-        else if (learnSlotIndex == s)
-        {
-            slotButtons[s].setButtonText("...");
-            slotClearBtns[s].setVisible(false);
-        }
-        else
-        {
-            slotButtons[s].setButtonText("+");
-            slotClearBtns[s].setVisible(false);
-        }
+            ++numMapped;
     }
+
+    // "+" button: "..." during learn, hidden when all slots full
+    addSlotBtn.setButtonText(learnSlotIndex >= 0 ? "..." : "+");
+    addSlotBtn.setVisible(numMapped < kNumSlots || learnSlotIndex >= 0);
+
+    // "-" button: visible when at least one assignment exists
+    removeSlotBtn.setVisible(numMapped > 0);
+
+    // Count + hint
+    countLabel.setText(juce::String(numMapped), juce::dontSendNotification);
+
+    layoutSlots();
 }
 
-void LFOSection::showSlotPopup(int /*slotIdx*/)
+void LFOSection::showSlotPopup(int /*slotIdx*/) {}
+
+void LFOSection::layoutSlots()
 {
-    // No longer used — slots now show just name + x to clear
+    if (slotArea.isEmpty()) return;
+    auto row = slotArea;
+
+    // [+] [-] [count]                    [hint right-justified]
+    if (addSlotBtn.isVisible())
+        addSlotBtn.setBounds(row.removeFromLeft(20).reduced(1, 0));
+
+    if (removeSlotBtn.isVisible())
+        removeSlotBtn.setBounds(row.removeFromLeft(20).reduced(1, 0));
+
+    countLabel.setBounds(row.removeFromLeft(14));
+    hintLabel.setBounds(row);
 }
 
 // ============================================================================
@@ -587,6 +708,25 @@ void LFOSection::enterLearnMode(int slotIdx)
 
     ModSlider::onLearnClick = [this, capturedTab, capturedSlot](bb::LFODest dest)
     {
+        // Policy: max 1 LFO per knob — remove any existing assignment from ANY LFO
+        for (int l = 0; l < 3; ++l)
+        {
+            auto otherPfx = "LFO" + juce::String(l + 1) + "_";
+            for (int s = 1; s <= kNumSlots; ++s)
+            {
+                auto dId = otherPfx + "DEST" + juce::String(s);
+                auto aId = otherPfx + "AMT"  + juce::String(s);
+                int curDest = static_cast<int>(safeParamLoad(state, dId));
+                if (curDest == static_cast<int>(dest))
+                {
+                    if (auto* dp = state.getParameter(dId))
+                        dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
+                    if (auto* ap = state.getParameter(aId))
+                        ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
+                }
+            }
+        }
+
         // Assign this dest to the captured slot
         auto pfx = "LFO" + juce::String(capturedTab + 1) + "_";
         auto destId = pfx + "DEST" + juce::String(capturedSlot + 1);
@@ -607,6 +747,7 @@ void LFOSection::cancelLearnMode()
 {
     learnSlotIndex = -1;
     ModSlider::onLearnClick = nullptr;
+    ModSlider::showDropTargets = false;
     updateAssignmentLabels();
 }
 
@@ -622,23 +763,97 @@ bool LFOSection::keyPressed(const juce::KeyPress& key)
 
 void LFOSection::mouseDown(const juce::MouseEvent& e)
 {
-    if (!e.mods.isPopupMenu()) return;
-
-    // Right-click on a slot button → clear that slot
-    for (int i = 0; i < 4; ++i)
+    // Tab buttons: start drag on left click drag (handled in mouseDrag)
+    // Right-click on "+" → show assignments popup to remove
+    if (e.mods.isPopupMenu() && e.eventComponent == &addSlotBtn)
     {
-        if (e.eventComponent == &slotButtons[i])
+        showAssignmentsPopup();
+        return;
+    }
+}
+
+void LFOSection::mouseDrag(const juce::MouseEvent& e)
+{
+    // Drag from tab buttons → start LFO drag & drop
+    for (int i = 0; i < 3; ++i)
+    {
+        if (e.eventComponent == &tabButtons[i] && e.getDistanceFromDragStart() > 4)
         {
-            auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-            auto destId = pfx + "DEST" + juce::String(i + 1);
-            auto amtId  = pfx + "AMT"  + juce::String(i + 1);
+            if (auto* container = findParentComponentOfClass<juce::DragAndDropContainer>())
+            {
+                ModSlider::showDropTargets = true;
+                juce::String dragDesc = "LFO_" + juce::String(i);
+                container->startDragging(dragDesc, &tabButtons[i]);
+            }
+            return;
+        }
+    }
+}
+
+void LFOSection::mouseUp(const juce::MouseEvent& e)
+{
+    // Clear drop targets when tab drag ends
+    for (int i = 0; i < 3; ++i)
+    {
+        if (e.eventComponent == &tabButtons[i])
+        {
+            ModSlider::showDropTargets = false;
+            return;
+        }
+    }
+}
+
+void LFOSection::showAssignmentsPopup()
+{
+    auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
+    juce::PopupMenu menu;
+    int itemId = 1;
+
+    for (int s = 0; s < kNumSlots; ++s)
+    {
+        int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(s + 1)));
+        if (dest > 0 && dest < kDestNames.size())
+        {
+            float amt = safeParamLoad(state, pfx + "AMT" + juce::String(s + 1));
+            auto amtStr = juce::String(static_cast<int>(amt * 100.0f));
+            menu.addItem(itemId + s,
+                juce::String::charToString(0x2716) + "  " + kDestNames[dest]
+                + "  " + amtStr + "%");
+        }
+    }
+
+    if (menu.getNumItems() == 0)
+    {
+        menu.addItem(-1, "No assignments", false, false);
+        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&addSlotBtn));
+        return;
+    }
+
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&addSlotBtn),
+        [this, pfx](int result) {
+            if (result <= 0) return;
+            int slot = result - 1;
+            auto destId = pfx + "DEST" + juce::String(slot + 1);
+            auto amtId  = pfx + "AMT"  + juce::String(slot + 1);
             if (auto* dp = state.getParameter(destId))
                 dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
             if (auto* ap = state.getParameter(amtId))
                 ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
-            return;
-        }
-    }
+        });
+}
+
+// ============================================================================
+// Paint — accent underline on active tab
+// ============================================================================
+
+void LFOSection::paint(juce::Graphics& g)
+{
+    auto accent = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto tabBounds = tabButtons[activeTab].getBounds().toFloat();
+    // Small accent bar below the active tab
+    g.setColour(accent);
+    g.fillRoundedRectangle(tabBounds.getX() + 2.0f, tabBounds.getBottom(),
+                           tabBounds.getWidth() - 4.0f, 2.0f, 1.0f);
 }
 
 // ============================================================================
@@ -675,18 +890,12 @@ void LFOSection::resized()
 
     area.removeFromTop(2);
 
-    // Bottom row: 4 slot cells — "x" sits inside the pill
-    auto bottomRow = area.removeFromBottom(18);
-    int cellW = bottomRow.getWidth() / 4;
-    for (int i = 0; i < 4; ++i)
-    {
-        auto cell = bottomRow.removeFromLeft(cellW).reduced(1, 0);
-        slotButtons[i].setBounds(cell);
-        // "x" overlaid flush-right inside the pill
-        slotClearBtns[i].setBounds(cell.withLeft(cell.getRight() - 16));
-        slotClearBtns[i].toFront(false);
-    }
+    // Bottom: dynamic slot pills + "+" button
+    area.removeFromBottom(1);
+    slotArea = area.removeFromBottom(16);
 
     // Remaining: wave display
     waveDisplay.setBounds(area);
+
+    layoutSlots();
 }

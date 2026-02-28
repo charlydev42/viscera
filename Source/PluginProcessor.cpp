@@ -139,7 +139,7 @@ void VisceraProcessor::cacheParameterPointers()
         lfoCache[n].rate = apvts.getRawParameterValue(id("RATE"));
         lfoCache[n].wave = apvts.getRawParameterValue(id("WAVE"));
         lfoCache[n].sync = apvts.getRawParameterValue(id("SYNC"));
-        for (int s = 0; s < 4; ++s)
+        for (int s = 0; s < kSlotsPerLFO; ++s)
         {
             lfoCache[n].dest[s] = apvts.getRawParameterValue(id("DEST" + juce::String(s + 1)));
             lfoCache[n].amt[s]  = apvts.getRawParameterValue(id("AMT" + juce::String(s + 1)));
@@ -361,7 +361,14 @@ VisceraProcessor::createParameterLayout()
                                       "DlyDamp", "DlySprd",
                                       "LiqRate", "LiqTone", "LiqFeed",
                                       "RubTone", "RubStr", "RubFeed",
-                                      "Porta" };
+                                      "Porta",
+                                      "E1A", "E1D", "E1S", "E1R",
+                                      "E2A", "E2D", "E2S", "E2R",
+                                      "E3A", "E3D", "E3S", "E3R",
+                                      "PEA", "PED", "PES", "PER",
+                                      "ShpRate", "ShpDep",
+                                      "M1Coar", "M2Coar", "CCoar",
+                                      "Tremor", "Vein", "Flux" };
 
         for (int n = 1; n <= 3; ++n)
         {
@@ -378,7 +385,7 @@ VisceraProcessor::createParameterLayout()
                 juce::StringArray{ "Free", "8 bar", "4 bar", "2 bar", "1 bar", "1/2", "1/4", "1/8", "1/16", "1/32",
                                    "1/4T", "1/8T", "1/16T" }, 0));
 
-            for (int s = 1; s <= 4; ++s)
+            for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
                 g->addChild(std::make_unique<juce::AudioParameterChoice>(
                     id("DEST" + juce::String(s)), nm("Dest" + juce::String(s)), destNames, 0));
@@ -503,7 +510,7 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             // Remap from bipolar [-1,+1] to unipolar [0,+1]
             float lfoVal = (globalLFO[l].tickBlock(buffer.getNumSamples()) + 1.0f) * 0.5f;
 
-            for (int s = 0; s < 4; ++s)
+            for (int s = 0; s < kSlotsPerLFO; ++s)
             {
                 int dest = static_cast<int>(c.dest[s]->load());
                 if (dest > 0 && dest < static_cast<int>(bb::LFODest::Count))
@@ -584,6 +591,54 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                          std::memory_order_relaxed);
         voiceParams.lfoModPorta.store(modSums[static_cast<int>(bb::LFODest::Porta)],
                                        std::memory_order_relaxed);
+        voiceParams.lfoModEnv1A.store(modSums[static_cast<int>(bb::LFODest::Env1A)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv1D.store(modSums[static_cast<int>(bb::LFODest::Env1D)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv1S.store(modSums[static_cast<int>(bb::LFODest::Env1S)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv1R.store(modSums[static_cast<int>(bb::LFODest::Env1R)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv2A.store(modSums[static_cast<int>(bb::LFODest::Env2A)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv2D.store(modSums[static_cast<int>(bb::LFODest::Env2D)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv2S.store(modSums[static_cast<int>(bb::LFODest::Env2S)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv2R.store(modSums[static_cast<int>(bb::LFODest::Env2R)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv3A.store(modSums[static_cast<int>(bb::LFODest::Env3A)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv3D.store(modSums[static_cast<int>(bb::LFODest::Env3D)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv3S.store(modSums[static_cast<int>(bb::LFODest::Env3S)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModEnv3R.store(modSums[static_cast<int>(bb::LFODest::Env3R)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModPEnvA.store(modSums[static_cast<int>(bb::LFODest::PEnvA)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModPEnvD.store(modSums[static_cast<int>(bb::LFODest::PEnvD)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModPEnvS.store(modSums[static_cast<int>(bb::LFODest::PEnvS)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModPEnvR.store(modSums[static_cast<int>(bb::LFODest::PEnvR)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModShaperRate.store(modSums[static_cast<int>(bb::LFODest::ShaperRate)],
+                                            std::memory_order_relaxed);
+        voiceParams.lfoModShaperDepth.store(modSums[static_cast<int>(bb::LFODest::ShaperDepth)],
+                                             std::memory_order_relaxed);
+        voiceParams.lfoModMod1Coarse.store(modSums[static_cast<int>(bb::LFODest::Mod1Coarse)],
+                                            std::memory_order_relaxed);
+        voiceParams.lfoModMod2Coarse.store(modSums[static_cast<int>(bb::LFODest::Mod2Coarse)],
+                                            std::memory_order_relaxed);
+        voiceParams.lfoModCarCoarse.store(modSums[static_cast<int>(bb::LFODest::CarCoarse)],
+                                           std::memory_order_relaxed);
+        voiceParams.lfoModTremor.store(modSums[static_cast<int>(bb::LFODest::Tremor)],
+                                        std::memory_order_relaxed);
+        voiceParams.lfoModVein.store(modSums[static_cast<int>(bb::LFODest::Vein)],
+                                      std::memory_order_relaxed);
+        voiceParams.lfoModFlux.store(modSums[static_cast<int>(bb::LFODest::Flux)],
+                                      std::memory_order_relaxed);
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
@@ -698,8 +753,10 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             rate = bpm / (60.0f * beats);
         }
 
+        rate = std::max(0.1f, rate + voiceParams.lfoModShaperRate.load(std::memory_order_relaxed) * 20.0f);
         volumeShaper.setRate(rate);
-        volumeShaper.setDepth(shaperDepthParam->load());
+        volumeShaper.setDepth(juce::jlimit(0.0f, 1.0f,
+            shaperDepthParam->load() + voiceParams.lfoModShaperDepth.load(std::memory_order_relaxed)));
         for (int i = 0; i < numSamples; ++i)
         {
             float gain = volumeShaper.tick();
@@ -793,7 +850,7 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
                     auto pfx = "LFO" + juce::String(n) + "_";
                     addP(pfx + "RATE", 1.0f);
                     addP(pfx + "WAVE", 0.0f);
-                    for (int s = 1; s <= 4; ++s)
+                    for (int s = 1; s <= kSlotsPerLFO; ++s)
                     {
                         addP(pfx + "DEST" + juce::String(s), 0.0f);
                         addP(pfx + "AMT" + juce::String(s), 0.0f);

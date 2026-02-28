@@ -83,13 +83,15 @@ private:
     // 3 global assignable LFOs
     bb::LFO globalLFO[3];
 
-    // Cached APVTS pointers for global LFOs (rate+wave+4×dest+4×amt per LFO)
+    static constexpr int kSlotsPerLFO = 8;
+
+    // Cached APVTS pointers for global LFOs (rate+wave+8×dest+8×amt per LFO)
     struct LFOParamCache {
         std::atomic<float>* rate  = nullptr;
         std::atomic<float>* wave  = nullptr;
         std::atomic<float>* sync  = nullptr;
-        std::atomic<float>* dest[4] = {};
-        std::atomic<float>* amt[4]  = {};
+        std::atomic<float>* dest[kSlotsPerLFO] = {};
+        std::atomic<float>* amt[kSlotsPerLFO]  = {};
     } lfoCache[3];
 
     // Post-synth FX on/off
