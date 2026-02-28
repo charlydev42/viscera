@@ -66,6 +66,8 @@ juce_add_binary_data(VisceraData SOURCES
     graphics/Knob_circle_green.png
     graphics/viscera_logo_light.png
     graphics/viscera_logo_dark.png
+    graphics/viscera_logo_light_nodolph.png
+    graphics/viscera_logo_dark_nodolph.png
     graphics/viscera_logo_neutral.png
     graphics/viscera_logo_neutral_dark.png
 )
