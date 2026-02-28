@@ -4,6 +4,15 @@
 #include "../PluginProcessor.h"
 #include "VisceraLookAndFeel.h"
 
+// Safe parameter read helper — returns 0 if parameter doesn't exist
+static float safeParamLoad(juce::AudioProcessorValueTreeState& s, const juce::String& id)
+{
+    if (auto* p = s.getRawParameterValue(id))
+        return p->load();
+    jassertfalse; // parameter not found — bug in param naming
+    return 0.0f;
+}
+
 // ============================================================================
 // LFOWaveDisplay — helpers
 // ============================================================================
@@ -390,7 +399,7 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
                 return;
             }
             auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-            int dest = static_cast<int>(state.getRawParameterValue(pfx + "DEST" + juce::String(i + 1))->load());
+            int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(i + 1)));
             if (dest == 0)
                 enterLearnMode(i);
         };
@@ -432,7 +441,7 @@ LFOSection::~LFOSection()
 int LFOSection::getSyncParam() const
 {
     auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-    return static_cast<int>(state.getRawParameterValue(pfx + "SYNC")->load());
+    return static_cast<int>(safeParamLoad(state, pfx + "SYNC"));
 }
 
 void LFOSection::setSyncParam(int idx)
@@ -489,7 +498,7 @@ void LFOSection::timerCallback()
     waveDisplay.setPhase(processor.getGlobalLFOPhase(activeTab));
 
     auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-    int waveType = static_cast<int>(state.getRawParameterValue(pfx + "WAVE")->load());
+    int waveType = static_cast<int>(safeParamLoad(state, pfx + "WAVE"));
     waveDisplay.setWaveType(waveType);
 
     // Show reset button only in Custom mode
@@ -522,7 +531,7 @@ void LFOSection::updateSyncDisplay()
     else
     {
         auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-        float rate = state.getRawParameterValue(pfx + "RATE")->load();
+        float rate = safeParamLoad(state, pfx + "RATE");
         rateLabel.setText(juce::String(rate, 1) + "Hz", juce::dontSendNotification);
     }
 
@@ -539,7 +548,7 @@ void LFOSection::updateAssignmentLabels()
 
     for (int s = 0; s < 4; ++s)
     {
-        int dest = static_cast<int>(state.getRawParameterValue(pfx + "DEST" + juce::String(s + 1))->load());
+        int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(s + 1)));
 
         if (dest > 0 && dest < kDestNames.size())
         {

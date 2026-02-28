@@ -22,7 +22,6 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       keyboard(processor.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
 {
     setLookAndFeel(&lookAndFeel);
-    juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
 
     // Give ModSlider access to live LFO modulation values
     ModSlider::voiceParamsPtr = &processor.getVoiceParams();
@@ -152,8 +151,10 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
         // 4. Kick GL to render with new bg, then re-show after a frame
         flubberVisualizer.triggerGLRepaint();
-        juce::MessageManager::callAsync([this] {
-            flubberVisualizer.setVisible(!showAdvanced);
+        auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
+        juce::MessageManager::callAsync([safeThis] {
+            if (safeThis != nullptr)
+                safeThis->flubberVisualizer.setVisible(!safeThis->showAdvanced);
         });
     };
     addAndMakeVisible(darkModeBtn);

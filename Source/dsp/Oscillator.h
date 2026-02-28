@@ -149,6 +149,7 @@ private:
     // t = phase normalisée [0,1), dt = incrément de phase
     static double polyBlep(double t, double dt) noexcept
     {
+        if (dt < 1e-10) return 0.0;
         // Début de période (discontinuité à t=0)
         if (t < dt)
         {

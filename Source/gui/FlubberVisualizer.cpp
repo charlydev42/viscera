@@ -2,7 +2,7 @@
 #include "FlubberVisualizer.h"
 #include "VisceraLookAndFeel.h"
 #include <cmath>
-#include <iostream>
+
 
 using namespace juce::gl;
 
@@ -549,19 +549,19 @@ bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
 
     if (!ss.program->addVertexShader(vertexShaderSrc))
     {
-        std::cerr << "[Flubber] Vertex shader error: " << ss.program->getLastError() << std::endl;
+        DBG("[Flubber] Vertex shader error: " << ss.program->getLastError());
         ss.program.reset();
         return false;
     }
     if (!ss.program->addFragmentShader(fragSrc))
     {
-        std::cerr << "[Flubber] Fragment shader error: " << ss.program->getLastError() << std::endl;
+        DBG("[Flubber] Fragment shader error: " << ss.program->getLastError());
         ss.program.reset();
         return false;
     }
     if (!ss.program->link())
     {
-        std::cerr << "[Flubber] Shader link error: " << ss.program->getLastError() << std::endl;
+        DBG("[Flubber] Shader link error: " << ss.program->getLastError());
         ss.program.reset();
         return false;
     }
@@ -577,9 +577,9 @@ bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
 void FlubberVisualizer::newOpenGLContextCreated()
 {
     if (!compileShader(lightShader, fragmentShaderLight))
-        std::cerr << "[Flubber] Light shader FAILED" << std::endl;
+        DBG("[Flubber] Light shader FAILED");
     if (!compileShader(darkShader, fragmentShaderDark))
-        std::cerr << "[Flubber] Dark shader FAILED" << std::endl;
+        DBG("[Flubber] Dark shader FAILED");
 
     // Audio texture (512 x 2, single-channel float)
     glGenTextures(1, &audioTex);
