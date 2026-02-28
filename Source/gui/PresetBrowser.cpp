@@ -48,8 +48,8 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
                             presetCombo.setSelectedId(kUserIdOffset + idx, juce::dontSendNotification);
                     }
                 }
-                delete aw;
-            }), true);
+                delete aw;  // always delete, regardless of result
+            }), false);
     };
     addAndMakeVisible(saveButton);
 }

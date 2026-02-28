@@ -15,6 +15,8 @@ public:
     void prepare(double sr)
     {
         sampleRate = sr;
+        // DC blocker at ~5Hz: R = 1 - (2*pi*5/sr)
+        dcCoeff = static_cast<float>(1.0 - (2.0 * 3.14159265358979 * 5.0 / sr));
         reset();
     }
 
@@ -81,7 +83,7 @@ public:
         signal -= bias;
 
         // DC blocker (1-pole highpass at ~5Hz)
-        float dcOut = signal - dcX1 + kDCCoeff * dcY1;
+        float dcOut = signal - dcX1 + dcCoeff * dcY1;
         dcX1 = signal;
         dcY1 = dcOut;
         signal = dcOut;
@@ -92,11 +94,10 @@ public:
 
 private:
     static constexpr float kPi = 3.14159265358979f;
-    // DC blocker coefficient for ~5Hz at 44.1kHz
-    // R = 1 - (2*pi*5/44100) ≈ 0.9993
-    static constexpr float kDCCoeff = 0.9993f;
 
     double sampleRate = 44100.0;
+    // DC blocker coefficient: R = 1 - (2*pi*5/sr), computed in prepare()
+    float dcCoeff = 0.9993f;
     float amount = 0.0f;
     float prevOutput = 0.0f;
 

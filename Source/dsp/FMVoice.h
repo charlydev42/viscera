@@ -240,6 +240,10 @@ private:
     juce::SmoothedValue<float> smoothCarNoise;
     juce::SmoothedValue<float> smoothCarSpread;
 
+    // Anti-click fade-out for voice stealing
+    int stealFadeSamples = 0;
+    int stealFadeLength  = 256;   // set properly in prepareToPlay
+
     // White noise generator (xorshift32)
     uint32_t noiseSeed = 0x12345678;
 

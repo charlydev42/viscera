@@ -238,7 +238,10 @@ void VisceraLookAndFeel::drawToggleButton(juce::Graphics& g,
     if (std::abs(target - anim) < 0.005f)
         anim = target;
     else
-        juce::MessageManager::callAsync([&button] { button.repaint(); });
+    {
+        auto safeBtn = juce::Component::SafePointer<juce::ToggleButton>(&button);
+        juce::MessageManager::callAsync([safeBtn] { if (safeBtn != nullptr) safeBtn->repaint(); });
+    }
 
     // Subtle intensity wobble when ON — mimics real LED current ripple
     float wobble = 1.0f;

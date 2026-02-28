@@ -19,6 +19,9 @@ public:
     {
         if (mask == 0) return input;
 
+        // NaN/Inf guard
+        if (!std::isfinite(input)) return 0.0f;
+
         // Clamper l'entrée à [-1, 1]
         float clamped = std::clamp(input, -1.0f, 1.0f);
 

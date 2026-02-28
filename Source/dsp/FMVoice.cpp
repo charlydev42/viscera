@@ -60,6 +60,10 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
     smoothMod2Level.reset(sr, 0.02);
     smoothCarNoise.reset(sr, 0.02);
     smoothCarSpread.reset(sr, 0.02);
+
+    // Anti-click fade: ~5ms
+    stealFadeLength = static_cast<int>(sr * 0.005);
+    stealFadeSamples = 0;
 }
 
 void FMVoice::startNote(int midiNoteNumber, float velocity,
@@ -67,6 +71,7 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
 {
     currentNote = midiNoteNumber;
     noteVelocity = velocity;
+    stealFadeSamples = 0;  // cancel any in-progress steal fade
 
     // Convertir note MIDI → fréquence : f = 440 × 2^((note-69)/12)
     noteFreqHz = 440.0 * std::pow(2.0, (midiNoteNumber - 69) / 12.0);
@@ -126,11 +131,8 @@ void FMVoice::stopNote(float /*velocity*/, bool allowTailOff)
     }
     else
     {
-        env1.reset();
-        env2.reset();
-        env3.reset();
-        pitchEnv.reset();
-        clearCurrentNote();
+        // Voice stealing: don't hard-reset, use a short fade-out to avoid clicks
+        stealFadeSamples = stealFadeLength;
     }
 }
 
@@ -462,6 +464,24 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float drv = juce::jlimit(1.0f, 10.0f, driveParam + gLfoModDrive * 9.0f);
         outputL *= vol;  outputL *= drv;  outputL = std::tanh(outputL);
         outputR *= vol;  outputR *= drv;  outputR = std::tanh(outputR);
+
+        // --- Anti-click fade-out for voice stealing ---
+        if (stealFadeSamples > 0)
+        {
+            float fadeGain = static_cast<float>(stealFadeSamples) / static_cast<float>(stealFadeLength);
+            outputL *= fadeGain;
+            outputR *= fadeGain;
+            --stealFadeSamples;
+            if (stealFadeSamples == 0)
+            {
+                env1.reset();
+                env2.reset();
+                env3.reset();
+                pitchEnv.reset();
+                clearCurrentNote();
+                return;
+            }
+        }
 
         // --- Écrire dans le buffer de sortie (true stereo) ---
         if (outputBuffer.getNumChannels() >= 2)

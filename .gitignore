@@ -30,3 +30,14 @@ DerivedData/
 
 # JUCE
 JuceLibraryCode/
+
+# Development artifacts (root-level only)
+/Screenshot*.png
+/image*.png
+/logo*.png
+/logo*.svg
+/*.af
+/*.knob
+/Blood_Bucket_*.md
+/Blood_Bucket_*.dll
+/Adobe Express*
