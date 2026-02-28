@@ -493,8 +493,9 @@ void VisceraLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectan
 
     if (isHighlighted && isActive)
     {
+        float pillCr = r.getHeight() * 0.5f;
         g.setColour(juce::Colour(kAccentColor).withAlpha(0.2f));
-        g.fillRoundedRectangle(r.toFloat(), 4.0f);
+        g.fillRoundedRectangle(r.toFloat(), pillCr);
     }
 
     auto textCol = isActive ? juce::Colour(kTextColor) : juce::Colour(kTextColor).withAlpha(0.4f);

@@ -52,12 +52,19 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     titleLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold));
     addAndMakeVisible(titleLabel);
 
-    // Logo image from BinaryData
+    // Logo image from BinaryData (light/dark variants for advanced page)
     {
-        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_fat_png, BinaryData::viscera_logo_fat_pngSize);
+        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_png, BinaryData::viscera_logo_light_pngSize);
         logoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(logoImage);
+
+    // Neutral logo for main page
+    {
+        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_png, BinaryData::viscera_logo_neutral_pngSize);
+        mainLogoImage.setImage(img, juce::RectanglePlacement::centred);
+    }
+    addAndMakeVisible(mainLogoImage);
 
     // FM Algorithm selector
     algoNames = { "Series", "Parallel", "Stack", "Ring", "Feedback" };
@@ -102,6 +109,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     kbToggleBtn.onClick = [this] {
         showKeyboardOnMain = !showKeyboardOnMain;
         keyboard.setVisible(showAdvanced || showKeyboardOnMain);
+        mainLogoImage.setVisible(!showAdvanced && !showKeyboardOnMain);
         resized();
     };
     addAndMakeVisible(kbToggleBtn);
@@ -116,6 +124,19 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
         lookAndFeel.refreshJuceColours();
         darkModeBtn.setButtonText(VisceraLookAndFeel::darkMode ? "Light" : "Dark");
+
+        // Swap logos (advanced + main)
+        {
+            auto img = VisceraLookAndFeel::darkMode
+                ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_png, BinaryData::viscera_logo_dark_pngSize)
+                : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_png, BinaryData::viscera_logo_light_pngSize);
+            logoImage.setImage(img, juce::RectanglePlacement::centred);
+
+            auto mainImg = VisceraLookAndFeel::darkMode
+                ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_dark_png, BinaryData::viscera_logo_neutral_dark_pngSize)
+                : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_png, BinaryData::viscera_logo_neutral_pngSize);
+            mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
+        }
 
         // 3. Repaint everything (viz area shows correct bg via parent)
         std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
@@ -385,6 +406,7 @@ void VisceraEditor::setPage(bool advanced)
     shaperSection.setVisible(advanced);
     globalSection.setVisible(advanced);
     logoImage.setVisible(advanced);
+    mainLogoImage.setVisible(!advanced);
 
     // Main-only components
     for (int i = 0; i < 6; ++i)
@@ -593,6 +615,13 @@ void VisceraEditor::resized()
             // Label below knob
             fxLabel[i].setBounds(kx - 8, ky + fxKnobSize, fxKnobSize + 16, labelH);
         }
+
+        // Neutral logo at bottom of main page
+        int logoW = 180;
+        int logoH = static_cast<int>(logoW * (1080.0f / 1920.0f)); // keep aspect ratio
+        int logoX = area.getRight() - logoW - 8;
+        int logoY = area.getBottom() - logoH + 4;
+        mainLogoImage.setBounds(logoX, logoY, logoW, logoH);
     }
     else
     {

@@ -57,7 +57,8 @@ private:
     juce::Label titleLabel;
 
     // Logo / branding
-    juce::ImageComponent logoImage;
+    juce::ImageComponent logoImage;        // advanced page (light/dark)
+    juce::ImageComponent mainLogoImage;    // main page (neutral)
 
     // FM algorithm selector (global, lives in top bar)
     juce::TextButton algoLeftBtn, algoRightBtn;
