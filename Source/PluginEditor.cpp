@@ -109,16 +109,27 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // Dark mode toggle
     darkModeBtn.setButtonText("Dark");
     darkModeBtn.onClick = [this] {
+        // 1. Hide viz — paint() will fill with bg color
+        flubberVisualizer.setVisible(false);
+
+        // 2. Switch colours
         VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
         lookAndFeel.refreshJuceColours();
         darkModeBtn.setButtonText(VisceraLookAndFeel::darkMode ? "Light" : "Dark");
-        // Force all components to re-read LookAndFeel colours
+
+        // 3. Repaint everything (viz area shows correct bg via parent)
         std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
             c->sendLookAndFeelChange();
             c->repaint();
             for (auto* ch : c->getChildren()) refreshAll(ch);
         };
         refreshAll(this);
+
+        // 4. Kick GL to render with new bg, then re-show after a frame
+        flubberVisualizer.triggerGLRepaint();
+        juce::MessageManager::callAsync([this] {
+            flubberVisualizer.setVisible(true);
+        });
     };
     addAndMakeVisible(darkModeBtn);
 

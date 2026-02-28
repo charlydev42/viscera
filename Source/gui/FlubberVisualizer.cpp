@@ -152,17 +152,17 @@ vec3 fluidColor(vec3 p,vec3 N,vec3 V,float t){
     float bss=bass();float md=mid();float hgs=highs();float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float warp=domainWarpFast(p*0.5,t,nrg);float warp2=flowFBM3(p*0.3+vec3(10.0),t*0.35,md);
     float b1=smoothstep(-0.4,0.4,warp);float b2=smoothstep(-0.3,0.5,warp2);
-    vec3 coolA=vec3(0.42,0.68,0.35),coolB=vec3(0.58,0.84,0.42),coolC=vec3(0.48,0.74,0.55);
-    vec3 warmA=vec3(0.70,0.88,0.45),warmB=vec3(0.84,0.92,0.38),warmC=vec3(0.95,0.87,0.30);
-    vec3 extremeA=vec3(0.98,0.98,0.60);
+    vec3 coolA=vec3(0.50,0.73,0.27),coolB=vec3(0.56,0.78,0.30),coolC=vec3(0.48,0.70,0.32);
+    vec3 warmA=vec3(0.58,0.78,0.30),warmB=vec3(0.64,0.76,0.25),warmC=vec3(0.72,0.72,0.20);
+    vec3 extremeA=vec3(0.80,0.82,0.38);
     vec3 cool=mix(coolA,mix(coolB,coolC,b2),b1);vec3 warm=mix(warmA,mix(warmB,warmC,b2),b1);
     float eBlend=smoothstep(0.02,0.35,nrg+warp*0.15);
     vec3 col=mix(cool,warm,eBlend);col=mix(col,extremeA,smoothstep(0.6,0.95,loud)*0.7);
-    float caust=causticsFast(p,t);col+=mix(vec3(0.45,0.88,0.35),vec3(0.95,0.92,0.50),eBlend)*caust*(0.07+loud*0.22);
-    float fres=pow(1.0-max(dot(N,V),0.0),2.0);col=mix(col,mix(vec3(0.52,0.92,0.60),vec3(0.92,0.98,0.55),eBlend),fres*0.35);
-    float shadowZone=1.0-max(dot(N,normalize(vec3(1.0,1.0,-1.0))),0.0);col=mix(col,col*vec3(0.60,0.45,0.78)*1.2,shadowZone*0.10);
+    float caust=causticsFast(p,t);col+=mix(vec3(0.42,0.80,0.28),vec3(0.88,0.86,0.40),eBlend)*caust*(0.07+loud*0.22);
+    float fres=pow(1.0-max(dot(N,V),0.0),2.0);col=mix(col,mix(vec3(0.48,0.82,0.32),vec3(0.85,0.90,0.42),eBlend),fres*0.35);
+    float shadowZone=1.0-max(dot(N,normalize(vec3(1.0,1.0,-1.0))),0.0);col=mix(col,col*vec3(0.55,0.42,0.72)*1.2,shadowZone*0.10);
     float veins=pow(abs(flowFBM3(p*2.0,t*0.6,nrg)),0.35);col=mix(col,mix(col*1.30,col*0.55,veins),0.12+loud*0.18);
-    float iri=dot(N,V)*6.0+t+hgs*4.0;col=mix(col,vec3(0.55+sin(iri)*0.15,0.78+sin(iri*1.3+2.0)*0.1,0.32+sin(iri*0.7+4.0)*0.2),hgs*0.18);
+    float iri=dot(N,V)*6.0+t+hgs*4.0;col=mix(col,vec3(0.545+sin(iri)*0.12,0.765+sin(iri*1.3+2.0)*0.08,0.290+sin(iri*0.7+4.0)*0.15),hgs*0.15);
     return col;
 }
 
@@ -401,17 +401,17 @@ vec3 fluidColor(vec3 p,vec3 N,vec3 V,float t){
     float bss=bass();float md=mid();float hgs=highs();float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float warp=domainWarpFast(p*0.5,t,nrg);float warp2=flowFBM3(p*0.3+vec3(10.0),t*0.35,md);
     float b1=smoothstep(-0.4,0.4,warp);float b2=smoothstep(-0.3,0.5,warp2);
-    vec3 coolA=vec3(0.35,0.60,0.28),coolB=vec3(0.52,0.80,0.35),coolC=vec3(0.40,0.68,0.50);
-    vec3 warmA=vec3(0.62,0.82,0.38),warmB=vec3(0.82,0.90,0.30),warmC=vec3(0.98,0.86,0.22);
-    vec3 extremeA=vec3(1.0,1.0,0.65);
+    vec3 coolA=vec3(0.45,0.68,0.24),coolB=vec3(0.52,0.74,0.28),coolC=vec3(0.44,0.66,0.30);
+    vec3 warmA=vec3(0.54,0.74,0.28),warmB=vec3(0.60,0.72,0.22),warmC=vec3(0.70,0.68,0.18);
+    vec3 extremeA=vec3(0.76,0.78,0.35);
     vec3 cool=mix(coolA,mix(coolB,coolC,b2),b1);vec3 warm=mix(warmA,mix(warmB,warmC,b2),b1);
     float eBlend=smoothstep(0.05,0.40,nrg+warp*0.15);
     vec3 col=mix(cool,warm,eBlend);col=mix(col,extremeA,smoothstep(0.6,0.95,loud)*0.7);
-    float caust=causticsFast(p,t);col+=mix(vec3(0.40,0.85,0.30),vec3(1.0,0.95,0.50),eBlend)*caust*(0.06+loud*0.25);
-    float fres=pow(1.0-max(dot(N,V),0.0),2.0);col=mix(col,mix(vec3(0.40,0.92,0.55),vec3(0.90,1.0,0.50),eBlend),fres*0.4);
-    float shadowZone=1.0-max(dot(N,normalize(vec3(1.0,1.0,-1.0))),0.0);col=mix(col,col*vec3(0.55,0.35,0.75)*1.5,shadowZone*0.10);
+    float caust=causticsFast(p,t);col+=mix(vec3(0.38,0.76,0.25),vec3(0.85,0.82,0.38),eBlend)*caust*(0.06+loud*0.25);
+    float fres=pow(1.0-max(dot(N,V),0.0),2.0);col=mix(col,mix(vec3(0.44,0.78,0.30),vec3(0.82,0.88,0.40),eBlend),fres*0.4);
+    float shadowZone=1.0-max(dot(N,normalize(vec3(1.0,1.0,-1.0))),0.0);col=mix(col,col*vec3(0.50,0.38,0.70)*1.5,shadowZone*0.10);
     float veins=pow(abs(flowFBM3(p*2.0,t*0.6,nrg)),0.35);col=mix(col,mix(col*1.35,col*0.55,veins),0.14+loud*0.22);
-    float iri=dot(N,V)*6.0+t+hgs*4.0;col=mix(col,vec3(0.545+sin(iri)*0.15,0.765+sin(iri*1.3+2.0)*0.1,0.290+sin(iri*0.7+4.0)*0.2),hgs*0.2);
+    float iri=dot(N,V)*6.0+t+hgs*4.0;col=mix(col,vec3(0.545+sin(iri)*0.12,0.765+sin(iri*1.3+2.0)*0.08,0.290+sin(iri*0.7+4.0)*0.15),hgs*0.18);
     return col;
 }
 
@@ -537,7 +537,9 @@ FlubberVisualizer::~FlubberVisualizer()
 
 void FlubberVisualizer::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::transparentBlack);
+    // Fill with current bg colour so mode switches look instant
+    // (the GL thread overwrites this on its next frame)
+    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
 }
 
 bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)

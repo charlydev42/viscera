@@ -14,6 +14,9 @@ public:
 
     void paint(juce::Graphics&) override;
 
+    // Force GL context to re-render (call after dark mode switch)
+    void triggerGLRepaint() { glContext.triggerRepaint(); }
+
     // OpenGLRenderer callbacks (called on GL thread)
     void newOpenGLContextCreated() override;
     void renderOpenGL() override;
