@@ -83,6 +83,7 @@ void VisceraLookAndFeel::refreshJuceColours()
     setColour(juce::PopupMenu::backgroundColourId, juce::Colour(kBgColor));
     setColour(juce::PopupMenu::textColourId, juce::Colour(kTextColor));
     setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(kAccentColor));
+    setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
     setColour(juce::TextButton::textColourOffId, juce::Colour(kTextColor));
     setColour(juce::TextButton::textColourOnId, juce::Colour(kTextColor));
     setColour(juce::TextButton::buttonColourId, juce::Colour(kBgColor));
@@ -441,5 +442,82 @@ void VisceraLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
 
         g.setColour(juce::Colour(kBgColor).brighter(highlighted ? 0.03f : 0.0f));
         g.fillRoundedRectangle(bounds, cr);
+    }
+}
+
+// PopupMenu — neumorphic rounded panel
+void VisceraLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
+{
+    auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat();
+    float cr = 8.0f;
+
+    // Drop shadow behind popup
+    juce::DropShadow shadow(juce::Colour(kShadowDark).withAlpha(0.5f), 10, { 0, 4 });
+    shadow.drawForRectangle(g, bounds.toNearestInt());
+
+    // Rounded background
+    g.setColour(juce::Colour(kBgColor));
+    g.fillRoundedRectangle(bounds, cr);
+
+    // Subtle border
+    g.setColour(juce::Colour(kShadowDark).withAlpha(0.15f));
+    g.drawRoundedRectangle(bounds.reduced(0.5f), cr, 1.0f);
+}
+
+void VisceraLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area,
+                                            bool isSeparator, bool isActive, bool isHighlighted,
+                                            bool isTicked, bool /*hasSubMenu*/,
+                                            const juce::String& text, const juce::String& /*shortcutKeyText*/,
+                                            const juce::Drawable* /*icon*/, const juce::Colour* /*textColour*/)
+{
+    if (isSeparator)
+    {
+        auto sepArea = area.reduced(8, 0);
+        g.setColour(juce::Colour(kShadowDark).withAlpha(0.2f));
+        g.fillRect(sepArea.getX(), sepArea.getCentreY(), sepArea.getWidth(), 1);
+        return;
+    }
+
+    auto r = area.reduced(4, 1);
+
+    if (isHighlighted && isActive)
+    {
+        g.setColour(juce::Colour(kAccentColor).withAlpha(0.2f));
+        g.fillRoundedRectangle(r.toFloat(), 4.0f);
+    }
+
+    auto textCol = isActive ? juce::Colour(kTextColor) : juce::Colour(kTextColor).withAlpha(0.4f);
+    if (isHighlighted && isActive)
+        textCol = juce::Colour(kAccentColor);
+
+    g.setColour(textCol);
+    g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
+
+    auto textArea = r.reduced(8, 0);
+    g.drawText(text, textArea, juce::Justification::centredLeft);
+
+    if (isTicked)
+    {
+        g.setColour(juce::Colour(kAccentColor));
+        auto tickArea = r.removeFromRight(20);
+        g.setFont(juce::Font(12.0f));
+        g.drawText(juce::String::charToString(0x2713), tickArea, juce::Justification::centred);
+    }
+}
+
+void VisceraLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator,
+                                                     int /*standardMenuItemHeight*/,
+                                                     int& idealWidth, int& idealHeight)
+{
+    if (isSeparator)
+    {
+        idealWidth = 50;
+        idealHeight = 8;
+    }
+    else
+    {
+        auto font = juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain);
+        idealWidth = static_cast<int>(font.getStringWidthFloat(text)) + 32;
+        idealHeight = 26;
     }
 }

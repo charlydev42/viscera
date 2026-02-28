@@ -61,9 +61,6 @@ void TabbedEffectSection::switchTab(int tab)
         tabButtons[i].setColour(juce::TextButton::buttonColourId,
             active ? accentCol.withAlpha(0.6f)
                    : juce::Colour(VisceraLookAndFeel::kPanelColor));
-        tabButtons[i].setColour(juce::TextButton::textColourOffId,
-            active ? juce::Colour(VisceraLookAndFeel::kTextColor)
-                   : juce::Colour(VisceraLookAndFeel::kTextColor));
     }
 
     delaySection.setVisible(activeTab == 0);
