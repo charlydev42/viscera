@@ -526,6 +526,7 @@ FlubberVisualizer::FlubberVisualizer(bb::AudioVisualBuffer& bufL,
     glContext.setOpenGLVersionRequired(juce::OpenGLContext::openGL3_2);
     glContext.setRenderer(this);
     glContext.setContinuousRepainting(true);
+    glContext.setSwapInterval(1); // vsync — cap at 60fps to avoid CPU hog
     glContext.setComponentPaintingEnabled(false);
     glContext.attachTo(*this);
 }
