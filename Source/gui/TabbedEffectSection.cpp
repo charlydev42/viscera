@@ -112,7 +112,7 @@ void TabbedEffectSection::resized()
         {
             auto panel = area.removeFromTop(panelH);
             panelBounds[i] = panel;
-            sections[i]->setBounds(panel.withTrimmedTop(headerH).reduced(2, 0));
+            sections[i]->setBounds(panel.withTrimmedTop(headerH));
             if (i < 3) area.removeFromTop(gap);
         }
     }

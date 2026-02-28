@@ -233,7 +233,7 @@ void VisceraLookAndFeel::drawToggleButton(juce::Graphics& g,
     // --- Smooth LED animation ---
     float target = on ? 1.0f : 0.0f;
     float& anim = toggleAnimValues[&button];
-    constexpr float kLerpSpeed = 0.32f; // fast but smooth
+    constexpr float kLerpSpeed = 0.55f; // snappy
     anim += (target - anim) * kLerpSpeed;
     if (std::abs(target - anim) < 0.005f)
         anim = target;
@@ -328,9 +328,7 @@ void VisceraLookAndFeel::drawToggleButton(juce::Graphics& g,
         g.fillEllipse(cx - specW * 0.5f, cy - ledR * 0.55f, specW, specH);
     }
 
-    // Keep repainting while LED is on (for wobble animation)
-    if (on && anim >= 1.0f)
-        juce::MessageManager::callAsync([&button] { button.repaint(); });
+    // No continuous repaint for wobble — saves CPU
 
     // Text — colour fades between text and accent
     auto textCol = juce::Colour(kTextColor).interpolatedWith(juce::Colour(kAccentColor), glow);

@@ -346,16 +346,17 @@ void VolumeShaperSection::updateDisplay()
 
 void VolumeShaperSection::resized()
 {
-    auto area = getLocalBounds().reduced(4);
+    auto area = getLocalBounds().reduced(2);
     area.removeFromTop(2);
 
     // Top row: On toggle + shape preset + subdivision toggle
     auto topRow = area.removeFromTop(18);
-    onToggle.setBounds(topRow.removeFromLeft(36));
+    topRow.removeFromLeft(4);  // left margin to align with effect toggles
+    onToggle.setBounds(topRow.removeFromLeft(44));
     topRow.removeFromLeft(4);
     subdivBtn.setBounds(topRow.removeFromRight(28));
     topRow.removeFromRight(4);
-    shapePresetBox.setBounds(topRow.reduced(0, 1));
+    shapePresetBox.setBounds(topRow.reduced(8, 1));
 
     area.removeFromTop(2);
 

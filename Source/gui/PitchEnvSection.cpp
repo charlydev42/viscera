@@ -165,11 +165,12 @@ void PitchEnvSection::setupKnob(juce::Slider& knob, juce::Label& label,
 
 void PitchEnvSection::resized()
 {
-    auto area = getLocalBounds().reduced(4);
+    auto area = getLocalBounds().reduced(2);
     area.removeFromTop(2);
 
     auto toggleRow = area.removeFromTop(18);
-    onToggle.setBounds(toggleRow.removeFromLeft(50));
+    toggleRow.removeFromLeft(2);  // align with effect toggles
+    onToggle.setBounds(toggleRow.removeFromLeft(48));
 
     area.removeFromTop(2);
 

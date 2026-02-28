@@ -657,6 +657,9 @@ void FlubberVisualizer::updateAudioTexture()
 
 void FlubberVisualizer::renderOpenGL()
 {
+    // Skip rendering when not visible (e.g. edit page)
+    if (!isVisible()) return;
+
     // Pick shader based on current dark mode
     auto& ss = VisceraLookAndFeel::darkMode ? darkShader : lightShader;
     if (!ss.program) return;

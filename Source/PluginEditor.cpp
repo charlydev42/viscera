@@ -673,7 +673,6 @@ void VisceraEditor::resized()
 
         // === CENTRE COLUMN: Vibrato | LFO Assign | Logo | Filter + Pitch Env ===
         {
-
             placeSection(centreCol, vibratoH, modMatrixSection, 3);
             centreCol.removeFromTop(gap);
             placeSection(centreCol, lfoH, lfoSection, 4);
