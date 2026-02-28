@@ -62,7 +62,7 @@ void TabbedEffectSection::switchTab(int tab)
             active ? accentCol.withAlpha(0.6f)
                    : juce::Colour(VisceraLookAndFeel::kPanelColor));
         tabButtons[i].setColour(juce::TextButton::textColourOffId,
-            active ? juce::Colours::white
+            active ? juce::Colour(VisceraLookAndFeel::kTextColor)
                    : juce::Colour(VisceraLookAndFeel::kTextColor));
     }
 
@@ -82,11 +82,7 @@ void TabbedEffectSection::paint(juce::Graphics& g)
     for (int i = 0; i < 4; ++i)
     {
         auto pb = panelBounds[i];
-        g.setColour(juce::Colours::white);
-        g.fillRoundedRectangle(pb.toFloat(), 3.0f);
-
-        g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.5f));
-        g.fillRect(pb.getX() + 2, pb.getY(), pb.getWidth() - 4, 1);
+        VisceraLookAndFeel::drawNeumorphicRect(g, pb.toFloat(), 6.0f, false);
 
         g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));

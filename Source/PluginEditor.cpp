@@ -103,6 +103,20 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     };
     addAndMakeVisible(kbToggleBtn);
 
+    // Dark mode toggle
+    darkModeBtn.setButtonText("Dark");
+    darkModeBtn.onClick = [this] {
+        VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
+        lookAndFeel.refreshJuceColours();
+        darkModeBtn.setButtonText(VisceraLookAndFeel::darkMode ? "Light" : "Dark");
+        std::function<void(juce::Component*)> repaintAll = [&](juce::Component* c) {
+            c->repaint();
+            for (auto* ch : c->getChildren()) repaintAll(ch);
+        };
+        repaintAll(this);
+    };
+    addAndMakeVisible(darkModeBtn);
+
     // Macro knobs for main page
     {
         struct MacroDef { const char* paramId; const char* label; bb::LFODest dest; };
@@ -177,6 +191,21 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
     // Start on main (perform) page
     setPage(false);
+
+    // Allow neumorphic shadows to overflow on widgets only (not containers)
+    std::function<void(juce::Component*)> enableUnclipped = [&](juce::Component* comp)
+    {
+        if (dynamic_cast<juce::Slider*>(comp) ||
+            dynamic_cast<juce::ToggleButton*>(comp) ||
+            dynamic_cast<juce::TextButton*>(comp) ||
+            dynamic_cast<juce::ComboBox*>(comp))
+        {
+            comp->setPaintingIsUnclipped(true);
+        }
+        for (auto* child : comp->getChildren())
+            enableUnclipped(child);
+    };
+    enableUnclipped(this);
 
     // Load first preset so sound matches displayed name
     // (done here after all attachments are created)
@@ -361,19 +390,31 @@ void VisceraEditor::setPage(bool advanced)
     repaint();
 }
 
-// Section header: colored bar at top + panel body below
+// Section header: neumorphic raised panel with darker header bar
 void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bounds,
                                        const juce::String& title)
 {
+    float cr = 8.0f;
+
+    // Neumorphic double shadow (raised)
+    auto bf = bounds.toFloat();
+    juce::DropShadow lightSh(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.7f), 4, { -2, -2 });
+    lightSh.drawForRectangle(g, bounds);
+    juce::DropShadow darkSh(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.5f), 6, { 3, 3 });
+    darkSh.drawForRectangle(g, bounds);
+
+    // Fill whole panel
+    g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillRoundedRectangle(bf, cr);
+
     int headerH = 16;
     auto headerBar = bounds.removeFromTop(headerH);
-    auto body = bounds;
 
     // Header bar background (rounded top corners)
     juce::Path headerPath;
     headerPath.addRoundedRectangle(headerBar.getX(), headerBar.getY(),
                                     headerBar.getWidth(), headerBar.getHeight(),
-                                    3.0f, 3.0f, true, true, false, false);
+                                    cr, cr, true, true, false, false);
     g.setColour(juce::Colour(VisceraLookAndFeel::kHeaderBg));
     g.fillPath(headerPath);
 
@@ -384,67 +425,32 @@ void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bo
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::plain));
         g.drawText(title, headerBar, juce::Justification::centred);
     }
-
-    // Body panel (rounded bottom corners)
-    juce::Path bodyPath;
-    bodyPath.addRoundedRectangle(body.getX(), body.getY(),
-                                  body.getWidth(), body.getHeight(),
-                                  3.0f, 3.0f, false, false, true, true);
-    g.setColour(juce::Colour(VisceraLookAndFeel::kPanelColor));
-    g.fillPath(bodyPath);
 }
 
 void VisceraEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::white);
+    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
 
     if (!showAdvanced)
     {
-        // Main page: white panel with drop shadow matching knob style
+        // Main page: neumorphic raised panel
         auto panelArea = mainPanelBounds.toFloat();
         if (! panelArea.isEmpty())
         {
-            // Light from top-left → shadow falls bottom-right
-            juce::DropShadow panelShadow(juce::Colour(0x30000000), 8, { 3, 4 });
-            panelShadow.drawForRectangle(g, mainPanelBounds);
-
-            // White base
-            g.setColour(juce::Colours::white);
-            g.fillRoundedRectangle(panelArea, 6.0f);
-
-            // Subtle radial gradient — light top-left, slightly darker edges
-            {
-                g.saveState();
-                juce::Path clipPath;
-                clipPath.addRoundedRectangle(panelArea, 6.0f);
-                g.reduceClipRegion(clipPath);
-
-                float lx = panelArea.getX() + panelArea.getWidth() * 0.3f;
-                float ly = panelArea.getY() + panelArea.getHeight() * 0.25f;
-                float r = juce::jmax(panelArea.getWidth(), panelArea.getHeight()) * 0.75f;
-
-                juce::ColourGradient depth(juce::Colour(0x00000000), lx, ly,
-                                           juce::Colour(0x08000000), lx + r, ly + r,
-                                           true);
-                depth.addColour(0.6, juce::Colour(0x00000000));
-                g.setGradientFill(depth);
-                g.fillRect(panelArea);
-
-                g.restoreState();
-            }
+            VisceraLookAndFeel::drawNeumorphicRect(g, panelArea, 8.0f, false);
         }
 
-        // Drop shadow under the oval visualizer — same light direction, discrete
+        // Neumorphic shadow under the oval visualizer
         if (! mainSectionBounds[0].isEmpty())
         {
+            auto vizF = mainSectionBounds[0].toFloat();
             juce::Path ovalPath;
-            ovalPath.addEllipse(mainSectionBounds[0].toFloat());
-            juce::DropShadow vizShadow(juce::Colour(0x28000000), 8, { 3, 4 });
-            vizShadow.drawForPath(g, ovalPath);
+            ovalPath.addEllipse(vizF);
+            juce::DropShadow vizLight(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.6f), 6, { -3, -3 });
+            vizLight.drawForPath(g, ovalPath);
+            juce::DropShadow vizDark(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.45f), 6, { 3, 3 });
+            vizDark.drawForPath(g, ovalPath);
         }
-
-
-
     }
     else
     {
@@ -477,6 +483,8 @@ void VisceraEditor::resized()
     topBar.removeFromLeft(sp);
 
     pageToggleBtn.setBounds(topBar.removeFromRight(40));
+    topBar.removeFromRight(sp);
+    darkModeBtn.setBounds(topBar.removeFromRight(40));
     topBar.removeFromRight(sp);
     if (!showAdvanced)
     {

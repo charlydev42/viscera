@@ -71,6 +71,9 @@ private:
     juce::TextButton pageToggleBtn;
     void setPage(bool advanced);
 
+    // Dark mode toggle
+    juce::TextButton darkModeBtn;
+
     // Main page keyboard toggle
     bool showKeyboardOnMain = false;
     juce::TextButton kbToggleBtn;
