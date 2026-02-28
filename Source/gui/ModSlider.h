@@ -11,7 +11,11 @@ class ModSlider : public juce::Slider,
                   private juce::Timer
 {
 public:
-    ModSlider() = default;
+    ModSlider()
+    {
+        setSliderSnapsToMousePosition(false);
+        setMouseDragSensitivity(200);
+    }
 
     // Static learn mode callback — when non-null, next click on a ModSlider calls it
     static inline std::function<void(bb::LFODest)> onLearnClick = nullptr;
