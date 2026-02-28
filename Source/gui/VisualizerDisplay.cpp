@@ -14,8 +14,7 @@ VisualizerDisplay::VisualizerDisplay(bb::AudioVisualBuffer& bufferL,
         btn.setClickingTogglesState(false);
         btn.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
         btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.3f));
-        btn.setColour(juce::TextButton::textColourOffId, juce::Colour(VisceraLookAndFeel::kTextColor));
-        btn.setColour(juce::TextButton::textColourOnId, juce::Colour(VisceraLookAndFeel::kAccentColor));
+        // text colours inherited from LookAndFeel (supports dark mode)
     };
     setupButton(scopeButton);
     setupButton(fftButton);

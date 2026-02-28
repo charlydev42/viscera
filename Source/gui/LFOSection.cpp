@@ -390,18 +390,12 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
             if (dest == 0)
                 enterLearnMode(i);
         };
-        slotButtons[i].setColour(juce::TextButton::buttonColourId,
-                                  juce::Colour(VisceraLookAndFeel::kPanelColor));
-        slotButtons[i].setColour(juce::TextButton::textColourOffId,
-                                  juce::Colour(VisceraLookAndFeel::kTextColor));
         addAndMakeVisible(slotButtons[i]);
 
         // Clear button — overlaid inside slot pill, no background
         slotClearBtns[i].setButtonText("x");
         slotClearBtns[i].setColour(juce::TextButton::buttonColourId,
                                     juce::Colours::transparentBlack);
-        slotClearBtns[i].setColour(juce::TextButton::textColourOffId,
-                                    juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
         slotClearBtns[i].onClick = [this, i] {
             auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
             auto destId = pfx + "DEST" + juce::String(i + 1);

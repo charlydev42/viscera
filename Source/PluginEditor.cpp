@@ -21,6 +21,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       keyboard(processor.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
 {
     setLookAndFeel(&lookAndFeel);
+    juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
 
     // Give ModSlider access to live LFO modulation values
     ModSlider::voiceParamsPtr = &processor.getVoiceParams();
@@ -109,11 +110,13 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
         lookAndFeel.refreshJuceColours();
         darkModeBtn.setButtonText(VisceraLookAndFeel::darkMode ? "Light" : "Dark");
-        std::function<void(juce::Component*)> repaintAll = [&](juce::Component* c) {
+        // Force all components to re-read LookAndFeel colours
+        std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
+            c->sendLookAndFeelChange();
             c->repaint();
-            for (auto* ch : c->getChildren()) repaintAll(ch);
+            for (auto* ch : c->getChildren()) refreshAll(ch);
         };
-        repaintAll(this);
+        refreshAll(this);
     };
     addAndMakeVisible(darkModeBtn);
 

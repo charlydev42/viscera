@@ -166,14 +166,14 @@ public:
                     arc.addCentredArc(centre.x, centre.y, arcR, arcR, 0,
                                       a1, a2, true);
                     // Soft bloom halo
-                    g.setColour(col.withAlpha(0.08f));
+                    g.setColour(col.withAlpha(0.06f));
                     g.strokePath(arc, juce::PathStrokeType(5.0f));
-                    // Core — sharp
+                    // Core
                     g.setColour(col.withAlpha(0.85f));
-                    g.strokePath(arc, juce::PathStrokeType(2.0f));
+                    g.strokePath(arc, juce::PathStrokeType(2.8f));
                     // Hot center
-                    g.setColour(col.brighter(0.5f).withAlpha(0.35f));
-                    g.strokePath(arc, juce::PathStrokeType(0.8f));
+                    g.setColour(col.brighter(0.5f).withAlpha(0.3f));
+                    g.strokePath(arc, juce::PathStrokeType(1.0f));
                 }
             }
         }
@@ -193,18 +193,10 @@ public:
             float cosA = std::cos(screenAngle);
             float sinA = std::sin(screenAngle);
             auto tickCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
-            // Bloom halo
-            g.setColour(tickCol.withAlpha(0.08f));
+            // Core
+            g.setColour(tickCol.withAlpha(0.7f));
             g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
-                       centre.x + cosA * outerR, centre.y + sinA * outerR, 4.0f);
-            // Core — sharp
-            g.setColour(tickCol.withAlpha(0.75f));
-            g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
-                       centre.x + cosA * outerR, centre.y + sinA * outerR, 1.6f);
-            // Hot
-            g.setColour(tickCol.brighter(0.5f).withAlpha(0.35f));
-            g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,
-                       centre.x + cosA * outerR, centre.y + sinA * outerR, 0.7f);
+                       centre.x + cosA * outerR, centre.y + sinA * outerR, 2.2f);
         }
     }
 

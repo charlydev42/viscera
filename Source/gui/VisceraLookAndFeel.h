@@ -34,6 +34,18 @@ public:
                               bool shouldDrawButtonAsHighlighted,
                               bool shouldDrawButtonAsDown) override;
 
+    void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override;
+
+    void drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area,
+                           bool isSeparator, bool isActive, bool isHighlighted,
+                           bool isTicked, bool hasSubMenu,
+                           const juce::String& text, const juce::String& shortcutKeyText,
+                           const juce::Drawable* icon, const juce::Colour* textColour) override;
+
+    void getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator,
+                                    int standardMenuItemHeight, int& idealWidth,
+                                    int& idealHeight) override;
+
     // Filmstrip knob images
     juce::Image knobVirgin, knobCircle, knobBlue, knobCircleGreen;
 
