@@ -388,6 +388,16 @@ void VisceraLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
                                          bool, bool)
 {
     g.setColour(button.findColour(juce::TextButton::textColourOffId));
+
+    if (button.getName() == "presetDisplay")
+    {
+        // Preset display: 12px monospace, centred-left with padding, leave room for arrow
+        g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
+        auto area = button.getLocalBounds().reduced(8, 0).withTrimmedRight(14);
+        g.drawText(button.getButtonText(), area, juce::Justification::centredLeft);
+        return;
+    }
+
     g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 11.0f, juce::Font::plain));
 
     if (button.getName() == "lfoSlot")
@@ -414,6 +424,33 @@ void VisceraLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
 
     auto bounds = button.getLocalBounds().toFloat().reduced(1.0f);
     float cr = bounds.getHeight() * 0.5f; // pill shape
+
+    // Preset display — inset pill style (like ComboBox)
+    if (button.getName() == "presetDisplay")
+    {
+        g.setColour(juce::Colour(kBgColor).darker(0.02f));
+        g.fillRoundedRectangle(bounds, cr);
+
+        g.saveState();
+        juce::Path clip;
+        clip.addRoundedRectangle(bounds, cr);
+        g.reduceClipRegion(clip);
+        juce::DropShadow darkIn(juce::Colour(kShadowDark).withAlpha(0.2f), 2, { 1, 1 });
+        darkIn.drawForRectangle(g, bounds.toNearestInt());
+        juce::DropShadow lightIn(juce::Colour(kShadowLight).withAlpha(0.2f), 2, { -1, -1 });
+        lightIn.drawForRectangle(g, bounds.toNearestInt());
+        g.restoreState();
+
+        // Dropdown arrow triangle
+        float h = bounds.getHeight();
+        float arrowX = bounds.getRight() - 16.0f;
+        float arrowY = h * 0.5f - 2.0f;
+        juce::Path arrow;
+        arrow.addTriangle(arrowX, arrowY, arrowX + 8.0f, arrowY, arrowX + 4.0f, arrowY + 5.0f);
+        g.setColour(juce::Colour(kTextColor));
+        g.fillPath(arrow);
+        return;
+    }
 
     if (down)
     {
@@ -521,6 +558,22 @@ void VisceraLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectan
         g.setFont(juce::Font(12.0f));
         g.drawText(juce::String::charToString(0x2713), tickArea, juce::Justification::centred);
     }
+}
+
+void VisceraLookAndFeel::drawPopupMenuSectionHeader(juce::Graphics& g,
+                                                      const juce::Rectangle<int>& area,
+                                                      const juce::String& sectionName)
+{
+    auto r = area.reduced(12, 0);
+
+    // Subtle line above
+    g.setColour(juce::Colour(kShadowDark).withAlpha(darkMode ? 0.3f : 0.12f));
+    g.fillRect(r.getX(), r.getY() + 2, r.getWidth(), 1);
+
+    // Section name — uppercase, accent colour, small font
+    g.setColour(juce::Colour(kAccentColor).withAlpha(0.8f));
+    g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::bold));
+    g.drawText(sectionName.toUpperCase(), r.withTrimmedTop(4), juce::Justification::centredLeft);
 }
 
 void VisceraLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator,

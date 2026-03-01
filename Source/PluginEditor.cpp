@@ -262,7 +262,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // Load first preset so sound matches displayed name
     // (done here after all attachments are created)
     if (proc.getCurrentPresetIndex() == 0 && !proc.isUserPreset())
-        proc.loadPreset(0);
+        proc.loadPresetAt(0);
 }
 
 VisceraEditor::~VisceraEditor()

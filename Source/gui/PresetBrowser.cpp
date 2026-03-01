@@ -1,28 +1,37 @@
-// PresetBrowser.cpp — Sélecteur de preset (factory + user)
+// PresetBrowser.cpp — Categorized preset browser (factory + user)
 #include "PresetBrowser.h"
 #include "../PluginProcessor.h"
 
 PresetBrowser::PresetBrowser(VisceraProcessor& processor)
     : proc(processor)
 {
-    refreshPresetList();
-
-    presetCombo.onChange = [this] {
-        int id = presetCombo.getSelectedId();
-        if (id <= 0) return;
-        if (id < kUserIdOffset)
-            proc.loadPreset(id - 1);
-        else if (id - kUserIdOffset < userPresetNames.size())
-            proc.loadUserPreset(userPresetNames[id - kUserIdOffset]);
-    };
-    addAndMakeVisible(presetCombo);
+    presetNameBtn.setName("presetDisplay");
+    presetNameBtn.onClick = [this] { showPresetMenu(); };
+    addAndMakeVisible(presetNameBtn);
 
     prevButton.onClick  = [this] { navigatePreset(-1); };
     nextButton.onClick  = [this] { navigatePreset(+1); };
     addAndMakeVisible(prevButton);
     addAndMakeVisible(nextButton);
 
-    randomButton.onClick = [this] { if (onRandomize) onRandomize(); };
+    initButton.onClick = [this] {
+        auto& registry = proc.getPresetRegistry();
+        for (int i = 0; i < static_cast<int>(registry.size()); ++i)
+        {
+            if (registry[static_cast<size_t>(i)].category == "Init")
+            {
+                proc.loadPresetAt(i);
+                updatePresetName();
+                return;
+            }
+        }
+    };
+    addAndMakeVisible(initButton);
+
+    randomButton.onClick = [this] {
+        if (onRandomize) onRandomize();
+        presetNameBtn.setButtonText("Random");
+    };
     addAndMakeVisible(randomButton);
 
     saveButton.onClick = [this] {
@@ -41,85 +50,115 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
                     if (name.isNotEmpty())
                     {
                         proc.saveUserPreset(name);
+                        proc.buildPresetRegistry();
                         refreshPresetList();
-                        // Select the newly saved preset
-                        int idx = userPresetNames.indexOf(name);
-                        if (idx >= 0)
-                            presetCombo.setSelectedId(kUserIdOffset + idx, juce::dontSendNotification);
                     }
                 }
-                delete aw;  // always delete, regardless of result
+                delete aw;
             }), false);
     };
     addAndMakeVisible(saveButton);
+
+    updatePresetName();
 }
 
 void PresetBrowser::refreshPresetList()
 {
-    presetCombo.clear(juce::dontSendNotification);
+    updatePresetName();
+}
 
-    // Factory presets
-    auto& factoryNames = VisceraProcessor::getPresetNames();
-    for (int i = 0; i < factoryNames.size(); ++i)
-        presetCombo.addItem(factoryNames[i], i + 1);
+void PresetBrowser::updatePresetName()
+{
+    auto& registry = proc.getPresetRegistry();
+    int idx = proc.getCurrentPresetIndex();
 
-    // User presets
-    userPresetNames = proc.getUserPresetNames();
-    if (userPresetNames.size() > 0)
-    {
-        presetCombo.addSeparator();
-        for (int i = 0; i < userPresetNames.size(); ++i)
-            presetCombo.addItem(userPresetNames[i], kUserIdOffset + i);
-    }
-
-    // Restore current selection
+    juce::String displayName;
     if (proc.isUserPreset())
-    {
-        int idx = userPresetNames.indexOf(proc.getUserPresetName());
-        if (idx >= 0)
-            presetCombo.setSelectedId(kUserIdOffset + idx, juce::dontSendNotification);
-    }
+        displayName = proc.getUserPresetName();
+    else if (idx >= 0 && idx < static_cast<int>(registry.size()))
+        displayName = registry[static_cast<size_t>(idx)].name;
     else
+        displayName = "Init";
+
+    presetNameBtn.setButtonText(displayName);
+}
+
+void PresetBrowser::showPresetMenu()
+{
+    auto& registry = proc.getPresetRegistry();
+    juce::PopupMenu menu;
+
+    // Category order for factory presets
+    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Texture" };
+
+    // Group factory presets by category
+    juce::String lastCategory;
+    bool hasUserPresets = false;
+    int currentIdx = proc.getCurrentPresetIndex();
+
+    for (int i = 0; i < static_cast<int>(registry.size()); ++i)
     {
-        presetCombo.setSelectedId(proc.getCurrentPresetIndex() + 1, juce::dontSendNotification);
+        auto& entry = registry[static_cast<size_t>(i)];
+
+        // Skip Init category — handled by dedicated Init button
+        if (entry.isFactory && entry.category == "Init")
+            continue;
+
+        if (entry.isFactory)
+        {
+            if (entry.category != lastCategory)
+            {
+                if (lastCategory.isNotEmpty())
+                    menu.addSeparator();
+                menu.addSectionHeader(entry.category);
+                lastCategory = entry.category;
+            }
+            menu.addItem(i + 1, entry.name, true, i == currentIdx);
+        }
+        else
+        {
+            if (!hasUserPresets)
+            {
+                menu.addSeparator();
+                menu.addSectionHeader("User");
+                hasUserPresets = true;
+            }
+            menu.addItem(i + 1, entry.name, true, i == currentIdx);
+        }
     }
+
+    menu.showMenuAsync(juce::PopupMenu::Options()
+        .withTargetComponent(&presetNameBtn)
+        .withMinimumWidth(presetNameBtn.getWidth()),
+        [this](int result) {
+            if (result > 0)
+            {
+                int index = result - 1;
+                proc.loadPresetAt(index);
+                updatePresetName();
+            }
+        });
 }
 
 void PresetBrowser::navigatePreset(int direction)
 {
-    int total = getTotalPresetCount();
+    auto& registry = proc.getPresetRegistry();
+    int total = static_cast<int>(registry.size());
     if (total == 0) return;
 
-    // Find current position in the flat list
-    int current = 0;
-    if (proc.isUserPreset())
+    int current = proc.getCurrentPresetIndex();
+
+    // Step in direction, skipping Init-category entries
+    for (int i = 0; i < total; ++i)
     {
-        int idx = userPresetNames.indexOf(proc.getUserPresetName());
-        current = VisceraProcessor::kNumPresets + (idx >= 0 ? idx : 0);
-    }
-    else
-    {
-        current = proc.getCurrentPresetIndex();
+        current = (current + direction + total) % total;
+        if (!(registry[static_cast<size_t>(current)].isFactory
+              && registry[static_cast<size_t>(current)].category == "Init"))
+            break;
     }
 
-    current = (current + direction + total) % total;
-
-    if (current < VisceraProcessor::kNumPresets)
-    {
-        proc.loadPreset(current);
-        presetCombo.setSelectedId(current + 1, juce::dontSendNotification);
-    }
-    else
-    {
-        int userIdx = current - VisceraProcessor::kNumPresets;
-        proc.loadUserPreset(userPresetNames[userIdx]);
-        presetCombo.setSelectedId(kUserIdOffset + userIdx, juce::dontSendNotification);
-    }
-}
-
-int PresetBrowser::getTotalPresetCount() const
-{
-    return VisceraProcessor::kNumPresets + userPresetNames.size();
+    proc.loadPresetAt(current);
+    updatePresetName();
 }
 
 void PresetBrowser::resized()
@@ -128,16 +167,20 @@ void PresetBrowser::resized()
     int btnW = 24;
     int sp = 2;
 
+    // Left: [<]
     prevButton.setBounds(area.removeFromLeft(btnW));
     area.removeFromLeft(sp);
 
-    // Right side: [>] [?] [+]
+    // Right side: [+] [Random] [Init] [>]
     saveButton.setBounds(area.removeFromRight(btnW));
     area.removeFromRight(sp);
-    randomButton.setBounds(area.removeFromRight(btnW));
+    randomButton.setBounds(area.removeFromRight(48));
+    area.removeFromRight(sp);
+    initButton.setBounds(area.removeFromRight(32));
     area.removeFromRight(sp);
     nextButton.setBounds(area.removeFromRight(btnW));
     area.removeFromRight(sp);
 
-    presetCombo.setBounds(area);
+    // Center: [preset name ▼]
+    presetNameBtn.setBounds(area);
 }

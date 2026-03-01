@@ -45,16 +45,24 @@ public:
     // APVTS publique pour que l'éditeur puisse s'y connecter
     juce::AudioProcessorValueTreeState apvts;
 
-    // Noms des presets factory
-    static constexpr int kNumPresets = 18;
-    static const juce::StringArray& getPresetNames();
-    void loadPreset(int index);
+    // --- Preset system ---
+    struct PresetEntry {
+        juce::String name;
+        juce::String category;
+        bool isFactory = true;
+        juce::String resourceName;   // BinaryData resource name (factory)
+        juce::String userFileName;   // filename without extension (user)
+    };
+
+    const std::vector<PresetEntry>& getPresetRegistry() const { return presetRegistry; }
+    void buildPresetRegistry();
+    void loadPresetAt(int index);
     int getCurrentPresetIndex() const { return currentPreset; }
+    int getPresetCount() const { return static_cast<int>(presetRegistry.size()); }
 
     // User presets
     static juce::File getUserPresetsDir();
-    juce::StringArray getUserPresetNames() const;
-    void saveUserPreset(const juce::String& name);
+    void saveUserPreset(const juce::String& name, const juce::String& category = "User");
     void loadUserPreset(const juce::String& name);
     bool isUserPreset() const { return isUserPresetLoaded; }
     const juce::String& getUserPresetName() const { return currentUserPresetName; }
@@ -79,6 +87,11 @@ private:
     int currentPreset = 0;
     bool isUserPresetLoaded = false;
     juce::String currentUserPresetName;
+    std::vector<PresetEntry> presetRegistry;
+
+    // Shared logic for loading preset XML
+    void loadPresetFromXml(const juce::String& xmlStr);
+    void loadFactoryPreset(const juce::String& resourceName);
 
     // 3 global assignable LFOs
     bb::LFO globalLFO[3];
@@ -156,9 +169,6 @@ private:
 
     // Migration des anciens presets (MOD_PITCH → COARSE+FINE ou FIXED_FREQ)
     static void migrateOldPitchParams(juce::ValueTree& tree);
-
-    // Données des presets factory (ValueTree XML)
-    static const char* getPresetXML(int index);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VisceraProcessor)
 };

@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "dsp/FMSound.h"
+#include <BinaryData.h>
 
 // --- Constructeur ---
 VisceraProcessor::VisceraProcessor()
@@ -17,6 +18,7 @@ VisceraProcessor::VisceraProcessor()
     auto* voice = new bb::FMVoice(voiceParams);
     synth.addVoice(voice);
 
+    buildPresetRegistry();
 }
 
 // --- Cacher les pointeurs atomiques vers les paramètres ---
@@ -774,20 +776,19 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 }
 
 // --- Programmes (presets) ---
-int VisceraProcessor::getNumPrograms() { return kNumPresets; }
+int VisceraProcessor::getNumPrograms() { return juce::jmax(1, getPresetCount()); }
 int VisceraProcessor::getCurrentProgram() { return currentPreset; }
 
 void VisceraProcessor::setCurrentProgram(int index)
 {
-    if (index >= 0 && index < kNumPresets)
-        loadPreset(index);
+    if (index >= 0 && index < getPresetCount())
+        loadPresetAt(index);
 }
 
 const juce::String VisceraProcessor::getProgramName(int index)
 {
-    auto& names = getPresetNames();
-    if (index >= 0 && index < names.size())
-        return names[index];
+    if (index >= 0 && index < static_cast<int>(presetRegistry.size()))
+        return presetRegistry[static_cast<size_t>(index)].name;
     return {};
 }
 
@@ -872,17 +873,7 @@ juce::File VisceraProcessor::getUserPresetsDir()
     return dir;
 }
 
-juce::StringArray VisceraProcessor::getUserPresetNames() const
-{
-    juce::StringArray names;
-    auto dir = getUserPresetsDir();
-    for (auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.xml"))
-        names.add(f.getFileNameWithoutExtension());
-    names.sort(true);
-    return names;
-}
-
-void VisceraProcessor::saveUserPreset(const juce::String& name)
+void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::String& category)
 {
     auto state = apvts.copyState();
     state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
@@ -896,14 +887,20 @@ void VisceraProcessor::saveUserPreset(const juce::String& name)
     auto xml = state.createXml();
     if (xml)
     {
-        auto file = getUserPresetsDir().getChildFile(name + ".xml");
+        xml->setAttribute("name", name);
+        xml->setAttribute("category", category);
+        auto file = getUserPresetsDir().getChildFile(name + ".visc");
         xml->writeTo(file);
     }
 }
 
 void VisceraProcessor::loadUserPreset(const juce::String& name)
 {
-    auto file = getUserPresetsDir().getChildFile(name + ".xml");
+    // Try .visc first, fallback to .xml
+    auto dir = getUserPresetsDir();
+    auto file = dir.getChildFile(name + ".visc");
+    if (!file.existsAsFile())
+        file = dir.getChildFile(name + ".xml");
     if (!file.existsAsFile()) return;
 
     auto xml = juce::parseXML(file);
@@ -926,6 +923,127 @@ void VisceraProcessor::loadUserPreset(const juce::String& name)
         isUserPresetLoaded = true;
         currentUserPresetName = name;
     }
+}
+
+// --- Shared preset loading from XML string ---
+void VisceraProcessor::loadPresetFromXml(const juce::String& xmlStr)
+{
+    auto xml = juce::parseXML(xmlStr);
+    if (!xml) return;
+    if (!xml->hasTagName(apvts.state.getType())) return;
+
+    auto tree = juce::ValueTree::fromXml(*xml);
+    if (tree.hasProperty("shaperTable"))
+        volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
+    for (int n = 0; n < 3; ++n)
+    {
+        auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
+        auto tableKey = "lfo" + juce::String(n + 1) + "Table";
+        if (tree.hasProperty(curveKey))
+            globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
+        else if (tree.hasProperty(tableKey))
+            globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
+    }
+    migrateOldPitchParams(tree);
+    apvts.replaceState(tree);
+}
+
+void VisceraProcessor::loadFactoryPreset(const juce::String& resName)
+{
+    int size = 0;
+    auto* data = BinaryData::getNamedResource(resName.toRawUTF8(), size);
+    if (data != nullptr && size > 0)
+        loadPresetFromXml(juce::String::fromUTF8(data, size));
+}
+
+// --- Build preset registry from BinaryData + user dir ---
+void VisceraProcessor::buildPresetRegistry()
+{
+    presetRegistry.clear();
+
+    // Scan BinaryData for .visc resources
+    for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
+    {
+        juce::String resName = BinaryData::namedResourceList[i];
+        juce::String origName = BinaryData::originalFilenames[i];
+        if (!origName.endsWith(".visc")) continue;
+
+        int size = 0;
+        auto* data = BinaryData::getNamedResource(resName.toRawUTF8(), size);
+        if (data == nullptr || size <= 0) continue;
+
+        auto xml = juce::parseXML(juce::String::fromUTF8(data, size));
+        if (!xml) continue;
+
+        PresetEntry entry;
+        entry.category = xml->getStringAttribute("category", "Init");
+        entry.name = xml->getStringAttribute("name", origName.upToLastOccurrenceOf(".", false, false));
+        entry.isFactory = true;
+        entry.resourceName = resName;
+        presetRegistry.push_back(std::move(entry));
+    }
+
+    // Sort factory presets by category order, then by name
+    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Texture" };
+    std::sort(presetRegistry.begin(), presetRegistry.end(),
+        [](const PresetEntry& a, const PresetEntry& b) {
+            int catA = categoryOrder.indexOf(a.category);
+            int catB = categoryOrder.indexOf(b.category);
+            if (catA < 0) catA = 999;
+            if (catB < 0) catB = 999;
+            if (catA != catB) return catA < catB;
+            return a.name.compareIgnoreCase(b.name) < 0;
+        });
+
+    // Scan user presets dir (.visc + .xml fallback)
+    auto dir = getUserPresetsDir();
+    juce::Array<juce::File> userFiles;
+    userFiles.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.visc"));
+    userFiles.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.xml"));
+
+    // Deduplicate: if both .visc and .xml exist, prefer .visc
+    juce::StringArray seenNames;
+    for (auto& f : userFiles)
+    {
+        auto baseName = f.getFileNameWithoutExtension();
+        if (seenNames.contains(baseName)) continue;
+        seenNames.add(baseName);
+
+        PresetEntry entry;
+        entry.name = baseName;
+        entry.category = "User";
+        entry.isFactory = false;
+        entry.userFileName = baseName;
+
+        // Try to read category from file
+        auto xml = juce::parseXML(f);
+        if (xml)
+        {
+            auto cat = xml->getStringAttribute("category", "User");
+            if (cat.isNotEmpty()) entry.category = cat;
+        }
+
+        presetRegistry.push_back(std::move(entry));
+    }
+}
+
+// --- Load preset by registry index ---
+void VisceraProcessor::loadPresetAt(int index)
+{
+    if (index < 0 || index >= static_cast<int>(presetRegistry.size())) return;
+
+    auto& entry = presetRegistry[static_cast<size_t>(index)];
+    if (entry.isFactory)
+    {
+        loadFactoryPreset(entry.resourceName);
+        isUserPresetLoaded = false;
+        currentUserPresetName.clear();
+    }
+    else
+    {
+        loadUserPreset(entry.userFileName);
+    }
+    currentPreset = index;
 }
 
 // --- Migration anciens presets : MOD_PITCH → COARSE+FINE ou FIXED_FREQ ---
@@ -1035,1611 +1153,6 @@ void VisceraProcessor::migrateOldPitchParams(juce::ValueTree& tree)
     addParam("CAR_SPREAD", 0.0f);
 }
 
-// --- Noms des presets ---
-const juce::StringArray& VisceraProcessor::getPresetNames()
-{
-    static juce::StringArray names {
-        "soft pulse", "nasal drone", "ethereal pad", "fm kick",
-        "metal bell", "saw lead", "dark drone", "bright pluck",
-        "fm organ", "digital harsh", "sync lead", "wobble bass",
-        "alien fx", "crystal", "chaos engine", "soft texture",
-        "microwave kick",
-        "glide kick"
-    };
-    return names;
-}
-
-// --- Chargement d'un preset ---
-void VisceraProcessor::loadPreset(int index)
-{
-    if (index < 0 || index >= kNumPresets) return;
-
-    const char* xmlStr = getPresetXML(index);
-    if (auto xml = juce::parseXML(xmlStr))
-    {
-        if (xml->hasTagName(apvts.state.getType()))
-            apvts.replaceState(juce::ValueTree::fromXml(*xml));
-    }
-    currentPreset = index;
-    isUserPresetLoaded = false;
-    currentUserPresetName.clear();
-}
-
-// --- Presets factory (16 presets) ---
-const char* VisceraProcessor::getPresetXML(int index)
-{
-    static const char* presets[] = {
-        // 0: soft pulse — son doux, peu de modulation
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.2"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.5"/>
-  <PARAM id="ENV1_S" value="0.3"/>
-  <PARAM id="ENV1_R" value="0.5"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.1"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.8"/>
-  <PARAM id="ENV2_S" value="0.2"/>
-  <PARAM id="ENV2_R" value="0.6"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.3"/>
-  <PARAM id="ENV3_S" value="1.0"/>
-  <PARAM id="ENV3_R" value="0.5"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="20000"/>
-  <PARAM id="FILT_RES" value="0"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 1: nasal drone — nasal, ratio non-harmonique
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="1"/>
-  <PARAM id="MOD1_PITCH" value="7"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.6"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="700"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.4"/>
-  <PARAM id="ENV1_S" value="0.5"/>
-  <PARAM id="ENV1_R" value="0.3"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="12"/>
-  <PARAM id="MOD2_KB" value="0"/>
-  <PARAM id="MOD2_LEVEL" value="0.3"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="523.25"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.2"/>
-  <PARAM id="ENV2_S" value="0.6"/>
-  <PARAM id="ENV2_R" value="0.4"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.5"/>
-  <PARAM id="ENV3_S" value="0.8"/>
-  <PARAM id="ENV3_R" value="0.4"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0.2"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="3000"/>
-  <PARAM id="FILT_RES" value="0.4"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 2: ethereal pad — pad éthéré, attaque lente
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.4"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="1.0"/>
-  <PARAM id="ENV1_D" value="2.0"/>
-  <PARAM id="ENV1_S" value="0.6"/>
-  <PARAM id="ENV1_R" value="2.0"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="12"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.3"/>
-  <PARAM id="MOD2_COARSE" value="2"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="1.5"/>
-  <PARAM id="ENV2_D" value="1.0"/>
-  <PARAM id="ENV2_S" value="0.4"/>
-  <PARAM id="ENV2_R" value="2.5"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.8"/>
-  <PARAM id="ENV3_D" value="0.5"/>
-  <PARAM id="ENV3_S" value="0.9"/>
-  <PARAM id="ENV3_R" value="3.0"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.15"/>
-  <PARAM id="VEIN" value="0.1"/>
-  <PARAM id="FLUX" value="0.1"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="8000"/>
-  <PARAM id="FILT_RES" value="0.1"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="0"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0.2"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 3: fm kick — bass percussif avec pitch env
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.8"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.001"/>
-  <PARAM id="ENV1_D" value="0.15"/>
-  <PARAM id="ENV1_S" value="0.0"/>
-  <PARAM id="ENV1_R" value="0.1"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.5"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.001"/>
-  <PARAM id="ENV2_D" value="0.2"/>
-  <PARAM id="ENV2_S" value="0.0"/>
-  <PARAM id="ENV2_R" value="0.1"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="-1"/>
-  <PARAM id="ENV3_A" value="0.001"/>
-  <PARAM id="ENV3_D" value="0.4"/>
-  <PARAM id="ENV3_S" value="0.0"/>
-  <PARAM id="ENV3_R" value="0.2"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="0"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="1"/>
-  <PARAM id="PENV_AMT" value="24"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.08"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="2000"/>
-  <PARAM id="FILT_RES" value="0.2"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.6"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 4: metal bell — cloche métallique
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="7.02"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.7"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="702"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.001"/>
-  <PARAM id="ENV1_D" value="1.5"/>
-  <PARAM id="ENV1_S" value="0.0"/>
-  <PARAM id="ENV1_R" value="1.0"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="12"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.4"/>
-  <PARAM id="MOD2_COARSE" value="2"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.001"/>
-  <PARAM id="ENV2_D" value="2.0"/>
-  <PARAM id="ENV2_S" value="0.0"/>
-  <PARAM id="ENV2_R" value="1.5"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="1"/>
-  <PARAM id="ENV3_A" value="0.001"/>
-  <PARAM id="ENV3_D" value="2.5"/>
-  <PARAM id="ENV3_S" value="0.0"/>
-  <PARAM id="ENV3_R" value="2.0"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="2"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="15000"/>
-  <PARAM id="FILT_RES" value="0.0"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.4"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 5: saw lead — lead agressif
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="1"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.9"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.3"/>
-  <PARAM id="ENV1_S" value="0.8"/>
-  <PARAM id="ENV1_R" value="0.2"/>
-  <PARAM id="MOD2_WAVE" value="2"/>
-  <PARAM id="MOD2_PITCH" value="12"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.5"/>
-  <PARAM id="MOD2_COARSE" value="2"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.2"/>
-  <PARAM id="ENV2_S" value="0.7"/>
-  <PARAM id="ENV2_R" value="0.2"/>
-  <PARAM id="CAR_WAVE" value="1"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.1"/>
-  <PARAM id="ENV3_S" value="1.0"/>
-  <PARAM id="ENV3_R" value="0.15"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="1"/>
-  <PARAM id="PENV_AMT" value="5"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.1"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="5000"/>
-  <PARAM id="FILT_RES" value="0.3"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 6: dark drone — drone sombre, LFO sur tout
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="1"/>
-  <PARAM id="MOD1_PITCH" value="-12"/>
-  <PARAM id="MOD1_KB" value="0"/>
-  <PARAM id="MOD1_LEVEL" value="0.6"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="130.81"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="2.0"/>
-  <PARAM id="ENV1_D" value="1.0"/>
-  <PARAM id="ENV1_S" value="0.8"/>
-  <PARAM id="ENV1_R" value="3.0"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="5"/>
-  <PARAM id="MOD2_KB" value="0"/>
-  <PARAM id="MOD2_LEVEL" value="0.4"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="349.23"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="1.5"/>
-  <PARAM id="ENV2_D" value="2.0"/>
-  <PARAM id="ENV2_S" value="0.7"/>
-  <PARAM id="ENV2_R" value="3.0"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="-1"/>
-  <PARAM id="ENV3_A" value="1.0"/>
-  <PARAM id="ENV3_D" value="1.0"/>
-  <PARAM id="ENV3_S" value="0.9"/>
-  <PARAM id="ENV3_R" value="4.0"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="0"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.3"/>
-  <PARAM id="VEIN" value="0.4"/>
-  <PARAM id="FLUX" value="0.3"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="1500"/>
-  <PARAM id="FILT_RES" value="0.5"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="0"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0.3"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 7: bright pluck — pluck court, harmoniques brillantes
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="1.0"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.001"/>
-  <PARAM id="ENV1_D" value="0.08"/>
-  <PARAM id="ENV1_S" value="0.0"/>
-  <PARAM id="ENV1_R" value="0.05"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="19"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.6"/>
-  <PARAM id="MOD2_COARSE" value="3"/>
-  <PARAM id="MOD2_FINE" value="-2"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.001"/>
-  <PARAM id="ENV2_D" value="0.12"/>
-  <PARAM id="ENV2_S" value="0.0"/>
-  <PARAM id="ENV2_R" value="0.08"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.001"/>
-  <PARAM id="ENV3_D" value="0.6"/>
-  <PARAM id="ENV3_S" value="0.0"/>
-  <PARAM id="ENV3_R" value="0.3"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="12000"/>
-  <PARAM id="FILT_RES" value="0.1"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 8: fm organ — orgue FM classique
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="12"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.4"/>
-  <PARAM id="MOD1_COARSE" value="2"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.5"/>
-  <PARAM id="ENV1_S" value="0.6"/>
-  <PARAM id="ENV1_R" value="0.3"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.3"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.4"/>
-  <PARAM id="ENV2_S" value="0.5"/>
-  <PARAM id="ENV2_R" value="0.3"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.1"/>
-  <PARAM id="ENV3_S" value="1.0"/>
-  <PARAM id="ENV3_R" value="0.2"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.05"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="20000"/>
-  <PARAM id="FILT_RES" value="0.0"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 9: digital harsh — XOR activé
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="2"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.8"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.3"/>
-  <PARAM id="ENV1_S" value="0.7"/>
-  <PARAM id="ENV1_R" value="0.2"/>
-  <PARAM id="MOD2_WAVE" value="1"/>
-  <PARAM id="MOD2_PITCH" value="7"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.7"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="700"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.2"/>
-  <PARAM id="ENV2_S" value="0.6"/>
-  <PARAM id="ENV2_R" value="0.2"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.2"/>
-  <PARAM id="ENV3_S" value="0.9"/>
-  <PARAM id="ENV3_R" value="0.2"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0.2"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="1"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="6000"/>
-  <PARAM id="FILT_RES" value="0.3"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.35"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 10: sync lead
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="1"/>
-  <PARAM id="MOD1_PITCH" value="-5"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.5"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="-500"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.3"/>
-  <PARAM id="ENV1_S" value="0.6"/>
-  <PARAM id="ENV1_R" value="0.3"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.3"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.2"/>
-  <PARAM id="ENV2_S" value="0.5"/>
-  <PARAM id="ENV2_R" value="0.3"/>
-  <PARAM id="CAR_WAVE" value="1"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.1"/>
-  <PARAM id="ENV3_S" value="1.0"/>
-  <PARAM id="ENV3_R" value="0.15"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="1"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="8000"/>
-  <PARAM id="FILT_RES" value="0.2"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 11: wobble bass — flux + vein actifs
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.7"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.4"/>
-  <PARAM id="ENV1_S" value="0.6"/>
-  <PARAM id="ENV1_R" value="0.3"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.5"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.3"/>
-  <PARAM id="ENV2_S" value="0.5"/>
-  <PARAM id="ENV2_R" value="0.3"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="-1"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.2"/>
-  <PARAM id="ENV3_S" value="0.9"/>
-  <PARAM id="ENV3_R" value="0.3"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="0"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.1"/>
-  <PARAM id="VEIN" value="0.5"/>
-  <PARAM id="FLUX" value="0.6"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="1200"/>
-  <PARAM id="FILT_RES" value="0.6"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.55"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 12: alien fx — non-harmonique + XOR + pitch env
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="4"/>
-  <PARAM id="MOD1_PITCH" value="3.5"/>
-  <PARAM id="MOD1_KB" value="0"/>
-  <PARAM id="MOD1_LEVEL" value="0.9"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="320.24"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.5"/>
-  <PARAM id="ENV1_D" value="1.0"/>
-  <PARAM id="ENV1_S" value="0.4"/>
-  <PARAM id="ENV1_R" value="2.0"/>
-  <PARAM id="MOD2_WAVE" value="3"/>
-  <PARAM id="MOD2_PITCH" value="-7"/>
-  <PARAM id="MOD2_KB" value="0"/>
-  <PARAM id="MOD2_LEVEL" value="0.6"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="174.61"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.3"/>
-  <PARAM id="ENV2_D" value="1.5"/>
-  <PARAM id="ENV2_S" value="0.3"/>
-  <PARAM id="ENV2_R" value="2.0"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.2"/>
-  <PARAM id="ENV3_D" value="1.0"/>
-  <PARAM id="ENV3_S" value="0.5"/>
-  <PARAM id="ENV3_R" value="2.0"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.2"/>
-  <PARAM id="VEIN" value="0.3"/>
-  <PARAM id="FLUX" value="0.4"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="1"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="1"/>
-  <PARAM id="PENV_AMT" value="-12"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.5"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="4000"/>
-  <PARAM id="FILT_RES" value="0.4"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.35"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="0"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0.4"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 13: crystal — cristallin, haut registre
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="24"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.3"/>
-  <PARAM id="MOD1_COARSE" value="4"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.001"/>
-  <PARAM id="ENV1_D" value="1.0"/>
-  <PARAM id="ENV1_S" value="0.1"/>
-  <PARAM id="ENV1_R" value="1.5"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="12"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.2"/>
-  <PARAM id="MOD2_COARSE" value="2"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.001"/>
-  <PARAM id="ENV2_D" value="0.8"/>
-  <PARAM id="ENV2_S" value="0.1"/>
-  <PARAM id="ENV2_R" value="1.0"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="2"/>
-  <PARAM id="ENV3_A" value="0.001"/>
-  <PARAM id="ENV3_D" value="1.5"/>
-  <PARAM id="ENV3_S" value="0.0"/>
-  <PARAM id="ENV3_R" value="1.0"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="4"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="18000"/>
-  <PARAM id="FILT_RES" value="0.0"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.35"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0.15"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 14: chaos engine — saw + sync + XOR = chaos
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="1"/>
-  <PARAM id="MOD1_PITCH" value="-7"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="1.0"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="-700"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.01"/>
-  <PARAM id="ENV1_D" value="0.3"/>
-  <PARAM id="ENV1_S" value="0.8"/>
-  <PARAM id="ENV1_R" value="0.2"/>
-  <PARAM id="MOD2_WAVE" value="2"/>
-  <PARAM id="MOD2_PITCH" value="5"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.8"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="500"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.01"/>
-  <PARAM id="ENV2_D" value="0.2"/>
-  <PARAM id="ENV2_S" value="0.7"/>
-  <PARAM id="ENV2_R" value="0.2"/>
-  <PARAM id="CAR_WAVE" value="1"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.01"/>
-  <PARAM id="ENV3_D" value="0.1"/>
-  <PARAM id="ENV3_S" value="1.0"/>
-  <PARAM id="ENV3_R" value="0.15"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.1"/>
-  <PARAM id="VEIN" value="0.2"/>
-  <PARAM id="FLUX" value="0.3"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="1"/>
-  <PARAM id="SYNC" value="1"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="4000"/>
-  <PARAM id="FILT_RES" value="0.5"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.3"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 15: soft texture — texture douce, tous LFOs subtils
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="3"/>
-  <PARAM id="MOD1_PITCH" value="12"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.3"/>
-  <PARAM id="MOD1_COARSE" value="2"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.5"/>
-  <PARAM id="ENV1_D" value="1.0"/>
-  <PARAM id="ENV1_S" value="0.5"/>
-  <PARAM id="ENV1_R" value="2.0"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.2"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.8"/>
-  <PARAM id="ENV2_D" value="1.5"/>
-  <PARAM id="ENV2_S" value="0.4"/>
-  <PARAM id="ENV2_R" value="2.5"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="0"/>
-  <PARAM id="ENV3_A" value="0.3"/>
-  <PARAM id="ENV3_D" value="0.5"/>
-  <PARAM id="ENV3_S" value="0.8"/>
-  <PARAM id="ENV3_R" value="3.0"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="1"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0.2"/>
-  <PARAM id="VEIN" value="0.3"/>
-  <PARAM id="FLUX" value="0.15"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="0"/>
-  <PARAM id="PENV_AMT" value="0"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.15"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.1"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="6000"/>
-  <PARAM id="FILT_RES" value="0.2"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.5"/>
-  <PARAM id="DRIVE" value="1.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="0"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0.25"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 16: microwave kick — hardcore sustained, pitch sweep + XOR + drive
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.95"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.001"/>
-  <PARAM id="ENV1_D" value="0.15"/>
-  <PARAM id="ENV1_S" value="0.6"/>
-  <PARAM id="ENV1_R" value="0.1"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="7"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.7"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="700"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.001"/>
-  <PARAM id="ENV2_D" value="0.1"/>
-  <PARAM id="ENV2_S" value="0.4"/>
-  <PARAM id="ENV2_R" value="0.08"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="-1"/>
-  <PARAM id="ENV3_A" value="0.001"/>
-  <PARAM id="ENV3_D" value="0.2"/>
-  <PARAM id="ENV3_S" value="0.9"/>
-  <PARAM id="ENV3_R" value="0.15"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="0"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="1"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="1"/>
-  <PARAM id="PENV_AMT" value="48"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.04"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.05"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="1500"/>
-  <PARAM id="FILT_RES" value="0.4"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.65"/>
-  <PARAM id="DRIVE" value="6.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)",
-
-        // 17: glide kick — portamento-style pitch drop kick
-        R"(<VisceraState>
-  <PARAM id="MOD1_WAVE" value="0"/>
-  <PARAM id="MOD1_PITCH" value="0"/>
-  <PARAM id="MOD1_KB" value="1"/>
-  <PARAM id="MOD1_LEVEL" value="0.3"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
-  <PARAM id="MOD1_FINE" value="0"/>
-  <PARAM id="MOD1_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD1_MULTI" value="4"/>
-  <PARAM id="ENV1_A" value="0.001"/>
-  <PARAM id="ENV1_D" value="0.12"/>
-  <PARAM id="ENV1_S" value="0.0"/>
-  <PARAM id="ENV1_R" value="0.08"/>
-  <PARAM id="MOD2_WAVE" value="0"/>
-  <PARAM id="MOD2_PITCH" value="0"/>
-  <PARAM id="MOD2_KB" value="1"/>
-  <PARAM id="MOD2_LEVEL" value="0.15"/>
-  <PARAM id="MOD2_COARSE" value="1"/>
-  <PARAM id="MOD2_FINE" value="0"/>
-  <PARAM id="MOD2_FIXED_FREQ" value="440"/>
-  <PARAM id="MOD2_MULTI" value="4"/>
-  <PARAM id="ENV2_A" value="0.001"/>
-  <PARAM id="ENV2_D" value="0.18"/>
-  <PARAM id="ENV2_S" value="0.0"/>
-  <PARAM id="ENV2_R" value="0.1"/>
-  <PARAM id="CAR_WAVE" value="0"/>
-  <PARAM id="CAR_OCTAVE" value="-1"/>
-  <PARAM id="ENV3_A" value="0.001"/>
-  <PARAM id="ENV3_D" value="0.5"/>
-  <PARAM id="ENV3_S" value="0.0"/>
-  <PARAM id="ENV3_R" value="0.2"/>
-  <PARAM id="CAR_DRIFT" value="0"/>
-  <PARAM id="CAR_NOISE" value="0"/>
-  <PARAM id="CAR_SPREAD" value="0"/>
-  <PARAM id="CAR_COARSE" value="0"/>
-  <PARAM id="CAR_FINE" value="0"/>
-  <PARAM id="CAR_FIXED_FREQ" value="440"/>
-  <PARAM id="CAR_KB" value="1"/>
-  <PARAM id="TREMOR" value="0"/>
-  <PARAM id="VEIN" value="0"/>
-  <PARAM id="FLUX" value="0"/>
-  <PARAM id="FM_ALGO" value="0"/>
-  <PARAM id="XOR_ON" value="0"/>
-  <PARAM id="SYNC" value="0"/>
-  <PARAM id="PENV_ON" value="1"/>
-  <PARAM id="PENV_AMT" value="36"/>
-  <PARAM id="PENV_A" value="0.001"/>
-  <PARAM id="PENV_D" value="0.12"/>
-  <PARAM id="PENV_S" value="0"/>
-  <PARAM id="PENV_R" value="0.08"/>
-  <PARAM id="FILT_ON" value="1"/>
-  <PARAM id="FILT_CUTOFF" value="3000"/>
-  <PARAM id="FILT_RES" value="0.15"/>
-  <PARAM id="FILT_TYPE" value="0"/>
-  <PARAM id="DLY_ON" value="0"/>
-  <PARAM id="DLY_TIME" value="0.3"/>
-  <PARAM id="DLY_FEED" value="0.3"/>
-  <PARAM id="DLY_DAMP" value="0.3"/>
-  <PARAM id="DLY_MIX" value="0"/>
-  <PARAM id="DLY_PING" value="0"/>
-  <PARAM id="REV_ON" value="0"/>
-  <PARAM id="REV_SIZE" value="0.3"/>
-  <PARAM id="REV_DAMP" value="0.5"/>
-  <PARAM id="REV_MIX" value="0"/>
-  <PARAM id="VOLUME" value="0.6"/>
-  <PARAM id="DRIVE" value="2.0"/>
-  <PARAM id="MONO" value="1"/>
-  <PARAM id="RETRIG" value="1"/>
-  <PARAM id="SHAPER_ON" value="0"/>
-  <PARAM id="SHAPER_SYNC" value="0"/>
-  <PARAM id="SHAPER_RATE" value="4.0"/>
-  <PARAM id="SHAPER_DEPTH" value="0.75"/>
-  <PARAM id="DISP_AMT" value="0"/>
-  <PARAM id="LIQ_ON" value="0"/>
-  <PARAM id="LIQ_RATE" value="0.8"/>
-  <PARAM id="LIQ_DEPTH" value="0.5"/>
-  <PARAM id="LIQ_TONE" value="0.5"/>
-  <PARAM id="LIQ_FEED" value="0.2"/>
-  <PARAM id="LIQ_MIX" value="0.6"/>
-  <PARAM id="RUB_ON" value="0"/>
-  <PARAM id="RUB_TONE" value="0.5"/>
-  <PARAM id="RUB_STRETCH" value="0.3"/>
-  <PARAM id="RUB_WARP" value="0"/>
-  <PARAM id="RUB_MIX" value="0.6"/>
-</VisceraState>)"
-    };
-
-    if (index >= 0 && index < kNumPresets)
-        return presets[index];
-    return presets[0];
-}
 
 // --- Création de l'éditeur ---
 juce::AudioProcessorEditor* VisceraProcessor::createEditor()
