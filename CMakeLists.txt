@@ -70,6 +70,57 @@ juce_add_binary_data(VisceraData SOURCES
     graphics/viscera_logo_dark_nodolph.png
     graphics/viscera_logo_neutral.png
     graphics/viscera_logo_neutral_dark.png
+    # Factory presets (.visc)
+    presets/Init.visc
+    presets/Bass_808_Sub.visc
+    presets/Bass_Acid_Squelch.visc
+    presets/Bass_FM_Kick.visc
+    presets/Bass_Glide_Kick.visc
+    presets/Bass_Microwave_Kick.visc
+    presets/Bass_Pluck_Bass.visc
+    presets/Bass_Reese.visc
+    presets/Bass_Sub_Growl.visc
+    presets/Bass_Tape_Wobble.visc
+    presets/Bass_Wobble_Bass.visc
+    presets/Lead_Acid_Lead.visc
+    presets/Lead_Bright_Pluck.visc
+    presets/Lead_Drift.visc
+    presets/Lead_FM_Brass.visc
+    presets/Lead_Glass.visc
+    presets/Lead_Saw_Lead.visc
+    presets/Lead_Screamer.visc
+    presets/Lead_Sync_Lead.visc
+    presets/Lead_Sync_Sweep.visc
+    presets/Lead_Whistle.visc
+    presets/Pad_Analog_Strings.visc
+    presets/Pad_Choir.visc
+    presets/Pad_Crystal.visc
+    presets/Pad_Deep_Space.visc
+    presets/Pad_Ethereal_Pad.visc
+    presets/Pad_FM_Organ.visc
+    presets/Pad_Ice_Glass.visc
+    presets/Pad_Shimmer.visc
+    presets/Pad_Soft_Pulse.visc
+    presets/Pad_Warm_Cloud.visc
+    presets/FX_Alien_FX.visc
+    presets/FX_Chaos_Engine.visc
+    presets/FX_Glitch_Perc.visc
+    presets/FX_Impact.visc
+    presets/FX_Laser.visc
+    presets/FX_Metal_Bell.visc
+    presets/FX_Robot_Voice.visc
+    presets/FX_Siren.visc
+    presets/FX_Stutter.visc
+    presets/FX_Wind.visc
+    presets/Texture_Dark_Drone.visc
+    presets/Texture_Digital_Harsh.visc
+    presets/Texture_Fog.visc
+    presets/Texture_Grain.visc
+    presets/Texture_Hive.visc
+    presets/Texture_Nasal_Drone.visc
+    presets/Texture_Rust.visc
+    presets/Texture_Soft_Texture.visc
+    presets/Texture_Wire.visc
 )
 
 target_include_directories(Viscera PRIVATE Source)

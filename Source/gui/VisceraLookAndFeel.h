@@ -42,6 +42,10 @@ public:
                            const juce::String& text, const juce::String& shortcutKeyText,
                            const juce::Drawable* icon, const juce::Colour* textColour) override;
 
+    void drawPopupMenuSectionHeader(juce::Graphics& g,
+                                     const juce::Rectangle<int>& area,
+                                     const juce::String& sectionName) override;
+
     void getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator,
                                     int standardMenuItemHeight, int& idealWidth,
                                     int& idealHeight) override;
