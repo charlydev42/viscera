@@ -42,6 +42,11 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // Undo/Redo manager (wired to APVTS — all param changes are undoable)
+    juce::UndoManager undoManager;
+
+    juce::UndoManager& getUndoManager() { return undoManager; }
+
     // APVTS publique pour que l'éditeur puisse s'y connecter
     juce::AudioProcessorValueTreeState apvts;
 
@@ -64,6 +69,7 @@ public:
     static juce::File getUserPresetsDir();
     void saveUserPreset(const juce::String& name, const juce::String& category = "User");
     void loadUserPreset(const juce::String& name);
+    bool deleteUserPreset(const juce::String& name);
     bool isUserPreset() const { return isUserPresetLoaded; }
     const juce::String& getUserPresetName() const { return currentUserPresetName; }
 
@@ -152,7 +158,16 @@ private:
     std::atomic<float>* shaperRateParam  = nullptr;
     std::atomic<float>* shaperDepthParam = nullptr;
 
+    // Harmonic tables for Custom waveform (owned by processor, shared with voices + GUI)
+    bb::HarmonicTable mod1Harmonics, mod2Harmonics, carHarmonics;
+
 public:
+    bb::HarmonicTable& getHarmonicTable(int idx)
+    {
+        if (idx == 0) return mod1Harmonics;
+        if (idx == 1) return mod2Harmonics;
+        return carHarmonics;
+    }
     bb::VolumeShaper& getVolumeShaper() { return volumeShaper; }
     bb::LFO& getGlobalLFO(int index) { return globalLFO[juce::jlimit(0, 2, index)]; }
     const bb::VoiceParams& getVoiceParams() const { return voiceParams; }

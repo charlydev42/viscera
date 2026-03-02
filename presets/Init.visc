@@ -1,5 +1,5 @@
 <VisceraState category="Init" name="Init">
-  <PARAM id="MOD1_WAVE" value="1"/>
+  <PARAM id="MOD1_WAVE" value="0"/>
   <PARAM id="MOD1_PITCH" value="0"/>
   <PARAM id="MOD1_KB" value="1"/>
   <PARAM id="MOD1_LEVEL" value="0.5"/>
@@ -11,7 +11,7 @@
   <PARAM id="ENV1_D" value="0.3"/>
   <PARAM id="ENV1_S" value="0.7"/>
   <PARAM id="ENV1_R" value="0.3"/>
-  <PARAM id="MOD2_WAVE" value="1"/>
+  <PARAM id="MOD2_WAVE" value="0"/>
   <PARAM id="MOD2_PITCH" value="0"/>
   <PARAM id="MOD2_KB" value="1"/>
   <PARAM id="MOD2_LEVEL" value="0.5"/>

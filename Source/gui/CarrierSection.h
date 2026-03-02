@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
+#include "HarmonicEditor.h"
 
 // Visual-only ADSR display for carrier envelope (ENV3)
 class CarrierEnvDisplay : public juce::Component,
@@ -23,13 +24,17 @@ class CarrierSection : public juce::Component,
                        private juce::Timer
 {
 public:
-    CarrierSection(juce::AudioProcessorValueTreeState& apvts);
+    CarrierSection(juce::AudioProcessorValueTreeState& apvts,
+                   bb::HarmonicTable& harmonics);
     ~CarrierSection() override = default;
     void resized() override;
     void timerCallback() override;
 
 private:
+    void setDesignMode(bool on);
+
     juce::AudioProcessorValueTreeState& state;
+    bb::HarmonicTable& harmonicTable;
 
     juce::ComboBox waveCombo;
     juce::Label waveLabel;
@@ -75,9 +80,16 @@ private:
     // Toggles
     juce::ToggleButton xorToggle, syncToggle;
 
+
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> coarseAttach, fixedFreqAttach, fineAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> xorAttach, syncAttach;
+
+    // Design mode (harmonic editor)
+    HarmonicEditor harmonicEditor;
+    juce::TextButton designBtn { "Harmo" };
+    bool designMode = false;
+    int lastDesignWave = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CarrierSection)
 };

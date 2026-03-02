@@ -16,6 +16,7 @@ public:
     {
         setSliderSnapsToMousePosition(false);
         setMouseDragSensitivity(200);
+        setWantsKeyboardFocus(true);
     }
 
     // Static learn mode callback — when non-null, next click on a ModSlider calls it
@@ -245,6 +246,7 @@ public:
             return;
 
         juce::Slider::mouseDown(e);
+        grabKeyboardFocus();
     }
 
     void mouseDrag(const juce::MouseEvent& e) override

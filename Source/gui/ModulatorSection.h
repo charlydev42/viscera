@@ -4,23 +4,27 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ModSlider.h"
+#include "HarmonicEditor.h"
 
 class ModulatorSection : public juce::Component,
                          private juce::Timer
 {
 public:
     ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
-                     const juce::String& prefix, const juce::String& envPrefix);
+                     const juce::String& prefix, const juce::String& envPrefix,
+                     bb::HarmonicTable& harmonics);
     ~ModulatorSection() override = default;
 
     void resized() override;
 
 private:
     void timerCallback() override;
+    void setDesignMode(bool on);
 
     juce::AudioProcessorValueTreeState& state;
     juce::String paramPrefix;
     juce::String kbParamId;
+    bb::HarmonicTable& harmonicTable;
 
     // Widgets
     juce::ComboBox waveCombo;
@@ -56,6 +60,12 @@ private:
 
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
     void setupKnob(juce::Slider& knob); // no label variant
+
+    // Design mode (harmonic editor)
+    HarmonicEditor harmonicEditor;
+    juce::TextButton designBtn { "Harmo" };
+    bool designMode = false;
+    int lastDesignWave = 0; // track wave changes in design mode
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModulatorSection)
 };

@@ -70,7 +70,7 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
                          juce::SynthesiserSound*, int currentPitchWheelPosition)
 {
     currentNote = midiNoteNumber;
-    noteVelocity = velocity;
+    noteVelocity = std::pow(velocity, 0.65f);
     stealFadeSamples = 0;  // cancel any in-progress steal fade
 
     // Convertir note MIDI → fréquence : f = 440 × 2^((note-69)/12)
@@ -253,6 +253,12 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     float driftParam   = juce::jlimit(0.0f, 1.0f,
                            (params.carDrift ? params.carDrift->load() : 0.0f)
                            + params.lfoModCarDrift.load(std::memory_order_relaxed));
+
+    // Wire harmonic tables to oscillators (for Custom waveform)
+    mod1Osc.setHarmonicTable(params.mod1Harmonics);
+    mod2Osc.setHarmonicTable(params.mod2Harmonics);
+    carrierOsc.setHarmonicTable(params.carHarmonics);
+    carrierOscR.setHarmonicTable(params.carHarmonics);
 
     // Configurer les oscillateurs
     mod1Osc.setWaveType(static_cast<WaveType>(mod1WaveIdx));

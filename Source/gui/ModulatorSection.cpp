@@ -3,13 +3,16 @@
 
 ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
                                    const juce::String& prefix,
-                                   const juce::String& envPrefix)
+                                   const juce::String& envPrefix,
+                                   bb::HarmonicTable& harmonics)
     : state(apvts),
       paramPrefix(prefix),
-      kbParamId(prefix + "_KB")
+      kbParamId(prefix + "_KB"),
+      harmonicTable(harmonics),
+      harmonicEditor(harmonics)
 {
     // Waveform combo
-    waveCombo.addItemList({"Sine", "Saw", "Square", "Tri", "Pulse"}, 1);
+    waveCombo.addItemList({"Sine", "Saw", "Square", "Tri", "Pulse", "Custom"}, 1);
     addAndMakeVisible(waveCombo);
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts, prefix + "_WAVE", waveCombo);
@@ -95,6 +98,39 @@ ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
         }
     }
 
+    // --- Design mode (harmonic editor) ---
+    designBtn.onClick = [this] {
+        if (!designMode)
+        {
+            // Entering design mode: if wave != Custom, init harmonics from current wave
+            int waveIdx = static_cast<int>(state.getRawParameterValue(paramPrefix + "_WAVE")->load());
+            if (waveIdx != 5) // 5 = Custom
+            {
+                harmonicTable.initFromWaveType(waveIdx);
+                lastDesignWave = waveIdx;
+            }
+            else
+            {
+                lastDesignWave = 5;
+            }
+        }
+        setDesignMode(!designMode);
+    };
+    addAndMakeVisible(designBtn);
+
+    // When user draws bars manually, switch wave to Custom
+    harmonicEditor.onUserDraw = [this] {
+        int waveIdx = static_cast<int>(state.getRawParameterValue(paramPrefix + "_WAVE")->load());
+        if (waveIdx != 5)
+        {
+            auto* param = state.getParameter(paramPrefix + "_WAVE");
+            param->setValueNotifyingHost(param->convertTo0to1(5.0f));
+        }
+        lastDesignWave = 5;
+    };
+
+    addChildComponent(harmonicEditor); // hidden by default
+
     startTimerHz(5);
 }
 
@@ -108,10 +144,13 @@ void ModulatorSection::timerCallback()
     bool isFixed = fixedToggle.getToggleState();
 
     // Swap knob visibility: Coarse/Fine in ratio mode, Freq/Multi in fixed mode
-    coarseKnob.setVisible(!isFixed);
-    fixedFreqKnob.setVisible(isFixed);
-    fineKnob.setVisible(!isFixed);
-    multiKnob.setVisible(isFixed);
+    if (!designMode)
+    {
+        coarseKnob.setVisible(!isFixed);
+        fixedFreqKnob.setVisible(isFixed);
+        fineKnob.setVisible(!isFixed);
+        multiKnob.setVisible(isFixed);
+    }
 
     // Update main knob label with formatted value
     if (isFixed)
@@ -146,6 +185,17 @@ void ModulatorSection::timerCallback()
             fineLabel.setText("0ct", juce::dontSendNotification);
     }
 
+    // In design mode: if wave combo changed to a standard wave, update harmonics
+    if (designMode)
+    {
+        int waveIdx = static_cast<int>(state.getRawParameterValue(paramPrefix + "_WAVE")->load());
+        if (waveIdx != 5 && waveIdx != lastDesignWave)
+        {
+            harmonicTable.initFromWaveType(waveIdx);
+            lastDesignWave = waveIdx;
+        }
+    }
+
     // Level label
     if (levelKnob.isMouseOverOrDragging())
         levelLabel.setText(juce::String(static_cast<int>(levelKnob.getValue() * 100)) + "%", juce::dontSendNotification);
@@ -169,6 +219,34 @@ void ModulatorSection::timerCallback()
         else
             adsrLabels[i].setText(adsrNames[i], juce::dontSendNotification);
     }
+}
+
+void ModulatorSection::setDesignMode(bool on)
+{
+    designMode = on;
+    designBtn.setButtonText(on ? "Back" : "Harmo");
+
+    // Toggle visibility: knobs hidden in design mode, editor shown
+    onToggle.setVisible(!on);
+    coarseKnob.setVisible(!on && !fixedToggle.getToggleState());
+    fixedFreqKnob.setVisible(!on && fixedToggle.getToggleState());
+    mainKnobLabel.setVisible(!on);
+    fineKnob.setVisible(!on && !fixedToggle.getToggleState());
+    multiKnob.setVisible(!on && fixedToggle.getToggleState());
+    fineLabel.setVisible(!on);
+    levelKnob.setVisible(!on);
+    levelLabel.setVisible(!on);
+    harmonicEditor.setVisible(on);
+
+    // Hide ADSR in design mode
+    for (int i = 0; i < 4; ++i)
+    {
+        adsrKnobs[i].setVisible(!on);
+        adsrLabels[i].setVisible(!on);
+    }
+
+    resized();
+    repaint();
 }
 
 void ModulatorSection::setupKnob(juce::Slider& knob, juce::Label& label,
@@ -197,51 +275,68 @@ void ModulatorSection::setupKnob(juce::Slider& knob)
 void ModulatorSection::resized()
 {
     auto area = getLocalBounds().reduced(4);
-    area.removeFromTop(2);
     int rowH = 28;
     int knobSize = 36;
     int labelH = 12;
 
-    // Row 1: [Waveform combo] [Fixed toggle] — no label
-    auto topRow = area.removeFromTop(rowH);
-    fixedToggle.setBounds(topRow.removeFromRight(60).reduced(2));
-    waveCombo.setBounds(topRow.reduced(2));
-
-    area.removeFromTop(2);
-
-    // Row 2: [On (narrow, aligned with A)] [Coarse/Freq] [Fine/Multi] [Level]
-    auto midRow = area.removeFromTop(knobSize + labelH);
-    int adsrColW = midRow.getWidth() / 4;
-
-    // On toggle: shifted 25px right within first ADSR-width column
-    auto onArea = midRow.removeFromLeft(adsrColW);
-    onToggle.setBounds(onArea.withTrimmedLeft(18).reduced(2, 8));
-
-    // 3 knob columns in remaining space
-    int colW = midRow.getWidth() / 3;
-
-    auto col1 = midRow.removeFromLeft(colW);
-    mainKnobLabel.setBounds(col1.removeFromBottom(labelH));
-    coarseKnob.setBounds(col1);
-    fixedFreqKnob.setBounds(col1);
-
-    auto col2 = midRow.removeFromLeft(colW);
-    fineLabel.setBounds(col2.removeFromBottom(labelH));
-    fineKnob.setBounds(col2);
-    multiKnob.setBounds(col2);
-
-    auto col3 = midRow;
-    levelLabel.setBounds(col3.removeFromBottom(labelH));
-    levelKnob.setBounds(col3);
-
-    area.removeFromTop(2);
-
-    // Row 3: ADSR
-    auto adsrRow = area.removeFromTop(knobSize + labelH);
-    for (int i = 0; i < 4; ++i)
+    if (designMode)
     {
-        auto col = adsrRow.removeFromLeft(adsrColW);
-        adsrLabels[i].setBounds(col.removeFromBottom(labelH));
-        adsrKnobs[i].setBounds(col);
+        // Design mode: top row + harmonic editor fills everything
+        auto topRow = area.removeFromTop(rowH);
+        fixedToggle.setBounds(topRow.removeFromRight(60).reduced(2));
+        designBtn.setBounds(topRow.removeFromRight(42).reduced(2));
+        waveCombo.setBounds(topRow.reduced(2));
+
+        area.removeFromTop(2);
+        harmonicEditor.setBounds(area);
+    }
+    else
+    {
+        // Normal mode: Row 1 pinned to top, distribute spacing below
+        // Row 1: [Waveform combo] [H button] [Fixed toggle]
+        auto topRow = area.removeFromTop(rowH);
+        fixedToggle.setBounds(topRow.removeFromRight(60).reduced(2));
+        designBtn.setBounds(topRow.removeFromRight(42).reduced(2));
+        waveCombo.setBounds(topRow.reduced(2));
+
+        int contentH = (knobSize + labelH) + (knobSize + labelH);
+        int totalGap = area.getHeight() - contentH;
+        int gap = std::max(2, totalGap / 3); // split gaps: above row2, between row2-3, below row3
+
+        area.removeFromTop(gap);
+
+        // Row 2: [On] [Coarse/Freq] [Fine/Multi] [Level]
+        auto midRow = area.removeFromTop(knobSize + labelH);
+        int adsrColW = midRow.getWidth() / 4;
+
+        auto onArea = midRow.removeFromLeft(adsrColW);
+        onToggle.setBounds(onArea.withTrimmedLeft(18).reduced(2, 8));
+
+        int colW = midRow.getWidth() / 3;
+
+        auto col1 = midRow.removeFromLeft(colW);
+        mainKnobLabel.setBounds(col1.removeFromBottom(labelH));
+        coarseKnob.setBounds(col1);
+        fixedFreqKnob.setBounds(col1);
+
+        auto col2 = midRow.removeFromLeft(colW);
+        fineLabel.setBounds(col2.removeFromBottom(labelH));
+        fineKnob.setBounds(col2);
+        multiKnob.setBounds(col2);
+
+        auto col3 = midRow;
+        levelLabel.setBounds(col3.removeFromBottom(labelH));
+        levelKnob.setBounds(col3);
+
+        area.removeFromTop(gap);
+
+        // Row 3: ADSR
+        auto adsrRow = area.removeFromTop(knobSize + labelH);
+        for (int i = 0; i < 4; ++i)
+        {
+            auto col = adsrRow.removeFromLeft(adsrColW);
+            adsrLabels[i].setBounds(col.removeFromBottom(labelH));
+            adsrKnobs[i].setBounds(col);
+        }
     }
 }

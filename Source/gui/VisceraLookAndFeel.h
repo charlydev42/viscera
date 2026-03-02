@@ -80,6 +80,11 @@ public:
     static void setDarkMode(bool dark);
     void refreshJuceColours();
 
+    void fillTextEditorBackground(juce::Graphics& g, int width, int height,
+                                   juce::TextEditor& editor) override;
+    void drawTextEditorOutline(juce::Graphics& g, int width, int height,
+                               juce::TextEditor& editor) override;
+
     // Draw a raised or inset neumorphic rectangle
     static void drawNeumorphicRect(juce::Graphics& g, juce::Rectangle<float> bounds,
                                    float cornerRadius, bool inset = false);

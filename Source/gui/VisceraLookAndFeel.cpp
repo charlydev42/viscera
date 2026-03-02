@@ -483,6 +483,30 @@ void VisceraLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
     }
 }
 
+// TextEditor — pill-shaped background + thin outline
+void VisceraLookAndFeel::fillTextEditorBackground(juce::Graphics& g, int width, int height,
+                                                    juce::TextEditor& editor)
+{
+    auto bounds = juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+    float cr = bounds.getHeight() * 0.5f; // full pill
+    g.setColour(editor.findColour(juce::TextEditor::backgroundColourId));
+    g.fillRoundedRectangle(bounds, cr);
+}
+
+void VisceraLookAndFeel::drawTextEditorOutline(juce::Graphics& g, int width, int height,
+                                                 juce::TextEditor& editor)
+{
+    auto bounds = juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)).reduced(0.5f);
+    float cr = bounds.getHeight() * 0.5f;
+
+    auto outlineColour = editor.hasKeyboardFocus(true)
+        ? editor.findColour(juce::TextEditor::focusedOutlineColourId)
+        : editor.findColour(juce::TextEditor::outlineColourId);
+
+    g.setColour(outlineColour);
+    g.drawRoundedRectangle(bounds, cr, 0.8f);
+}
+
 // PopupMenu — neumorphic rounded panel
 void VisceraLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
 {

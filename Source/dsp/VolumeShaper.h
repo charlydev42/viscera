@@ -62,6 +62,13 @@ public:
 
     float getPhase() const { return static_cast<float>(phase); }
 
+    // Reset table to all 1.0 (flat / bypass)
+    void resetTable()
+    {
+        for (int i = 0; i < kNumSteps; ++i)
+            table[i].store(1.0f, std::memory_order_relaxed);
+    }
+
     // Serialize table to comma-separated string
     juce::String serializeTable() const
     {

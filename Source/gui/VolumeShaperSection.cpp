@@ -294,10 +294,16 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
 
 void VolumeShaperSection::timerCallback()
 {
-    updateDisplay();
     int syncIdx = getSyncParam();
+    bool shouldBeFixed = syncIdx > 0;
+    if (fixedToggle.getToggleState() != shouldBeFixed)
+    {
+        fixedToggle.setToggleState(shouldBeFixed, juce::dontSendNotification);
+        resized();
+    }
     if (syncIdx > 0 && static_cast<int>(syncKnob.getValue()) != syncIdx)
         syncKnob.setValue(syncIdx, juce::dontSendNotification);
+    updateDisplay();
 
     if (depthKnob.isMouseOverOrDragging())
         depthLabel.setText(juce::String(static_cast<int>(depthKnob.getValue() * 100)) + "%", juce::dontSendNotification);

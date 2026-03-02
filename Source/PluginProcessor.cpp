@@ -9,9 +9,14 @@
 VisceraProcessor::VisceraProcessor()
     : AudioProcessor(BusesProperties()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, nullptr, "VisceraState", createParameterLayout())
+      apvts(*this, &undoManager, "VisceraState", createParameterLayout())
 {
     cacheParameterPointers();
+
+    // Wire harmonic tables to voice params
+    voiceParams.mod1Harmonics = &mod1Harmonics;
+    voiceParams.mod2Harmonics = &mod2Harmonics;
+    voiceParams.carHarmonics  = &carHarmonics;
 
     // Ajouter un sound et une voix (mono par défaut)
     synth.addSound(new bb::FMSound());
@@ -155,7 +160,7 @@ VisceraProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::AudioProcessorParameterGroup>> groups;
 
-    juce::StringArray waveNames { "Sine", "Saw", "Square", "Triangle", "Pulse" };
+    juce::StringArray waveNames { "Sine", "Saw", "Square", "Triangle", "Pulse", "Custom" };
 
     // --- Groupe Modulateur 1 ---
     {
@@ -805,6 +810,9 @@ void VisceraProcessor::getStateInformation(juce::MemoryBlock& destData)
     state.setProperty("lfo1Curve", globalLFO[0].serializeCurve(), nullptr);
     state.setProperty("lfo2Curve", globalLFO[1].serializeCurve(), nullptr);
     state.setProperty("lfo3Curve", globalLFO[2].serializeCurve(), nullptr);
+    state.setProperty("mod1Harmonics", mod1Harmonics.serializeHarmonics(), nullptr);
+    state.setProperty("mod2Harmonics", mod2Harmonics.serializeHarmonics(), nullptr);
+    state.setProperty("carHarmonics", carHarmonics.serializeHarmonics(), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -817,6 +825,8 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
         auto tree = juce::ValueTree::fromXml(*xml);
         if (tree.hasProperty("shaperTable"))
             volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
+        else
+            volumeShaper.resetTable();
         // Load curve data if present, otherwise fall back to table (old presets)
         for (int n = 0; n < 3; ++n)
         {
@@ -826,7 +836,21 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
                 globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
             else if (tree.hasProperty(tableKey))
                 globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
+            else
+                globalLFO[n].resetCurve();
         }
+        if (tree.hasProperty("mod1Harmonics"))
+            mod1Harmonics.deserializeHarmonics(tree.getProperty("mod1Harmonics").toString());
+        else
+            mod1Harmonics.resetHarmonics();
+        if (tree.hasProperty("mod2Harmonics"))
+            mod2Harmonics.deserializeHarmonics(tree.getProperty("mod2Harmonics").toString());
+        else
+            mod2Harmonics.resetHarmonics();
+        if (tree.hasProperty("carHarmonics"))
+            carHarmonics.deserializeHarmonics(tree.getProperty("carHarmonics").toString());
+        else
+            carHarmonics.resetHarmonics();
         migrateOldPitchParams(tree);
 
         // Migrate: inject default global LFO params if absent
@@ -861,6 +885,7 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
         }
 
         apvts.replaceState(tree);
+        undoManager.clearUndoHistory();
     }
 }
 
@@ -883,6 +908,9 @@ void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::Stri
     state.setProperty("lfo1Curve", globalLFO[0].serializeCurve(), nullptr);
     state.setProperty("lfo2Curve", globalLFO[1].serializeCurve(), nullptr);
     state.setProperty("lfo3Curve", globalLFO[2].serializeCurve(), nullptr);
+    state.setProperty("mod1Harmonics", mod1Harmonics.serializeHarmonics(), nullptr);
+    state.setProperty("mod2Harmonics", mod2Harmonics.serializeHarmonics(), nullptr);
+    state.setProperty("carHarmonics", carHarmonics.serializeHarmonics(), nullptr);
 
     auto xml = state.createXml();
     if (xml)
@@ -892,6 +920,17 @@ void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::Stri
         auto file = getUserPresetsDir().getChildFile(name + ".visc");
         xml->writeTo(file);
     }
+}
+
+bool VisceraProcessor::deleteUserPreset(const juce::String& name)
+{
+    auto dir = getUserPresetsDir();
+    auto file = dir.getChildFile(name + ".visc");
+    if (!file.existsAsFile())
+        file = dir.getChildFile(name + ".xml");
+    if (file.existsAsFile())
+        return file.deleteFile();
+    return false;
 }
 
 void VisceraProcessor::loadUserPreset(const juce::String& name)
@@ -909,6 +948,8 @@ void VisceraProcessor::loadUserPreset(const juce::String& name)
         auto tree = juce::ValueTree::fromXml(*xml);
         if (tree.hasProperty("shaperTable"))
             volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
+        else
+            volumeShaper.resetTable();
         for (int n = 0; n < 3; ++n)
         {
             auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
@@ -917,9 +958,24 @@ void VisceraProcessor::loadUserPreset(const juce::String& name)
                 globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
             else if (tree.hasProperty(tableKey))
                 globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
+            else
+                globalLFO[n].resetCurve();
         }
+        if (tree.hasProperty("mod1Harmonics"))
+            mod1Harmonics.deserializeHarmonics(tree.getProperty("mod1Harmonics").toString());
+        else
+            mod1Harmonics.resetHarmonics();
+        if (tree.hasProperty("mod2Harmonics"))
+            mod2Harmonics.deserializeHarmonics(tree.getProperty("mod2Harmonics").toString());
+        else
+            mod2Harmonics.resetHarmonics();
+        if (tree.hasProperty("carHarmonics"))
+            carHarmonics.deserializeHarmonics(tree.getProperty("carHarmonics").toString());
+        else
+            carHarmonics.resetHarmonics();
         migrateOldPitchParams(tree);
         apvts.replaceState(tree);
+        undoManager.clearUndoHistory();
         isUserPresetLoaded = true;
         currentUserPresetName = name;
     }
@@ -935,6 +991,8 @@ void VisceraProcessor::loadPresetFromXml(const juce::String& xmlStr)
     auto tree = juce::ValueTree::fromXml(*xml);
     if (tree.hasProperty("shaperTable"))
         volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
+    else
+        volumeShaper.resetTable();
     for (int n = 0; n < 3; ++n)
     {
         auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
@@ -943,9 +1001,24 @@ void VisceraProcessor::loadPresetFromXml(const juce::String& xmlStr)
             globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
         else if (tree.hasProperty(tableKey))
             globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
+        else
+            globalLFO[n].resetCurve();
     }
+    if (tree.hasProperty("mod1Harmonics"))
+        mod1Harmonics.deserializeHarmonics(tree.getProperty("mod1Harmonics").toString());
+    else
+        mod1Harmonics.resetHarmonics();
+    if (tree.hasProperty("mod2Harmonics"))
+        mod2Harmonics.deserializeHarmonics(tree.getProperty("mod2Harmonics").toString());
+    else
+        mod2Harmonics.resetHarmonics();
+    if (tree.hasProperty("carHarmonics"))
+        carHarmonics.deserializeHarmonics(tree.getProperty("carHarmonics").toString());
+    else
+        carHarmonics.resetHarmonics();
     migrateOldPitchParams(tree);
     apvts.replaceState(tree);
+    undoManager.clearUndoHistory();
 }
 
 void VisceraProcessor::loadFactoryPreset(const juce::String& resName)
@@ -984,7 +1057,7 @@ void VisceraProcessor::buildPresetRegistry()
     }
 
     // Sort factory presets by category order, then by name
-    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Texture" };
+    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
     std::sort(presetRegistry.begin(), presetRegistry.end(),
         [](const PresetEntry& a, const PresetEntry& b) {
             int catA = categoryOrder.indexOf(a.category);

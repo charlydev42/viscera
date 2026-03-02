@@ -69,9 +69,11 @@ float causticsFast(vec3 p, float t) {
 float sdEllipsoid(vec3 p, vec3 r) { float k0=length(p/r); float k1=length(p/(r*r)); return k0*(k0-1.0)/k1; }
 float sdSphere(vec3 p, float r) { return length(p)-r; }
 float smin(float a, float b, float k) { float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }
+float smax(float a, float b, float k) { return -smin(-a,-b,k); }
 
-const float S = 0.55;
-const float MAX_RADIUS = 1.4;
+const float S = 0.48;
+const float MAX_RADIUS = 1.6;
+const float BOUND_RADIUS = 2.15 * S;
 vec3 clampPos(vec3 p, float maxR) { float l=length(p); return l>maxR ? p*(maxR/l) : p; }
 
 float map(vec3 p) {
@@ -88,16 +90,16 @@ float map(vec3 p) {
     float surfNoise=noise3D(p*2.0+vec3(t*0.2,t*0.15,t*0.18))*0.08
                    +noise3D(p*1.0+vec3(t*0.1,t*0.08,t*0.12))*0.12;
     core-=surfNoise*S;
-    float idD=0.40;
+    float idD=0.55;
     float b1O=(idD+bss*1.0)*S;
-    vec3 b1P=clampPos(vec3(sin(t*0.7+bss*2.0)*b1O,cos(t*0.5)*b1O*0.35,sin(t*0.9+1.0)*b1O*0.7),MAX_RADIUS*S);
-    float blob1=sdEllipsoid(p-b1P,vec3(0.55+bss*0.28,0.42+bss*0.20,0.48+bss*0.24)*S);
+    vec3 b1P=clampPos(vec3(sin(t*0.7+bss*2.0)*b1O,cos(t*0.5)*b1O*0.55,sin(t*0.9+1.0)*b1O*0.7),MAX_RADIUS*S);
+    float blob1=sdEllipsoid(p-b1P,vec3(0.50+bss*0.28,0.38+bss*0.20,0.44+bss*0.24)*S);
     float b2O=(idD+md*0.9)*S;
-    vec3 b2P=clampPos(vec3(cos(t*0.9+2.0+md*3.0)*b2O,sin(t*0.6+1.5+md*2.0)*b2O*0.4,cos(t*0.7+md*1.5)*b2O*0.8),MAX_RADIUS*S);
-    float blob2=sdEllipsoid(p-b2P,vec3(0.45+md*0.24,0.36+md*0.16,0.40+md*0.20)*S);
+    vec3 b2P=clampPos(vec3(cos(t*0.9+2.0+md*3.0)*b2O,sin(t*0.6+1.5+md*2.0)*b2O*0.6,cos(t*0.7+md*1.5)*b2O*0.8),MAX_RADIUS*S);
+    float blob2=sdEllipsoid(p-b2P,vec3(0.42+md*0.24,0.32+md*0.16,0.37+md*0.20)*S);
     float b3O=(idD*0.8+hgs*0.75)*S;
-    vec3 b3P=clampPos(vec3(sin(t*2.0+4.0+hgs*5.0)*b3O,cos(t*1.8+3.0+hgs*4.0)*b3O*0.35,sin(t*1.5+2.0)*b3O*0.85),MAX_RADIUS*S);
-    float blob3=sdEllipsoid(p-b3P,vec3(0.38+hgs*0.20,0.30+hgs*0.14,0.34+hgs*0.18)*S);
+    vec3 b3P=clampPos(vec3(sin(t*2.0+4.0+hgs*5.0)*b3O,cos(t*1.8+3.0+hgs*4.0)*b3O*0.55,sin(t*1.5+2.0)*b3O*0.85),MAX_RADIUS*S);
+    float blob3=sdEllipsoid(p-b3P,vec3(0.35+hgs*0.20,0.27+hgs*0.14,0.31+hgs*0.18)*S);
     float b4O=(idD+nrg*1.2)*S;
     vec3 b4P=clampPos(vec3(cos(t*0.5+5.0)*b4O+waveSample(0.2)*nrg*0.4*S,sin(t*1.2)*b4O*0.3+waveSample(0.5)*nrg*0.25*S,cos(t*0.9+1.5)*b4O*0.8+waveSample(0.8)*nrg*0.3*S),MAX_RADIUS*S);
     float blob4=sdEllipsoid(p-b4P,vec3(0.40+nrg*0.24,0.32+nrg*0.16,0.36+nrg*0.20)*S);
@@ -114,7 +116,7 @@ float map(vec3 p) {
         vec3 b8P=clampPos(vec3(waveSample(0.15)*nrg*1.2*S,waveSample(0.45)*nrg*0.8*S,waveSample(0.75)*nrg*1.0*S),MAX_RADIUS*S);
         blob8=sdSphere(p-b8P,(0.12+nrg*0.16)*S);
     }
-    float k=(0.30+loudness*0.5)*S;
+    float k=(0.18+loudness*0.35)*S;
     float d=smin(core,blob1,k); d=smin(d,blob2,k); d=smin(d,blob3,k*0.8); d=smin(d,blob4,k);
     if(loudness>0.35){d=smin(d,blob5,k*0.7);d=smin(d,blob6,k*0.7);}
     if(extremeLoud>0.15){d=smin(d,blob7,k*0.65);d=smin(d,blob8,k*0.65);}
@@ -207,7 +209,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     vec2 ndc=(fragCoord/iResolution.xy)*2.0-1.0; // -1..1
     float ovalDist=length(ndc); // circle in normalized coords (aspect handled by viewport)
     float ovalFw=fwidth(ovalDist);
-    float ovalMask=1.0-smoothstep(0.92-ovalFw,0.92+ovalFw,ovalDist);
+    float ovalMask=1.0-smoothstep(0.99-ovalFw,0.99+ovalFw,ovalDist);
     if(ovalMask<0.001){ fragColor=vec4(uBgColor,1.0); return; }
 
     vec2 uv=(fragCoord-0.5*iResolution.xy)/iResolution.y;
@@ -237,8 +239,8 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float ang=iTime*0.15;float camDist=3.5-loud*0.35;
     vec3 ro=vec3(sin(ang)*camDist,0.7+sin(iTime*0.12)*0.3,cos(ang)*camDist);
-    float sh=0.02+loud*0.06;
-    ro.x+=noise3D(vec3(iTime*4.0))*sh;ro.y+=noise3D(vec3(iTime*4.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*4.0+200.0))*sh*0.5;
+    float sh=0.01+loud*0.03;
+    ro.x+=noise3D(vec3(iTime*2.0))*sh;ro.y+=noise3D(vec3(iTime*2.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*2.0+200.0))*sh*0.5;
     mat3 cam=camera(ro,vec3(0));vec3 rd=cam*normalize(vec3(uv,1.3));
     vec2 rm=rayMarch(ro,rd);float d=rm.x;
     vec3 col=bg;
@@ -318,9 +320,11 @@ float causticsFast(vec3 p, float t) {
 float sdEllipsoid(vec3 p, vec3 r) { float k0=length(p/r); float k1=length(p/(r*r)); return k0*(k0-1.0)/k1; }
 float sdSphere(vec3 p, float r) { return length(p)-r; }
 float smin(float a, float b, float k) { float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }
+float smax(float a, float b, float k) { return -smin(-a,-b,k); }
 
-const float S = 0.55;
-const float MAX_RADIUS = 1.4;
+const float S = 0.48;
+const float MAX_RADIUS = 1.6;
+const float BOUND_RADIUS = 2.15 * S;
 vec3 clampPos(vec3 p, float maxR) { float l=length(p); return l>maxR ? p*(maxR/l) : p; }
 
 float map(vec3 p) {
@@ -337,16 +341,16 @@ float map(vec3 p) {
     float surfNoise=noise3D(p*2.0+vec3(t*0.2,t*0.15,t*0.18))*0.08
                    +noise3D(p*1.0+vec3(t*0.1,t*0.08,t*0.12))*0.12;
     core-=surfNoise*S;
-    float idD=0.40;
+    float idD=0.55;
     float b1O=(idD+bss*1.0)*S;
-    vec3 b1P=clampPos(vec3(sin(t*0.7+bss*2.0)*b1O,cos(t*0.5)*b1O*0.35,sin(t*0.9+1.0)*b1O*0.7),MAX_RADIUS*S);
-    float blob1=sdEllipsoid(p-b1P,vec3(0.55+bss*0.28,0.42+bss*0.20,0.48+bss*0.24)*S);
+    vec3 b1P=clampPos(vec3(sin(t*0.7+bss*2.0)*b1O,cos(t*0.5)*b1O*0.55,sin(t*0.9+1.0)*b1O*0.7),MAX_RADIUS*S);
+    float blob1=sdEllipsoid(p-b1P,vec3(0.50+bss*0.28,0.38+bss*0.20,0.44+bss*0.24)*S);
     float b2O=(idD+md*0.9)*S;
-    vec3 b2P=clampPos(vec3(cos(t*0.9+2.0+md*3.0)*b2O,sin(t*0.6+1.5+md*2.0)*b2O*0.4,cos(t*0.7+md*1.5)*b2O*0.8),MAX_RADIUS*S);
-    float blob2=sdEllipsoid(p-b2P,vec3(0.45+md*0.24,0.36+md*0.16,0.40+md*0.20)*S);
+    vec3 b2P=clampPos(vec3(cos(t*0.9+2.0+md*3.0)*b2O,sin(t*0.6+1.5+md*2.0)*b2O*0.6,cos(t*0.7+md*1.5)*b2O*0.8),MAX_RADIUS*S);
+    float blob2=sdEllipsoid(p-b2P,vec3(0.42+md*0.24,0.32+md*0.16,0.37+md*0.20)*S);
     float b3O=(idD*0.8+hgs*0.75)*S;
-    vec3 b3P=clampPos(vec3(sin(t*2.0+4.0+hgs*5.0)*b3O,cos(t*1.8+3.0+hgs*4.0)*b3O*0.35,sin(t*1.5+2.0)*b3O*0.85),MAX_RADIUS*S);
-    float blob3=sdEllipsoid(p-b3P,vec3(0.38+hgs*0.20,0.30+hgs*0.14,0.34+hgs*0.18)*S);
+    vec3 b3P=clampPos(vec3(sin(t*2.0+4.0+hgs*5.0)*b3O,cos(t*1.8+3.0+hgs*4.0)*b3O*0.55,sin(t*1.5+2.0)*b3O*0.85),MAX_RADIUS*S);
+    float blob3=sdEllipsoid(p-b3P,vec3(0.35+hgs*0.20,0.27+hgs*0.14,0.31+hgs*0.18)*S);
     float b4O=(idD+nrg*1.2)*S;
     vec3 b4P=clampPos(vec3(cos(t*0.5+5.0)*b4O+waveSample(0.2)*nrg*0.4*S,sin(t*1.2)*b4O*0.3+waveSample(0.5)*nrg*0.25*S,cos(t*0.9+1.5)*b4O*0.8+waveSample(0.8)*nrg*0.3*S),MAX_RADIUS*S);
     float blob4=sdEllipsoid(p-b4P,vec3(0.40+nrg*0.24,0.32+nrg*0.16,0.36+nrg*0.20)*S);
@@ -363,7 +367,7 @@ float map(vec3 p) {
         vec3 b8P=clampPos(vec3(waveSample(0.15)*nrg*1.2*S,waveSample(0.45)*nrg*0.8*S,waveSample(0.75)*nrg*1.0*S),MAX_RADIUS*S);
         blob8=sdSphere(p-b8P,(0.12+nrg*0.16)*S);
     }
-    float k=(0.30+loudness*0.5)*S;
+    float k=(0.18+loudness*0.35)*S;
     float d=smin(core,blob1,k); d=smin(d,blob2,k); d=smin(d,blob3,k*0.8); d=smin(d,blob4,k);
     if(loudness>0.35){d=smin(d,blob5,k*0.7);d=smin(d,blob6,k*0.7);}
     if(extremeLoud>0.15){d=smin(d,blob7,k*0.65);d=smin(d,blob8,k*0.65);}
@@ -457,7 +461,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     vec2 ndc=(fragCoord/iResolution.xy)*2.0-1.0;
     float ovalDist=length(ndc);
     float ovalFw=fwidth(ovalDist);
-    float ovalMask=1.0-smoothstep(0.92-ovalFw,0.92+ovalFw,ovalDist);
+    float ovalMask=1.0-smoothstep(0.99-ovalFw,0.99+ovalFw,ovalDist);
     if(ovalMask<0.001){ fragColor=vec4(uBgColor,1.0); return; }
 
     vec2 uv=(fragCoord-0.5*iResolution.xy)/iResolution.y;
@@ -487,8 +491,8 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float ang=iTime*0.15;float camDist=3.5-loud*0.35;
     vec3 ro=vec3(sin(ang)*camDist,0.7+sin(iTime*0.12)*0.3,cos(ang)*camDist);
-    float sh=0.02+loud*0.06;
-    ro.x+=noise3D(vec3(iTime*4.0))*sh;ro.y+=noise3D(vec3(iTime*4.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*4.0+200.0))*sh*0.5;
+    float sh=0.01+loud*0.03;
+    ro.x+=noise3D(vec3(iTime*2.0))*sh;ro.y+=noise3D(vec3(iTime*2.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*2.0+200.0))*sh*0.5;
     mat3 cam=camera(ro,vec3(0));vec3 rd=cam*normalize(vec3(uv,1.3));
     vec2 rm=rayMarch(ro,rd);float d=rm.x;
     vec3 col=bg;

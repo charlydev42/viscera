@@ -1,6 +1,7 @@
 // PluginEditor.h — Editeur principal de Viscera
 // Layout 3x3 sombre avec sections tabbées
 #pragma once
+#include <set>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
@@ -18,6 +19,8 @@
 #include "gui/FlubberVisualizer.h"
 #include "gui/LFOSection.h"
 #include "gui/ModSlider.h"
+#include "gui/PresetOverlay.h"
+#include "gui/SaveOverlay.h"
 
 class VisceraEditor : public juce::AudioProcessorEditor,
                       public juce::DragAndDropContainer,
@@ -30,6 +33,7 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
+    void dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&) override;
 
 private:
     VisceraProcessor& proc;
@@ -49,9 +53,6 @@ private:
     FlubberVisualizer flubberVisualizer;
     LFOSection lfoSection;
     GlobalSection globalSection;
-
-    // Clavier MIDI integre
-    juce::MidiKeyboardComponent keyboard;
 
     // Label titre
     juce::Label titleLabel;
@@ -78,9 +79,6 @@ private:
     juce::TextButton darkModeBtn;
     bool darkModeTransitioning = false;
 
-    // Main page keyboard toggle
-    bool showKeyboardOnMain = false;
-    juce::TextButton kbToggleBtn;
 
     // Main page macro knobs (Volume, Drive, Cutoff, Res, Fold, Spread)
     ModSlider macroKnobs[6];
@@ -106,6 +104,29 @@ private:
     juce::Rectangle<int> macroCardBounds[6];
     // White panel bounds for main page background
     juce::Rectangle<int> mainPanelBounds;
+
+    // Inline preset overlay (replaces main page content)
+    PresetOverlay presetOverlay;
+    bool showPresetOverlay = false;
+    void setPresetOverlayVisible(bool visible);
+
+    // Inline save overlay (replaces main page content)
+    SaveOverlay saveOverlay;
+    bool showSaveOverlay = false;
+    void setSaveOverlayVisible(bool visible);
+
+    // Key handler (undo/redo on all platforms + MIDI keyboard standalone-only)
+    bool keyPressed(const juce::KeyPress& key) override;
+
+    // Use native OS title bar for standalone window
+    void parentHierarchyChanged() override;
+
+    // Computer MIDI keyboard (Ableton-style, standalone only)
+#if JUCE_STANDALONE_APPLICATION
+    bool keyStateChanged(bool isKeyDown) override;
+    std::set<int> computerKeysDown;
+    int computerKeyOctave = 4;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VisceraEditor)
 };

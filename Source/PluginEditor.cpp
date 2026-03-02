@@ -7,9 +7,9 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     : AudioProcessorEditor(processor),
       proc(processor),
       presetBrowser(processor),
-      mod1Section(processor.apvts, "MOD1", "ENV1"),
-      mod2Section(processor.apvts, "MOD2", "ENV2"),
-      carrierSection(processor.apvts),
+      mod1Section(processor.apvts, "MOD1", "ENV1", processor.getHarmonicTable(0)),
+      mod2Section(processor.apvts, "MOD2", "ENV2", processor.getHarmonicTable(1)),
+      carrierSection(processor.apvts, processor.getHarmonicTable(2)),
       modMatrixSection(processor.apvts),
       filterSection(processor.apvts),
       pitchEnvSection(processor.apvts),
@@ -19,7 +19,8 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       flubberVisualizer(processor.getVisualBuffer(), processor.getVisualBufferR()),
       lfoSection(processor.apvts, processor),
       globalSection(processor.apvts),
-      keyboard(processor.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
+      presetOverlay(processor),
+      saveOverlay(processor)
 {
     setLookAndFeel(&lookAndFeel);
 
@@ -40,12 +41,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     addAndMakeVisible(lfoSection);
     addAndMakeVisible(globalSection);
 
-    // Clavier MIDI integre (standalone only)
-#if JUCE_STANDALONE_APPLICATION
-    keyboard.setMidiChannel(1);
-    keyboard.setOctaveForMiddleC(4);
-    addAndMakeVisible(keyboard);
-#endif
+    // Clavier MIDI visuel supprimé — on utilise le clavier d'ordi (Ableton-style)
 
     // Titre
     titleLabel.setText("Viscera", juce::dontSendNotification);
@@ -100,21 +96,81 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // Wire randomize to PresetBrowser's ? button
     presetBrowser.onRandomize = [this] { randomizeParams(); };
 
+    // Wire preset overlay
+    presetBrowser.onBrowse = [this] {
+        if (showPresetOverlay)
+        {
+            // Toggling off = cancel (restore saved preset)
+            presetOverlay.stopPreviewNote();
+            int saved = presetOverlay.getSavedPresetIndex();
+            if (saved >= 0)
+                proc.loadPresetAt(saved);
+            setPresetOverlayVisible(false);
+            presetBrowser.refreshPresetList();
+        }
+        else
+        {
+            setPresetOverlayVisible(true);
+        }
+    };
+    presetOverlay.onClose = [this] {
+        // Confirmed — keep new preset
+        setPresetOverlayVisible(false);
+        presetBrowser.refreshPresetList();
+    };
+    presetOverlay.onCancel = [this] {
+        // Cancelled — preset already restored by overlay
+        setPresetOverlayVisible(false);
+        presetBrowser.refreshPresetList();
+    };
+    presetOverlay.onPresetChanged = [this] {
+        presetBrowser.refreshPresetList();
+    };
+    addChildComponent(presetOverlay); // hidden by default
+
+    // Wire save overlay
+    presetBrowser.onSave = [this] {
+        if (showSaveOverlay)
+            setSaveOverlayVisible(false);
+        else
+            setSaveOverlayVisible(true);
+    };
+    saveOverlay.onSave = [this] {
+        setSaveOverlayVisible(false);
+        presetBrowser.refreshPresetList();
+    };
+    saveOverlay.onCancel = [this] {
+        setSaveOverlayVisible(false);
+    };
+    addChildComponent(saveOverlay); // hidden by default
+
     // Page toggle button
     pageToggleBtn.setButtonText("Edit");
-    pageToggleBtn.onClick = [this] { setPage(!showAdvanced); };
+    pageToggleBtn.onClick = [this] {
+        if (showSaveOverlay)
+        {
+            setSaveOverlayVisible(false);
+        }
+        else if (showPresetOverlay)
+        {
+            // Back button = cancel (restore saved preset)
+            presetOverlay.stopPreviewNote();
+            int saved = presetOverlay.getSavedPresetIndex();
+            if (saved >= 0)
+                proc.loadPresetAt(saved);
+            setPresetOverlayVisible(false);
+            presetBrowser.refreshPresetList();
+        }
+        else
+        {
+            setPage(!showAdvanced);
+        }
+    };
     addAndMakeVisible(pageToggleBtn);
 
     // Keyboard toggle for main page (standalone only)
 #if JUCE_STANDALONE_APPLICATION
-    kbToggleBtn.setButtonText("KB");
-    kbToggleBtn.onClick = [this] {
-        showKeyboardOnMain = !showKeyboardOnMain;
-        keyboard.setVisible(showAdvanced || showKeyboardOnMain);
-        mainLogoImage.setVisible(!showAdvanced && !showKeyboardOnMain);
-        resized();
-    };
-    addAndMakeVisible(kbToggleBtn);
+    // KB toggle removed — computer keyboard replaces it on standalone
 #endif
 
     // Dark mode toggle
@@ -154,7 +210,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
         juce::MessageManager::callAsync([safeThis] {
             if (safeThis != nullptr)
-                safeThis->flubberVisualizer.setVisible(!safeThis->showAdvanced);
+                safeThis->flubberVisualizer.setVisible(!safeThis->showAdvanced && !safeThis->showPresetOverlay && !safeThis->showSaveOverlay);
         });
     };
     addAndMakeVisible(darkModeBtn);
@@ -229,6 +285,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
     startTimerHz(5);
 
+    setWantsKeyboardFocus(true);
     setSize(920, 660);
 
     // Start on main (perform) page
@@ -257,7 +314,6 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     algoLabel.setPaintingIsUnclipped(true);
     darkModeBtn.setPaintingIsUnclipped(true);
     pageToggleBtn.setPaintingIsUnclipped(true);
-    kbToggleBtn.setPaintingIsUnclipped(true);
 
     // Load first preset so sound matches displayed name
     // (done here after all attachments are created)
@@ -273,6 +329,7 @@ VisceraEditor::~VisceraEditor()
 void VisceraEditor::timerCallback()
 {
     updateAlgoLabel();
+    proc.getUndoManager().beginNewTransaction();
 }
 
 void VisceraEditor::randomizeParams()
@@ -395,10 +452,172 @@ void VisceraEditor::updateAlgoLabel()
         algoLabel.setText(algoNames[idx], juce::dontSendNotification);
 }
 
+void VisceraEditor::dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&)
+{
+    // Clean up drop-target glow when any drag finishes (success or cancel)
+    ModSlider::showDropTargets = false;
+}
+
+void VisceraEditor::setPresetOverlayVisible(bool visible)
+{
+    // Close save overlay if opening preset overlay
+    if (visible && showSaveOverlay)
+        setSaveOverlayVisible(false);
+
+    showPresetOverlay = visible;
+    presetOverlay.setVisible(visible);
+
+    if (visible)
+        presetOverlay.refresh();
+
+    // Update page toggle button text
+    if (visible)
+        pageToggleBtn.setButtonText("Back");
+    else if (showAdvanced)
+        pageToggleBtn.setButtonText("Home");
+    else
+        pageToggleBtn.setButtonText("Edit");
+
+    if (showAdvanced)
+    {
+        // Advanced page: hide/show edit sections behind overlay
+        mod1Section.setVisible(!visible);
+        mod2Section.setVisible(!visible);
+        carrierSection.setVisible(!visible);
+        modMatrixSection.setVisible(!visible);
+        lfoSection.setVisible(!visible);
+        filterSection.setVisible(!visible);
+        pitchEnvSection.setVisible(!visible);
+        tabbedEffects.setVisible(!visible);
+        shaperSection.setVisible(!visible);
+        globalSection.setVisible(!visible);
+        logoImage.setVisible(!visible);
+    }
+    else
+    {
+        // Main page: hide/show perform content behind overlay
+        flubberVisualizer.setVisible(!visible);
+        if (visible)
+            flubberVisualizer.setBounds(0, 0, 0, 0); // clear GL native view bounds
+        for (int i = 0; i < 6; ++i)
+        {
+            macroKnobs[i].setVisible(!visible);
+            macroLabels[i].setVisible(!visible);
+        }
+        for (int i = 0; i < 4; ++i)
+        {
+            fxToggle[i].setVisible(!visible);
+            fxMixKnob[i].setVisible(!visible);
+            fxLabel[i].setVisible(!visible);
+        }
+        mainLogoImage.setVisible(!visible);
+    }
+
+    if (visible)
+    {
+        presetOverlay.setBounds(mainPanelBounds);
+        presetOverlay.toFront(false);
+    }
+    else
+    {
+        // Restore flubber bounds when closing overlay on main page
+        resized();
+    }
+
+    repaint();
+}
+
+void VisceraEditor::setSaveOverlayVisible(bool visible)
+{
+    // Close preset overlay if opening save overlay
+    if (visible && showPresetOverlay)
+    {
+        presetOverlay.stopPreviewNote();
+        int saved = presetOverlay.getSavedPresetIndex();
+        if (saved >= 0)
+            proc.loadPresetAt(saved);
+        setPresetOverlayVisible(false);
+        presetBrowser.refreshPresetList();
+    }
+
+    showSaveOverlay = visible;
+    saveOverlay.setVisible(visible);
+
+    if (visible)
+        saveOverlay.refresh();
+
+    // Update page toggle button text
+    if (visible)
+        pageToggleBtn.setButtonText("Back");
+    else if (showPresetOverlay)
+        pageToggleBtn.setButtonText("Back");
+    else if (showAdvanced)
+        pageToggleBtn.setButtonText("Home");
+    else
+        pageToggleBtn.setButtonText("Edit");
+
+    if (showAdvanced)
+    {
+        mod1Section.setVisible(!visible);
+        mod2Section.setVisible(!visible);
+        carrierSection.setVisible(!visible);
+        modMatrixSection.setVisible(!visible);
+        lfoSection.setVisible(!visible);
+        filterSection.setVisible(!visible);
+        pitchEnvSection.setVisible(!visible);
+        tabbedEffects.setVisible(!visible);
+        shaperSection.setVisible(!visible);
+        globalSection.setVisible(!visible);
+        logoImage.setVisible(!visible);
+    }
+    else
+    {
+        flubberVisualizer.setVisible(!visible);
+        if (visible)
+            flubberVisualizer.setBounds(0, 0, 0, 0); // clear GL native view bounds
+        for (int i = 0; i < 6; ++i)
+        {
+            macroKnobs[i].setVisible(!visible);
+            macroLabels[i].setVisible(!visible);
+        }
+        for (int i = 0; i < 4; ++i)
+        {
+            fxToggle[i].setVisible(!visible);
+            fxMixKnob[i].setVisible(!visible);
+            fxLabel[i].setVisible(!visible);
+        }
+        mainLogoImage.setVisible(!visible);
+    }
+
+    if (visible)
+    {
+        saveOverlay.setBounds(mainPanelBounds);
+        saveOverlay.toFront(false);
+    }
+    else
+    {
+        resized();
+    }
+
+    repaint();
+}
+
 void VisceraEditor::setPage(bool advanced)
 {
     showAdvanced = advanced;
-    pageToggleBtn.setButtonText(advanced ? "Back" : "Edit");
+    pageToggleBtn.setButtonText(advanced ? "Home" : "Edit");
+
+    // Close overlays when switching pages
+    if (showPresetOverlay)
+    {
+        showPresetOverlay = false;
+        presetOverlay.setVisible(false);
+    }
+    if (showSaveOverlay)
+    {
+        showSaveOverlay = false;
+        saveOverlay.setVisible(false);
+    }
 
     // Advanced-only sections
     mod1Section.setVisible(advanced);
@@ -426,8 +645,10 @@ void VisceraEditor::setPage(bool advanced)
         fxLabel[i].setVisible(!advanced);
     }
 
-    // Flubber visualizer only on main page
-    flubberVisualizer.setVisible(!advanced);
+    // Flubber visualizer only on main page (and not during overlays)
+    flubberVisualizer.setVisible(!advanced && !showPresetOverlay && !showSaveOverlay);
+    if (advanced)
+        flubberVisualizer.setBounds(0, 0, 0, 0); // clear stale bounds so GL native view doesn't intercept events
 
     // Effects: hidden on main (we use mini-controls), stacked on edit
     tabbedEffects.setVisible(advanced);
@@ -435,8 +656,6 @@ void VisceraEditor::setPage(bool advanced)
 
     // Keyboard: standalone only
 #if JUCE_STANDALONE_APPLICATION
-    keyboard.setVisible(advanced || showKeyboardOnMain);
-    kbToggleBtn.setVisible(!advanced);
 #endif
 
     // Both pages: effects, preset, keyboard, logo, algo, randomize, toggle
@@ -492,7 +711,7 @@ void VisceraEditor::paint(juce::Graphics& g)
     {
         // Main page: flat background, no neumorphic panel
     }
-    else
+    else if (!showPresetOverlay)
     {
         // Advanced page: 10 section headers (no visualizer)
         static const char* titles[] = {
@@ -526,53 +745,34 @@ void VisceraEditor::resized()
     topBar.removeFromRight(sp);
     darkModeBtn.setBounds(topBar.removeFromRight(40));
     topBar.removeFromRight(sp);
-#if JUCE_STANDALONE_APPLICATION
-    if (!showAdvanced)
-    {
-        kbToggleBtn.setBounds(topBar.removeFromRight(28));
-        topBar.removeFromRight(sp);
-    }
-#endif
 
     presetBrowser.setBounds(topBar);
     area.removeFromTop(4);
 
-    // === Keyboard at bottom (standalone only) ===
-#if JUCE_STANDALONE_APPLICATION
-    if (showAdvanced || showKeyboardOnMain)
-    {
-        if (showAdvanced)
-        {
-            keyboard.setBounds(area.removeFromBottom(50));
-            area.removeFromBottom(4);
-        }
-        else
-        {
-            // On main page: overlay at bottom, no layout impact
-            auto kbBounds = area;
-            keyboard.setBounds(kbBounds.removeFromBottom(50));
-        }
-    }
-#endif
 
     int gap = 6;
     int headerH = 16;
+
+    // Store content area for overlay (available on both pages)
+    mainPanelBounds = area;
+
+    if (showAdvanced)
+        area.removeFromBottom(3);
 
     if (!showAdvanced)
     {
         // =============================================
         // MAIN (PERFORM) PAGE — Oval viz + macro knobs + FX controls around ellipse
         // =============================================
-        mainPanelBounds = area;
         int knobSize = 58;
         int fxKnobSize = 44;
         int labelH = 14;
 
         // Rectangular flubber visualizer centered
-        int vizW = static_cast<int>(area.getWidth() * 0.54f);
-        int vizH = static_cast<int>(area.getHeight() * 0.58f);
+        int vizW = static_cast<int>(area.getWidth() * 0.62f);
+        int vizH = static_cast<int>(area.getHeight() * 0.66f);
         auto vizBounds = area.withSizeKeepingCentre(vizW, vizH);
-        vizBounds.translate(0, -62);
+        vizBounds.translate(0, -50);
         mainSectionBounds[0] = vizBounds;
         flubberVisualizer.setBounds(vizBounds);
 
@@ -581,8 +781,8 @@ void VisceraEditor::resized()
         constexpr float pi = juce::MathConstants<float>::pi;
 
         // --- Macro knobs: 3 left, 3 right (along sides of ellipse) ---
-        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.4f;
-        float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * 0.85f;
+        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.45f;
+        float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * 0.9f;
 
         // Left: Cutoff(2), Res(3), Spread(5)  |  Right: Drive(1), Fold(4), Volume(0)
         float leftAngles[3]  = { 150.0f * pi / 180.0f, 180.0f * pi / 180.0f, 210.0f * pi / 180.0f };
@@ -633,12 +833,21 @@ void VisceraEditor::resized()
         int logoX = area.getRight() - logoW - 8;
         int logoY = area.getBottom() - logoH + 4;
         mainLogoImage.setBounds(logoX, logoY, logoW, logoH);
+
+        // Overlays cover the entire main panel area
+        if (showPresetOverlay)
+            presetOverlay.setBounds(mainPanelBounds);
+        if (showSaveOverlay)
+            saveOverlay.setBounds(mainPanelBounds);
     }
     else
     {
         // =============================================
         // ADVANCED (EDIT) PAGE
         // =============================================
+        // Clear flubber bounds so its OpenGL native view doesn't intercept mouse events
+        flubberVisualizer.setBounds(0, 0, 0, 0);
+
         int totalH = area.getHeight();
 
         int colW = (area.getWidth() - gap * 2) / 3;
@@ -710,5 +919,126 @@ void VisceraEditor::resized()
             sectionBounds[9] = globalBlock;
             globalSection.setBounds(globalBlock.withTrimmedTop(headerH).reduced(4, 0));
         }
+
+        // Overlays cover the entire content area
+        if (showPresetOverlay)
+            presetOverlay.setBounds(mainPanelBounds);
+        if (showSaveOverlay)
+            saveOverlay.setBounds(mainPanelBounds);
     }
 }
+
+// =============================================================================
+// Key handling — undo/redo (all platforms) + computer MIDI keyboard (standalone)
+// =============================================================================
+
+#if JUCE_STANDALONE_APPLICATION
+// Note mapping: supports both QWERTY and AZERTY physical layouts
+struct NoteMap { int offset; juce::juce_wchar keys[2]; int numKeys; };
+static const NoteMap kNoteMapping[] = {
+    {  0, {'a','q'}, 2 },  // C
+    {  1, {'w','z'}, 2 },  // C#
+    {  2, {'s', 0 }, 1 },  // D
+    {  3, {'e', 0 }, 1 },  // D#
+    {  4, {'d', 0 }, 1 },  // E
+    {  5, {'f', 0 }, 1 },  // F
+    {  6, {'t', 0 }, 1 },  // F#
+    {  7, {'g', 0 }, 1 },  // G
+    {  8, {'y', 0 }, 1 },  // G#
+    {  9, {'h', 0 }, 1 },  // A
+    { 10, {'u', 0 }, 1 },  // A#
+    { 11, {'j', 0 }, 1 },  // B
+    { 12, {'k', 0 }, 1 },  // C+1
+    { 13, {'o', 0 }, 1 },  // C#+1
+    { 14, {'l', 0 }, 1 },  // D+1
+    { 15, {'p', 0 }, 1 },  // D#+1
+};
+#endif
+
+void VisceraEditor::parentHierarchyChanged()
+{
+#if JUCE_STANDALONE_APPLICATION
+    if (auto* docWindow = findParentComponentOfClass<juce::DocumentWindow>())
+    {
+        if (!docWindow->isUsingNativeTitleBar())
+        {
+            docWindow->setUsingNativeTitleBar(true);
+            // Re-set editor size so the window adapts
+            juce::MessageManager::callAsync([this] {
+                setSize(920, 660);
+            });
+        }
+    }
+#endif
+}
+
+bool VisceraEditor::keyPressed(const juce::KeyPress& key)
+{
+    // Redo: Cmd+Shift+Z (Mac) / Ctrl+Shift+Z (PC) — check before undo
+    if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier
+                                    | juce::ModifierKeys::shiftModifier, 0))
+    {
+        proc.getUndoManager().redo();
+        return true;
+    }
+
+    // Undo: Cmd+Z (Mac) / Ctrl+Z (PC)
+    if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier, 0))
+    {
+        proc.getUndoManager().undo();
+        return true;
+    }
+
+#if JUCE_STANDALONE_APPLICATION
+    auto c = static_cast<juce::juce_wchar>(std::tolower(key.getTextCharacter()));
+
+    // Octave shift: C = down, V = up
+    if (c == 'c') { computerKeyOctave = juce::jmax(0, computerKeyOctave - 1); return true; }
+    if (c == 'v') { computerKeyOctave = juce::jmin(8, computerKeyOctave + 1); return true; }
+
+    // Consume note keys to prevent macOS system beep
+    for (auto& m : kNoteMapping)
+        for (int k = 0; k < m.numKeys; ++k)
+            if (m.keys[k] == c)
+                return true;
+#endif
+
+    return false;
+}
+
+#if JUCE_STANDALONE_APPLICATION
+
+bool VisceraEditor::keyStateChanged(bool /*isKeyDown*/)
+{
+    bool handled = false;
+
+    for (auto& m : kNoteMapping)
+    {
+        int note = computerKeyOctave * 12 + m.offset;
+        if (note < 0 || note > 127) continue;
+
+        bool anyDown = false;
+        for (int k = 0; k < m.numKeys; ++k)
+            if (juce::KeyPress::isKeyCurrentlyDown(static_cast<int>(m.keys[k])))
+                anyDown = true;
+
+        bool wasDown = computerKeysDown.count(note) > 0;
+
+        if (anyDown && !wasDown)
+        {
+            proc.keyboardState.noteOn(1, note, 0.7f);
+            computerKeysDown.insert(note);
+            handled = true;
+        }
+        else if (!anyDown && wasDown)
+        {
+            proc.keyboardState.noteOff(1, note, 0.0f);
+            computerKeysDown.erase(note);
+            handled = true;
+        }
+    }
+
+    return handled;
+}
+
+#endif

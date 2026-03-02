@@ -6,7 +6,12 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
     : proc(processor)
 {
     presetNameBtn.setName("presetDisplay");
-    presetNameBtn.onClick = [this] { showPresetMenu(); };
+    presetNameBtn.onClick = [this] {
+        if (onBrowse)
+            onBrowse();
+        else
+            showPresetMenu();
+    };
     addAndMakeVisible(presetNameBtn);
 
     prevButton.onClick  = [this] { navigatePreset(-1); };
@@ -34,28 +39,9 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
     };
     addAndMakeVisible(randomButton);
 
+    saveButton.setButtonText("Save");
     saveButton.onClick = [this] {
-        auto* aw = new juce::AlertWindow("Save Preset",
-                                          "Enter a name for the new preset:",
-                                          juce::AlertWindow::NoIcon, this);
-        aw->addTextEditor("name", "", "Preset name:");
-        aw->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
-        aw->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-
-        aw->enterModalState(true, juce::ModalCallbackFunction::create(
-            [this, aw](int result) {
-                if (result == 1)
-                {
-                    auto name = aw->getTextEditorContents("name").trim();
-                    if (name.isNotEmpty())
-                    {
-                        proc.saveUserPreset(name);
-                        proc.buildPresetRegistry();
-                        refreshPresetList();
-                    }
-                }
-                delete aw;
-            }), false);
+        if (onSave) onSave();
     };
     addAndMakeVisible(saveButton);
 
@@ -89,7 +75,7 @@ void PresetBrowser::showPresetMenu()
     juce::PopupMenu menu;
 
     // Category order for factory presets
-    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Texture" };
+    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
 
     // Group factory presets by category
     juce::String lastCategory;
@@ -171,8 +157,8 @@ void PresetBrowser::resized()
     prevButton.setBounds(area.removeFromLeft(btnW));
     area.removeFromLeft(sp);
 
-    // Right side: [+] [Random] [Init] [>]
-    saveButton.setBounds(area.removeFromRight(btnW));
+    // Right side: [Save] [Random] [Init] [>]
+    saveButton.setBounds(area.removeFromRight(36));
     area.removeFromRight(sp);
     randomButton.setBounds(area.removeFromRight(48));
     area.removeFromRight(sp);

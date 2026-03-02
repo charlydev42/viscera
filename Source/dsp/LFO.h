@@ -235,6 +235,14 @@ public:
         return s;
     }
 
+    // Reset curve + table to defaults (flat 0.5)
+    void resetCurve()
+    {
+        curvePoints = { {0.0f, 0.5f}, {1.0f, 0.5f} };
+        for (int i = 0; i < kNumSteps; ++i)
+            customTable[i].store(0.5f, std::memory_order_relaxed);
+    }
+
     void deserializeCurve(const juce::String& s)
     {
         auto pointTokens = juce::StringArray::fromTokens(s, ";", "");

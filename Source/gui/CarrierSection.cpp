@@ -76,11 +76,13 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
 // CarrierSection
 // ============================================================
 
-CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts)
-    : state(apvts), kbParamId("CAR_KB"), envDisplay(apvts)
+CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts,
+                               bb::HarmonicTable& harmonics)
+    : state(apvts), kbParamId("CAR_KB"), harmonicTable(harmonics),
+      envDisplay(apvts), harmonicEditor(harmonics)
 {
     // Waveform combo
-    waveCombo.addItemList({"Sine", "Saw", "Square", "Tri", "Pulse"}, 1);
+    waveCombo.addItemList({"Sine", "Saw", "Square", "Tri", "Pulse", "Custom"}, 1);
     addAndMakeVisible(waveCombo);
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts, "CAR_WAVE", waveCombo);
@@ -168,6 +170,38 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts)
     syncAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, "SYNC", syncToggle);
 
+    // --- Design mode (harmonic editor) ---
+    designBtn.onClick = [this] {
+        if (!designMode)
+        {
+            int waveIdx = static_cast<int>(state.getRawParameterValue("CAR_WAVE")->load());
+            if (waveIdx != 5) // 5 = Custom
+            {
+                harmonicTable.initFromWaveType(waveIdx);
+                lastDesignWave = waveIdx;
+            }
+            else
+            {
+                lastDesignWave = 5;
+            }
+        }
+        setDesignMode(!designMode);
+    };
+    addAndMakeVisible(designBtn);
+
+    // When user draws bars manually, switch wave to Custom
+    harmonicEditor.onUserDraw = [this] {
+        int waveIdx = static_cast<int>(state.getRawParameterValue("CAR_WAVE")->load());
+        if (waveIdx != 5)
+        {
+            auto* param = state.getParameter("CAR_WAVE");
+            param->setValueNotifyingHost(param->convertTo0to1(5.0f));
+        }
+        lastDesignWave = 5;
+    };
+
+    addChildComponent(harmonicEditor);
+
     // Timer to refresh labels on preset change
     startTimerHz(5);
 }
@@ -179,9 +213,23 @@ void CarrierSection::timerCallback()
     if (fixedToggle.getToggleState() == kbOn)
         fixedToggle.setToggleState(!kbOn, juce::dontSendNotification);
 
+    // In design mode: if wave combo changed to a standard wave, update harmonics
+    if (designMode)
+    {
+        int waveIdx = static_cast<int>(state.getRawParameterValue("CAR_WAVE")->load());
+        if (waveIdx != 5 && waveIdx != lastDesignWave)
+        {
+            harmonicTable.initFromWaveType(waveIdx);
+            lastDesignWave = waveIdx;
+        }
+    }
+
     bool isFixed = fixedToggle.getToggleState();
-    coarseKnob.setVisible(!isFixed);
-    fixedFreqKnob.setVisible(isFixed);
+    if (!designMode)
+    {
+        coarseKnob.setVisible(!isFixed);
+        fixedFreqKnob.setVisible(isFixed);
+    }
 
     // Update main knob label with formatted value
     if (isFixed)
@@ -237,6 +285,34 @@ void CarrierSection::timerCallback()
     }
 }
 
+
+
+void CarrierSection::setDesignMode(bool on)
+{
+    designMode = on;
+    designBtn.setButtonText(on ? "Back" : "Harmo");
+
+    bool isFixed = fixedToggle.getToggleState();
+
+    // Hide Row 2 knobs in design mode
+    coarseKnob.setVisible(!on && !isFixed);
+    fixedFreqKnob.setVisible(!on && isFixed);
+    mainKnobLabel.setVisible(!on);
+    fineKnob.setVisible(!on);
+    fineLabel.setVisible(!on);
+    driftKnob.setVisible(!on);
+    driftLabel.setVisible(!on);
+    noiseKnob.setVisible(!on);
+    noiseLabel.setVisible(!on);
+    spreadKnob.setVisible(!on);
+    spreadLabel.setVisible(!on);
+    harmonicEditor.setVisible(on);
+    envDisplay.setVisible(!on);
+
+    resized();
+    repaint();
+}
+
 void CarrierSection::setupKnob(juce::Slider& knob, juce::Label& label,
                                  const juce::String& text)
 {
@@ -262,61 +338,100 @@ void CarrierSection::setupKnob(juce::Slider& knob)
 
 void CarrierSection::resized()
 {
-    auto area = getLocalBounds().reduced(4);
-
     int labelH = 12;
     int knobH = 36;
 
-    // Row 1: Wave combo + Fixed + XOR + Sync
-    auto topBar = area.removeFromTop(26);
-    waveCombo.setBounds(topBar.removeFromLeft(80).reduced(1));
-    topBar.removeFromLeft(4);
-    int toggleW = topBar.getWidth() / 3;
-    fixedToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
-    xorToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
-    syncToggle.setBounds(topBar.reduced(1));
-
-    area.removeFromTop(2);
-
-    // Row 2 (pitch + character knobs): [Coarse/Freq] [Fine] [Drift] [Noise] [Spread]
-    auto knobRow1 = area.removeFromTop(knobH + labelH);
-    int colW = knobRow1.getWidth() / 5;
-
-    auto coarseArea = knobRow1.removeFromLeft(colW);
-    mainKnobLabel.setBounds(coarseArea.removeFromBottom(labelH));
-    coarseKnob.setBounds(coarseArea.reduced(2, 0));
-    fixedFreqKnob.setBounds(coarseArea.reduced(2, 0));
-
-    auto fineArea = knobRow1.removeFromLeft(colW);
-    fineLabel.setBounds(fineArea.removeFromBottom(labelH));
-    fineKnob.setBounds(fineArea.reduced(2, 0));
-
-    auto driftArea = knobRow1.removeFromLeft(colW);
-    driftLabel.setBounds(driftArea.removeFromBottom(labelH));
-    driftKnob.setBounds(driftArea.reduced(2, 0));
-
-    auto noiseArea = knobRow1.removeFromLeft(colW);
-    noiseLabel.setBounds(noiseArea.removeFromBottom(labelH));
-    noiseKnob.setBounds(noiseArea.reduced(2, 0));
-
-    auto spreadArea = knobRow1;
-    spreadLabel.setBounds(spreadArea.removeFromBottom(labelH));
-    spreadKnob.setBounds(spreadArea.reduced(2, 0));
-
-    area.removeFromTop(2);
-
-    // Bottom: ADSR knobs
-    auto knobRow2 = area.removeFromBottom(knobH + labelH);
-    int adsrColW = knobRow2.getWidth() / 4;
-    for (int i = 0; i < 4; ++i)
+    if (designMode)
     {
-        auto col = knobRow2.removeFromLeft(adsrColW);
-        adsrLabels[i].setBounds(col.removeFromBottom(labelH));
-        adsrKnobs[i].setBounds(col.reduced(2, 0));
+        auto area = getLocalBounds().reduced(4);
+
+        // Row 1: Wave combo + Harmo + Fixed + XOR + Sync
+        auto topBar = area.removeFromTop(26);
+        waveCombo.setBounds(topBar.removeFromLeft(72).reduced(1));
+        topBar.removeFromLeft(1);
+        designBtn.setBounds(topBar.removeFromLeft(38).reduced(1));
+        topBar.removeFromLeft(1);
+        int toggleW = topBar.getWidth() / 3;
+        fixedToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
+        xorToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
+        syncToggle.setBounds(topBar.reduced(1));
+
+        area.removeFromTop(2);
+
+        // Bottom: ADSR knobs (no env display)
+        auto knobRow2 = area.removeFromBottom(knobH + labelH);
+        int adsrColW = knobRow2.getWidth() / 4;
+        for (int i = 0; i < 4; ++i)
+        {
+            auto col = knobRow2.removeFromLeft(adsrColW);
+            adsrLabels[i].setBounds(col.removeFromBottom(labelH));
+            adsrKnobs[i].setBounds(col.reduced(2, 0));
+        }
+
+        area.removeFromBottom(2);
+
+        // Remaining: harmonic editor
+        harmonicEditor.setBounds(area);
     }
+    else
+    {
+        // Single area from reduced(2) — aligns ADSR bottom with PitchEnv/Global
+        auto area = getLocalBounds().reduced(2);
+        area.removeFromTop(2);
 
-    area.removeFromBottom(2);
+        // Row 1: Wave combo + Harmo + Fixed + XOR + Sync
+        auto topBar = area.removeFromTop(26).reduced(2, 0);
+        waveCombo.setBounds(topBar.removeFromLeft(72).reduced(1));
+        topBar.removeFromLeft(1);
+        designBtn.setBounds(topBar.removeFromLeft(38).reduced(1));
+        topBar.removeFromLeft(1);
+        int toggleW = topBar.getWidth() / 3;
+        fixedToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
+        xorToggle.setBounds(topBar.removeFromLeft(toggleW).reduced(1));
+        syncToggle.setBounds(topBar.reduced(1));
 
-    // ENV3 display
-    envDisplay.setBounds(area.reduced(0, 2));
+        area.removeFromTop(6);
+
+        // Knob row: Coarse/Fine/Drift/Noise/Spread (right below top bar)
+        auto knobRow1 = area.removeFromTop(knobH + labelH);
+        int colW = knobRow1.getWidth() / 5;
+
+        auto coarseArea = knobRow1.removeFromLeft(colW);
+        mainKnobLabel.setBounds(coarseArea.removeFromBottom(labelH));
+        coarseKnob.setBounds(coarseArea.reduced(2, 0));
+        fixedFreqKnob.setBounds(coarseArea.reduced(2, 0));
+
+        auto fineArea = knobRow1.removeFromLeft(colW);
+        fineLabel.setBounds(fineArea.removeFromBottom(labelH));
+        fineKnob.setBounds(fineArea.reduced(2, 0));
+
+        auto driftArea = knobRow1.removeFromLeft(colW);
+        driftLabel.setBounds(driftArea.removeFromBottom(labelH));
+        driftKnob.setBounds(driftArea.reduced(2, 0));
+
+        auto noiseArea = knobRow1.removeFromLeft(colW);
+        noiseLabel.setBounds(noiseArea.removeFromBottom(labelH));
+        noiseKnob.setBounds(noiseArea.reduced(2, 0));
+
+        auto spreadArea = knobRow1;
+        spreadLabel.setBounds(spreadArea.removeFromBottom(labelH));
+        spreadKnob.setBounds(spreadArea.reduced(2, 0));
+
+        area.removeFromTop(3);
+
+        // Bottom: ADSR knobs (aligned with PitchEnv/Global)
+        auto knobRow2 = area.removeFromBottom(knobH + labelH);
+        int adsrColW = knobRow2.getWidth() / 4;
+        for (int i = 0; i < 4; ++i)
+        {
+            auto col = knobRow2.removeFromLeft(adsrColW);
+            adsrLabels[i].setBounds(col.removeFromBottom(labelH));
+            adsrKnobs[i].setBounds(col);
+        }
+
+        // ENV3 display fills remaining space between knob row and ADSR
+        area.removeFromBottom(2);
+        area.removeFromTop(2);
+        envDisplay.setBounds(area);
+    }
 }

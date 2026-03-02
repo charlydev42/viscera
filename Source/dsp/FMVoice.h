@@ -123,6 +123,10 @@ struct VoiceParams
     std::atomic<float>* env2S         = nullptr;
     std::atomic<float>* env2R         = nullptr;
 
+    HarmonicTable* mod1Harmonics = nullptr;
+    HarmonicTable* mod2Harmonics = nullptr;
+    HarmonicTable* carHarmonics  = nullptr;
+
     std::atomic<float>* carWave      = nullptr;
     std::atomic<float>* carOctave   = nullptr; // legacy, kept for backward-compat
     std::atomic<float>* carCoarse   = nullptr;

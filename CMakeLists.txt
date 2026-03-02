@@ -53,8 +53,11 @@ target_sources(Viscera PRIVATE
     Source/gui/FlubberVisualizer.cpp
     Source/gui/GlobalSection.cpp
     Source/gui/PresetBrowser.cpp
+    Source/gui/PresetOverlay.cpp
+    Source/gui/SaveOverlay.cpp
     Source/gui/VisceraLookAndFeel.cpp
     Source/gui/TabbedEffectSection.cpp
+    Source/gui/HarmonicEditor.cpp
 )
 
 juce_add_binary_data(VisceraData SOURCES
@@ -74,9 +77,9 @@ juce_add_binary_data(VisceraData SOURCES
     presets/Init.visc
     presets/Bass_808_Sub.visc
     presets/Bass_Acid_Squelch.visc
-    presets/Bass_FM_Kick.visc
-    presets/Bass_Glide_Kick.visc
-    presets/Bass_Microwave_Kick.visc
+    presets/Drums_FM_Kick.visc
+    presets/Drums_Glide_Kick.visc
+    presets/Drums_Microwave_Kick.visc
     presets/Bass_Pluck_Bass.visc
     presets/Bass_Reese.visc
     presets/Bass_Sub_Growl.visc
@@ -104,7 +107,7 @@ juce_add_binary_data(VisceraData SOURCES
     presets/Pad_Warm_Cloud.visc
     presets/FX_Alien_FX.visc
     presets/FX_Chaos_Engine.visc
-    presets/FX_Glitch_Perc.visc
+    presets/Drums_Glitch_Perc.visc
     presets/FX_Impact.visc
     presets/FX_Laser.visc
     presets/FX_Metal_Bell.visc
@@ -121,6 +124,51 @@ juce_add_binary_data(VisceraData SOURCES
     presets/Texture_Rust.visc
     presets/Texture_Soft_Texture.visc
     presets/Texture_Wire.visc
+    # New factory presets - Glitch Perc (Drums)
+    presets/Drums_Bit_Snap.visc
+    presets/Drums_Zap_Hit.visc
+    presets/Drums_Crackle.visc
+    presets/Drums_Digi_Rim.visc
+    presets/Drums_Glitch_Pop.visc
+    presets/Drums_Tin_Can.visc
+    presets/Drums_Static_Burst.visc
+    presets/Drums_Micro_Blip.visc
+    presets/Drums_Hex_Drum.visc
+    presets/Drums_Click_Dust.visc
+    # New factory presets - Hyperpop Plucks (Lead)
+    presets/Lead_Bubble_Pop.visc
+    presets/Lead_Crystal_Tap.visc
+    presets/Lead_Sugar_Pluck.visc
+    presets/Lead_Neon_Stab.visc
+    presets/Lead_Pixel_Chime.visc
+    # New factory presets - Dubstep Bass
+    presets/Bass_Saw_Tear.visc
+    presets/Bass_Gutter_Growl.visc
+    presets/Bass_Razor_Sub.visc
+    presets/Bass_Neuro_Bite.visc
+    presets/Bass_XOR_Stomp.visc
+    presets/Bass_Wub_Cannon.visc
+    presets/Bass_Filth_Stab.visc
+    presets/Bass_Steel_Jaw.visc
+    presets/Bass_Acid_Scream.visc
+    presets/Bass_Crunch_Drop.visc
+    presets/Bass_Void_Punch.visc
+    # New factory presets - DnB Jump Up / Belgian DnB
+    presets/Bass_Frog_Ribbit.visc
+    presets/Bass_Jump_Razor.visc
+    presets/Bass_Foghorn_Stab.visc
+    # New factory presets - Trance / Eurodance
+    presets/Lead_Fairy_Dust.visc
+    presets/Lead_Euro_Dream.visc
+    presets/Lead_Cotton_Candy.visc
+    # New factory presets - Heaven Plucks
+    presets/Lead_Angel_Pluck.visc
+    presets/Lead_Cloud_Nine.visc
+    presets/Lead_Halo_Stab.visc
+    # New factory presets - Psy Trance
+    presets/Bass_Psy_Squelch.visc
+    presets/Bass_Goa_Acid.visc
+    presets/Bass_Third_Eye.visc
 )
 
 target_include_directories(Viscera PRIVATE Source)

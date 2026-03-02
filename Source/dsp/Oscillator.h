@@ -6,11 +6,12 @@
 #include <cmath>
 #include <cstdint>
 #include <array>
+#include "HarmonicTable.h"
 
 namespace bb {
 
 // --- Types de forme d'onde ---
-enum class WaveType : int { Sine = 0, Saw, Square, Triangle, Pulse, Count };
+enum class WaveType : int { Sine = 0, Saw, Square, Triangle, Pulse, Custom, Count };
 
 // --- Table de sinus précalculée (constexpr) ---
 // 4096 échantillons = bon compromis précision/cache
@@ -54,6 +55,7 @@ public:
     }
 
     void setWaveType(WaveType type) noexcept { waveType = type; }
+    void setHarmonicTable(HarmonicTable* t) noexcept { harmonicTable = t; }
 
     // Analog drift: slow random pitch wandering (0 = clean, 1 = max drift)
     void setDrift(float amount) noexcept { driftAmount = amount; }
@@ -127,6 +129,7 @@ private:
     double inc = 0.01;      // freq / sampleRate
     double phase = 0.0;     // [0, 1)
     WaveType waveType = WaveType::Sine;
+    HarmonicTable* harmonicTable = nullptr;
     bool syncPulse = false;
     float syncFraction = 0.0f;
 
@@ -205,6 +208,9 @@ private:
             out -= polyBlep(std::fmod(p + 0.75, 1.0), inc);
             return static_cast<float>(out);
         }
+
+        case WaveType::Custom:
+            return harmonicTable ? harmonicTable->lookup(p) : lookupSine(p);
 
         default:
             return 0.0f;
