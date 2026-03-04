@@ -408,8 +408,35 @@ mat3 camera(vec3 ro, vec3 ta) {
     return mat3(cu, cross(cu, cw), cw);
 }
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+// Per-pixel render (shared camera, varied sub-pixel offset)
+vec3 renderPixel(vec3 ro, mat3 cam, vec2 fragCoord) {
     vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
+    vec3 rd = cam * normalize(vec3(uv, 1.3));
+
+    vec3 col = envMap(rd);
+
+    float d = rayMarch(ro, rd);
+    if (d < MAX_DIST) {
+        col = shade(ro + rd * d, rd, calcNormal(ro + rd * d));
+    }
+
+    float loud = clamp(energy() * 4.0, 0.0, 1.0);
+    col = col / (col + 1.0);
+    col += max(col - (0.55 - loud*0.12), 0.0) * (0.55 + loud*0.4);
+
+    float chr = length(fragCoord/iResolution.xy - 0.5) * (0.001 + loud*0.005) * 28.0;
+    col.r *= 1.0 - chr * 0.5;
+    col.g *= 1.0 + chr * 0.3;
+    col.b *= 1.0 - chr;
+
+    vec2 q = fragCoord / iResolution.xy;
+    col *= mix(vec3(1.0), vec3(0.92, 1.0, 0.88), 0.25) *
+           (0.5 + 0.5 * pow(16.0*q.x*q.y*(1.0-q.x)*(1.0-q.y), 0.15));
+
+    return col;
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float nrg = energy();
     float loud = clamp(nrg * 4.0, 0.0, 1.0);
 
@@ -423,26 +450,13 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     ro.z += noise3D(vec3(iTime*4.0+200.0)) * shakeAmt * 0.5;
 
     mat3 cam = camera(ro, vec3(0.0));
-    vec3 rd = cam * normalize(vec3(uv, 1.3));
 
-    vec3 col = envMap(rd);
-
-    float d = rayMarch(ro, rd);
-    if (d < MAX_DIST) {
-        col = shade(ro + rd * d, rd, calcNormal(ro + rd * d));
-    }
-
-    col = col / (col + 1.0);
-    col += max(col - (0.55 - loud*0.12), 0.0) * (0.55 + loud*0.4);
-
-    float chr = length(fragCoord/iResolution.xy - 0.5) * (0.001 + loud*0.005) * 28.0;
-    col.r *= 1.0 - chr * 0.5;
-    col.g *= 1.0 + chr * 0.3;
-    col.b *= 1.0 - chr;
-
-    vec2 q = fragCoord / iResolution.xy;
-    col *= mix(vec3(1.0), vec3(0.92, 1.0, 0.88), 0.25) *
-           (0.5 + 0.5 * pow(16.0*q.x*q.y*(1.0-q.x)*(1.0-q.y), 0.15));
+    // 2x2 supersampling for anti-aliased blob edges
+    vec3 col = renderPixel(ro, cam, fragCoord + vec2(-0.25, -0.25))
+             + renderPixel(ro, cam, fragCoord + vec2( 0.25, -0.25))
+             + renderPixel(ro, cam, fragCoord + vec2(-0.25,  0.25))
+             + renderPixel(ro, cam, fragCoord + vec2( 0.25,  0.25));
+    col *= 0.25;
 
     col = pow(col, vec3(0.4545));
     fragColor = vec4(col, 1.0);

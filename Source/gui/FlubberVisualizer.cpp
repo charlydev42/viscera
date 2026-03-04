@@ -456,6 +456,25 @@ vec3 shade(vec3 p,vec3 rd,vec3 N){
 
 mat3 camera(vec3 ro,vec3 ta){vec3 cw=normalize(ta-ro);vec3 cu=normalize(cross(cw,vec3(0,1,0)));return mat3(cu,cross(cu,cw),cw);}
 
+// Per-sample ray trace (shared camera, varied sub-pixel offset)
+vec3 traceSample(vec3 ro, mat3 cam, vec3 bg, vec2 fc, float loud){
+    vec2 uv=(fc-0.5*iResolution.xy)/iResolution.y;
+    vec3 rd=cam*normalize(vec3(uv,1.3));
+    vec2 rm=rayMarch(ro,rd);float d=rm.x;
+    vec3 col=bg;
+    if(d<MAX_DIST){
+        vec3 hitP=ro+rd*d;vec3 N=calcNormal(hitP);
+        vec3 sc=shade(hitP,rd,N);
+        sc=sc/(sc+1.0);sc+=max(sc-(0.55-loud*0.12),0.0)*(0.55+loud*0.4);
+        sc=pow(sc,vec3(0.4545));
+        float NdV=max(dot(N,-rd),0.0);
+        float silhouette=smoothstep(0.0,0.12,NdV);
+        float edgeFade=smoothstep(MAX_DIST,MAX_DIST*0.85,d);
+        col=mix(bg,sc,silhouette*edgeFade);
+    }
+    return col;
+}
+
 void mainImage(out vec4 fragColor,in vec2 fragCoord){
     // Elliptical mask: clip to oval inscribed in viewport
     vec2 ndc=(fragCoord/iResolution.xy)*2.0-1.0;
@@ -466,21 +485,18 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
 
     vec2 uv=(fragCoord-0.5*iResolution.xy)/iResolution.y;
 
-    // X-Y axes with tick marks
+    // X-Y axes with tick marks (computed once at center)
     float lineW=1.2/iResolution.y;
     vec3 axisCol=mix(uBgColor,vec3(0.5),0.16);
     vec3 tickCol=mix(uBgColor,vec3(0.5),0.10);
     float axX=1.0-smoothstep(0.0,lineW,abs(uv.x));
     float axY=1.0-smoothstep(0.0,lineW,abs(uv.y));
-    // Tick marks every 0.1 units along each axis
     float tickSp=0.1;
     float tickLen=8.0/iResolution.y;
     float tickW=1.0/iResolution.y;
-    // Ticks on X axis (short vertical dashes along y=0)
     float onTickX=1.0-smoothstep(0.0,tickW,abs(mod(uv.x+tickSp*0.5,tickSp)-tickSp*0.5));
     float nearAxisY=1.0-smoothstep(0.0,tickLen,abs(uv.y));
     float ticksX=onTickX*nearAxisY;
-    // Ticks on Y axis (short horizontal dashes along x=0)
     float onTickY=1.0-smoothstep(0.0,tickW,abs(mod(uv.y+tickSp*0.5,tickSp)-tickSp*0.5));
     float nearAxisX=1.0-smoothstep(0.0,tickLen,abs(uv.x));
     float ticksY=onTickY*nearAxisX;
@@ -488,29 +504,25 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     bg=mix(bg,tickCol,max(ticksX,ticksY));
     bg=mix(bg,axisCol,max(axX,axY));
 
+    // Camera (computed once)
     float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float ang=iTime*0.15;float camDist=3.5-loud*0.35;
     vec3 ro=vec3(sin(ang)*camDist,0.7+sin(iTime*0.12)*0.3,cos(ang)*camDist);
     float sh=0.01+loud*0.03;
     ro.x+=noise3D(vec3(iTime*2.0))*sh;ro.y+=noise3D(vec3(iTime*2.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*2.0+200.0))*sh*0.5;
-    mat3 cam=camera(ro,vec3(0));vec3 rd=cam*normalize(vec3(uv,1.3));
-    vec2 rm=rayMarch(ro,rd);float d=rm.x;
-    vec3 col=bg;
-    if(d<MAX_DIST){
-        vec3 hitP=ro+rd*d;vec3 N=calcNormal(hitP);
-        vec3 sc=shade(hitP,rd,N);
-        sc=sc/(sc+1.0);sc+=max(sc-(0.55-loud*0.12),0.0)*(0.55+loud*0.4);
-        float chr=length(fragCoord/iResolution.xy-0.5)*(0.001+loud*0.005)*28.0;
-        sc.r*=1.0-chr*0.5;sc.g*=1.0+chr*0.3;sc.b*=1.0-chr;
-        sc=pow(sc,vec3(0.4545));
-        // Fresnel silhouette fade
-        float NdV=max(dot(N,-rd),0.0);
-        float silhouette=smoothstep(0.0,0.1,NdV);
-        float edgeFade=smoothstep(MAX_DIST,MAX_DIST*0.85,d);
-        float fw=fwidth(d);
-        float edgeAA=1.0-smoothstep(0.0,max(fw*1.5,0.025),rm.y);
-        col=mix(bg,sc,silhouette*edgeAA*edgeFade);
-    }
+    mat3 cam=camera(ro,vec3(0));
+
+    // 2x2 supersampling for smooth blob silhouette
+    vec3 col = traceSample(ro, cam, bg, fragCoord+vec2(-0.25,-0.25), loud)
+             + traceSample(ro, cam, bg, fragCoord+vec2( 0.25,-0.25), loud)
+             + traceSample(ro, cam, bg, fragCoord+vec2(-0.25, 0.25), loud)
+             + traceSample(ro, cam, bg, fragCoord+vec2( 0.25, 0.25), loud);
+    col*=0.25;
+
+    // Chromatic aberration (once at center)
+    float chr=length(fragCoord/iResolution.xy-0.5)*(0.001+loud*0.005)*28.0;
+    col.r*=1.0-chr*0.5;col.g*=1.0+chr*0.3;col.b*=1.0-chr;
+
     col=mix(uBgColor,col,ovalMask);
     fragColor=vec4(col,1.0);
 }
