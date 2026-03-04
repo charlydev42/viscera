@@ -284,7 +284,7 @@ private:
 
     // Portamento
     double targetNoteFreq = 440.0;
-    double currentFreq = 440.0;
+    double currentFreq = 0.0; // 0 = no previous note, first note plays instantly
     double portamentoRate = 0.0;
 
     // Pitch wheel

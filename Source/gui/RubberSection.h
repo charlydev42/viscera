@@ -9,7 +9,7 @@ class RubberSection : public juce::Component,
 {
 public:
     RubberSection(juce::AudioProcessorValueTreeState& apvts);
-    ~RubberSection() override = default;
+    ~RubberSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

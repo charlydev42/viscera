@@ -11,6 +11,7 @@ class ShaperDisplay : public juce::Component,
 {
 public:
     ShaperDisplay(bb::VolumeShaper& shaper);
+    ~ShaperDisplay() override { stopTimer(); }
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
@@ -33,7 +34,7 @@ class VolumeShaperSection : public juce::Component,
 public:
     VolumeShaperSection(juce::AudioProcessorValueTreeState& apvts,
                         bb::VolumeShaper& shaper);
-    ~VolumeShaperSection() override = default;
+    ~VolumeShaperSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

@@ -9,7 +9,7 @@ class HarmonicEditor : public juce::Component,
 {
 public:
     HarmonicEditor(bb::HarmonicTable& table);
-    ~HarmonicEditor() override = default;
+    ~HarmonicEditor() override { stopTimer(); }
 
     // Called when user draws bars manually
     std::function<void()> onUserDraw;

@@ -516,6 +516,7 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
 
 LFOSection::~LFOSection()
 {
+    stopTimer();
     cancelLearnMode();
     waveAttach.reset();
     rateAttach.reset();

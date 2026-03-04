@@ -10,6 +10,7 @@ class PitchEnvDisplay : public juce::Component,
 {
 public:
     PitchEnvDisplay(juce::AudioProcessorValueTreeState& apvts);
+    ~PitchEnvDisplay() override { stopTimer(); }
     void paint(juce::Graphics& g) override;
     void timerCallback() override;
 
@@ -24,7 +25,7 @@ class PitchEnvSection : public juce::Component,
 {
 public:
     PitchEnvSection(juce::AudioProcessorValueTreeState& apvts);
-    ~PitchEnvSection() override = default;
+    ~PitchEnvSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

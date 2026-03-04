@@ -9,7 +9,7 @@ class FilterSection : public juce::Component,
 {
 public:
     FilterSection(juce::AudioProcessorValueTreeState& apvts);
-    ~FilterSection() override = default;
+    ~FilterSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

@@ -9,7 +9,7 @@ class ModMatrixSection : public juce::Component,
 {
 public:
     ModMatrixSection(juce::AudioProcessorValueTreeState& apvts);
-    ~ModMatrixSection() override = default;
+    ~ModMatrixSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

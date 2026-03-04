@@ -9,7 +9,7 @@ class GlobalSection : public juce::Component,
 {
 public:
     GlobalSection(juce::AudioProcessorValueTreeState& apvts);
-    ~GlobalSection() override = default;
+    ~GlobalSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

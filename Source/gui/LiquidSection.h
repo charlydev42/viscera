@@ -9,7 +9,7 @@ class LiquidSection : public juce::Component,
 {
 public:
     LiquidSection(juce::AudioProcessorValueTreeState& apvts);
-    ~LiquidSection() override = default;
+    ~LiquidSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

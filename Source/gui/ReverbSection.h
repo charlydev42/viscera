@@ -9,7 +9,7 @@ class ReverbSection : public juce::Component,
 {
 public:
     ReverbSection(juce::AudioProcessorValueTreeState& apvts);
-    ~ReverbSection() override = default;
+    ~ReverbSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

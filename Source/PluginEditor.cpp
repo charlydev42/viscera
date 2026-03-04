@@ -327,6 +327,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
 VisceraEditor::~VisceraEditor()
 {
+    stopTimer();
     setLookAndFeel(nullptr);
 }
 

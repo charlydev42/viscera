@@ -13,7 +13,7 @@ public:
     ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
                      const juce::String& prefix, const juce::String& envPrefix,
                      bb::HarmonicTable& harmonics);
-    ~ModulatorSection() override = default;
+    ~ModulatorSection() override { stopTimer(); }
 
     void resized() override;
 

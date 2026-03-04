@@ -61,6 +61,9 @@ public:
             // Each repeat loses high frequencies
             lpStateL = lpStateL + (1.0f - dampCoeff) * (delayedL - lpStateL);
             lpStateR = lpStateR + (1.0f - dampCoeff) * (delayedR - lpStateR);
+            // Flush denormals in feedback filter states
+            if (std::fabs(lpStateL) < 1.0e-20f) lpStateL = 0.0f;
+            if (std::fabs(lpStateR) < 1.0e-20f) lpStateR = 0.0f;
             float filteredL = lpStateL;
             float filteredR = lpStateR;
 

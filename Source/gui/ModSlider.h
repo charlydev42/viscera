@@ -18,6 +18,7 @@ public:
         setMouseDragSensitivity(200);
         setWantsKeyboardFocus(true);
     }
+    ~ModSlider() override { stopTimer(); }
 
     // Static learn mode callback — when non-null, next click on a ModSlider calls it
     static inline std::function<void(bb::LFODest)> onLearnClick = nullptr;
@@ -368,7 +369,7 @@ private:
 
         // Collect all LFO assignments targeting this knob
         struct Assignment { int lfo; int slot; float arcEnd; };
-        Assignment assignments[12];
+        Assignment assignments[24];
         int numAssignments = 0;
 
         auto rp = getRotaryParameters();
@@ -511,7 +512,7 @@ private:
 
         // Collect LFO assignments targeting this knob
         struct Hit { int lfo; int slot; float amt; };
-        Hit hits[12];
+        Hit hits[24];
         int numHits = 0;
 
         for (int l = 0; l < 3; ++l)

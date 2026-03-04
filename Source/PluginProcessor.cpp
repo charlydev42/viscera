@@ -900,6 +900,9 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
                     auto pfx = "LFO" + juce::String(n) + "_";
                     addP(pfx + "RATE", 1.0f);
                     addP(pfx + "WAVE", 0.0f);
+                    addP(pfx + "SYNC", 3.0f);
+                    addP(pfx + "RETRIG", 0.0f);
+                    addP(pfx + "VEL", 0.0f);
                     for (int s = 1; s <= kSlotsPerLFO; ++s)
                     {
                         addP(pfx + "DEST" + juce::String(s), 0.0f);

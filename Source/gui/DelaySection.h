@@ -9,7 +9,7 @@ class DelaySection : public juce::Component,
 {
 public:
     DelaySection(juce::AudioProcessorValueTreeState& apvts);
-    ~DelaySection() override = default;
+    ~DelaySection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

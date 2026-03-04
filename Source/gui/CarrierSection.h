@@ -11,6 +11,7 @@ class CarrierEnvDisplay : public juce::Component,
 {
 public:
     CarrierEnvDisplay(juce::AudioProcessorValueTreeState& apvts);
+    ~CarrierEnvDisplay() override { stopTimer(); }
     void paint(juce::Graphics& g) override;
     void timerCallback() override;
 
@@ -26,7 +27,7 @@ class CarrierSection : public juce::Component,
 public:
     CarrierSection(juce::AudioProcessorValueTreeState& apvts,
                    bb::HarmonicTable& harmonics);
-    ~CarrierSection() override = default;
+    ~CarrierSection() override { stopTimer(); }
     void resized() override;
     void timerCallback() override;
 

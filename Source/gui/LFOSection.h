@@ -12,6 +12,7 @@ class LFOWaveDisplay : public juce::Component,
 {
 public:
     LFOWaveDisplay(int lfoIndex);
+    ~LFOWaveDisplay() override { stopTimer(); }
     void paint(juce::Graphics& g) override;
     void setWaveType(int type)    { waveType = type; repaint(); }
     void setPhase(float p)        { phase = p; }
