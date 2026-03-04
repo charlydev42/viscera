@@ -248,7 +248,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     bool filtEnabled   = params.filtOn->load() > 0.5f;
     float cutoffBase   = params.filtCutoff->load();
     float resonance    = params.filtRes->load();
-    auto filterMode    = static_cast<FilterMode>(static_cast<int>(params.filtType->load()));
+    auto filterMode    = static_cast<FilterMode>(juce::jlimit(0, 3, static_cast<int>(params.filtType->load())));
     float volumeParam  = params.volume->load();
     float driveParam   = params.drive->load();
     float dispAmount   = params.dispAmt->load();
@@ -329,6 +329,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         double pitchModSemitones = static_cast<double>(lfo1Val * tremorAmount) * 2.0
                                    + static_cast<double>(gLfoModPitch) * 2.0
                                    + pitchBendSemitones + pitchEnvSemitones;
+        pitchModSemitones = juce::jlimit(-48.0, 48.0, pitchModSemitones);
         double pitchMod = std::exp2(pitchModSemitones / 12.0);
 
         double baseFreq = currentFreq * pitchMod;
@@ -397,7 +398,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             }
             case 4: // Feedback: Mod1 → Mod2 → Carrier, Mod2 self-modulates
             {
-                double fbSignal = static_cast<double>(mod2FeedbackSample * m2Level * fluxMod)
+                double fbSignal = static_cast<double>(mod2FeedbackSample)
                                   * kMaxModIndex * 0.5;
                 float mod2Out = mod2Osc.tick(mod1Signal + fbSignal);
                 float env2Val = env2.tick();
@@ -450,7 +451,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             noiseSeed ^= noiseSeed >> 17;
             noiseSeed ^= noiseSeed << 5;
             float whiteNoise = static_cast<float>(static_cast<int32_t>(noiseSeed))
-                               / static_cast<float>(INT32_MAX);
+                               / 2147483648.0f;
             outputL = (carrierOutL * (1.0f - noiseMix) + whiteNoise * noiseMix)
                       * env3Val * velGain;
             outputR = (carrierOutR * (1.0f - noiseMix) + whiteNoise * noiseMix)
@@ -483,7 +484,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             cutNorm = juce::jlimit(0.0f, 1.0f, cutNorm + gLfoModCutoff);
             float modulatedCutoff = (20.0f + 19980.0f * std::pow(cutNorm, kCutInvSkew)) * veinMod;
             modulatedCutoff = juce::jlimit(20.0f, 20000.0f, modulatedCutoff);
-            float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + gLfoModRes * 0.5f);
+            float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + gLfoModRes);
             filterL.setParameters(modulatedCutoff, modulatedRes);
             filterR.setParameters(modulatedCutoff, modulatedRes);
             outputL = filterL.tick(outputL, filterMode);

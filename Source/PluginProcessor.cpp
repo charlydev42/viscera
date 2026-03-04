@@ -824,6 +824,51 @@ const juce::String VisceraProcessor::getProgramName(int index)
 
 void VisceraProcessor::changeProgramName(int, const juce::String&) {}
 
+// --- Shared serialization helpers (DRY) ---
+void VisceraProcessor::serializeCustomData(juce::ValueTree& state) const
+{
+    state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
+    for (int n = 0; n < 3; ++n)
+    {
+        auto prefix = "lfo" + juce::String(n + 1);
+        state.setProperty(prefix + "Table", globalLFO[n].serializeTable(), nullptr);
+        state.setProperty(prefix + "Curve", globalLFO[n].serializeCurve(), nullptr);
+    }
+    state.setProperty("mod1Harmonics", mod1Harmonics.serializeHarmonics(), nullptr);
+    state.setProperty("mod2Harmonics", mod2Harmonics.serializeHarmonics(), nullptr);
+    state.setProperty("carHarmonics", carHarmonics.serializeHarmonics(), nullptr);
+}
+
+void VisceraProcessor::deserializeCustomData(const juce::ValueTree& tree)
+{
+    if (tree.hasProperty("shaperTable"))
+        volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
+    else
+        volumeShaper.resetTable();
+
+    for (int n = 0; n < 3; ++n)
+    {
+        auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
+        auto tableKey = "lfo" + juce::String(n + 1) + "Table";
+        if (tree.hasProperty(curveKey))
+            globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
+        else if (tree.hasProperty(tableKey))
+            globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
+        else
+            globalLFO[n].resetCurve();
+    }
+
+    auto deserializeHarm = [&](const juce::String& key, bb::HarmonicTable& ht) {
+        if (tree.hasProperty(key))
+            ht.deserializeHarmonics(tree.getProperty(key).toString());
+        else
+            ht.resetHarmonics();
+    };
+    deserializeHarm("mod1Harmonics", mod1Harmonics);
+    deserializeHarm("mod2Harmonics", mod2Harmonics);
+    deserializeHarm("carHarmonics", carHarmonics);
+}
+
 // --- State save/restore ---
 void VisceraProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
@@ -831,17 +876,8 @@ void VisceraProcessor::getStateInformation(juce::MemoryBlock& destData)
     state.setProperty("_presetIndex", currentPreset, nullptr);
     state.setProperty("_isUserPreset", isUserPresetLoaded, nullptr);
     state.setProperty("_userPresetName", currentUserPresetName, nullptr);
-    state.setProperty("_displayName", displayName, nullptr);
-    state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
-    state.setProperty("lfo1Table", globalLFO[0].serializeTable(), nullptr);
-    state.setProperty("lfo2Table", globalLFO[1].serializeTable(), nullptr);
-    state.setProperty("lfo3Table", globalLFO[2].serializeTable(), nullptr);
-    state.setProperty("lfo1Curve", globalLFO[0].serializeCurve(), nullptr);
-    state.setProperty("lfo2Curve", globalLFO[1].serializeCurve(), nullptr);
-    state.setProperty("lfo3Curve", globalLFO[2].serializeCurve(), nullptr);
-    state.setProperty("mod1Harmonics", mod1Harmonics.serializeHarmonics(), nullptr);
-    state.setProperty("mod2Harmonics", mod2Harmonics.serializeHarmonics(), nullptr);
-    state.setProperty("carHarmonics", carHarmonics.serializeHarmonics(), nullptr);
+    state.setProperty("_displayName", getDisplayName(), nullptr);
+    serializeCustomData(state);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -852,34 +888,7 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
         auto tree = juce::ValueTree::fromXml(*xml);
-        if (tree.hasProperty("shaperTable"))
-            volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
-        else
-            volumeShaper.resetTable();
-        // Load curve data if present, otherwise fall back to table (old presets)
-        for (int n = 0; n < 3; ++n)
-        {
-            auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
-            auto tableKey = "lfo" + juce::String(n + 1) + "Table";
-            if (tree.hasProperty(curveKey))
-                globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
-            else if (tree.hasProperty(tableKey))
-                globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
-            else
-                globalLFO[n].resetCurve();
-        }
-        if (tree.hasProperty("mod1Harmonics"))
-            mod1Harmonics.deserializeHarmonics(tree.getProperty("mod1Harmonics").toString());
-        else
-            mod1Harmonics.resetHarmonics();
-        if (tree.hasProperty("mod2Harmonics"))
-            mod2Harmonics.deserializeHarmonics(tree.getProperty("mod2Harmonics").toString());
-        else
-            mod2Harmonics.resetHarmonics();
-        if (tree.hasProperty("carHarmonics"))
-            carHarmonics.deserializeHarmonics(tree.getProperty("carHarmonics").toString());
-        else
-            carHarmonics.resetHarmonics();
+        deserializeCustomData(tree);
         migrateOldPitchParams(tree);
 
         // Migrate: inject default global LFO params if absent
@@ -948,25 +957,21 @@ juce::File VisceraProcessor::getUserPresetsDir()
 
 void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::String& category)
 {
+    // Sanitize filename to prevent path traversal
+    auto safeName = juce::File::createLegalFileName(name);
+    if (safeName.isEmpty()) return;
+
     auto state = apvts.copyState();
-    state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
-    state.setProperty("lfo1Table", globalLFO[0].serializeTable(), nullptr);
-    state.setProperty("lfo2Table", globalLFO[1].serializeTable(), nullptr);
-    state.setProperty("lfo3Table", globalLFO[2].serializeTable(), nullptr);
-    state.setProperty("lfo1Curve", globalLFO[0].serializeCurve(), nullptr);
-    state.setProperty("lfo2Curve", globalLFO[1].serializeCurve(), nullptr);
-    state.setProperty("lfo3Curve", globalLFO[2].serializeCurve(), nullptr);
-    state.setProperty("mod1Harmonics", mod1Harmonics.serializeHarmonics(), nullptr);
-    state.setProperty("mod2Harmonics", mod2Harmonics.serializeHarmonics(), nullptr);
-    state.setProperty("carHarmonics", carHarmonics.serializeHarmonics(), nullptr);
+    serializeCustomData(state);
 
     auto xml = state.createXml();
     if (xml)
     {
         xml->setAttribute("name", name);
         xml->setAttribute("category", category);
-        auto file = getUserPresetsDir().getChildFile(name + ".visc");
-        xml->writeTo(file);
+        auto file = getUserPresetsDir().getChildFile(safeName + ".visc");
+        if (!xml->writeTo(file))
+            DBG("Failed to save preset: " + file.getFullPathName());
     }
 }
 
@@ -1037,33 +1042,7 @@ void VisceraProcessor::loadPresetFromXml(const juce::String& xmlStr)
     if (!xml->hasTagName(apvts.state.getType())) return;
 
     auto tree = juce::ValueTree::fromXml(*xml);
-    if (tree.hasProperty("shaperTable"))
-        volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
-    else
-        volumeShaper.resetTable();
-    for (int n = 0; n < 3; ++n)
-    {
-        auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
-        auto tableKey = "lfo" + juce::String(n + 1) + "Table";
-        if (tree.hasProperty(curveKey))
-            globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
-        else if (tree.hasProperty(tableKey))
-            globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
-        else
-            globalLFO[n].resetCurve();
-    }
-    if (tree.hasProperty("mod1Harmonics"))
-        mod1Harmonics.deserializeHarmonics(tree.getProperty("mod1Harmonics").toString());
-    else
-        mod1Harmonics.resetHarmonics();
-    if (tree.hasProperty("mod2Harmonics"))
-        mod2Harmonics.deserializeHarmonics(tree.getProperty("mod2Harmonics").toString());
-    else
-        mod2Harmonics.resetHarmonics();
-    if (tree.hasProperty("carHarmonics"))
-        carHarmonics.deserializeHarmonics(tree.getProperty("carHarmonics").toString());
-    else
-        carHarmonics.resetHarmonics();
+    deserializeCustomData(tree);
     migrateOldPitchParams(tree);
     apvts.replaceState(tree);
     undoManager.clearUndoHistory();

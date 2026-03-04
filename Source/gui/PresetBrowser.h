@@ -1,6 +1,7 @@
 // PresetBrowser.h — Categorized preset browser with popup menu
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <vector>
 
 class VisceraProcessor;
 
@@ -42,6 +43,7 @@ private:
     void showPresetMenu();
     void navigatePreset(int direction);
     void updatePresetName();
+    std::vector<int> buildSortedOrder();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser)
 };

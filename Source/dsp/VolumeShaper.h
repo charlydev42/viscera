@@ -62,11 +62,17 @@ public:
 
     float getPhase() const { return static_cast<float>(phase); }
 
-    // Reset table to all 1.0 (flat / bypass)
+    // Reset table to default sidechain curve
     void resetTable()
     {
+        static constexpr float kSidechain[kNumSteps] = {
+            0.0f, 0.1f, 0.25f, 0.4f, 0.55f, 0.7f, 0.8f, 0.88f,
+            0.94f, 0.97f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.8f, 0.4f
+        };
         for (int i = 0; i < kNumSteps; ++i)
-            table[i].store(1.0f, std::memory_order_relaxed);
+            table[i].store(kSidechain[i], std::memory_order_relaxed);
     }
 
     // Serialize table to comma-separated string
@@ -81,12 +87,17 @@ public:
         return s;
     }
 
-    // Deserialize from comma-separated string
+    // Deserialize from comma-separated string (with bounds validation)
     void deserializeTable(const juce::String& s)
     {
+        if (s.isEmpty()) { resetTable(); return; }
         auto tokens = juce::StringArray::fromTokens(s, ",", "");
+        if (tokens.size() < kNumSteps) { resetTable(); return; }
         for (int i = 0; i < kNumSteps && i < tokens.size(); ++i)
-            table[i].store(tokens[i].getFloatValue(), std::memory_order_relaxed);
+        {
+            float val = tokens[i].getFloatValue();
+            table[i].store(juce::jlimit(0.0f, 1.0f, val), std::memory_order_relaxed);
+        }
     }
 
 private:

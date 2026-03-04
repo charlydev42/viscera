@@ -29,9 +29,9 @@ public:
         // Coefficients Cytomic TPT SVF
         // g = tan(π × fc / sr) — la transformation bilinéaire
         g = std::tan(3.14159265358979323846 * fc / sr);
-        // k = damping = 2 - 2*resonance (Q = 1/(2-2*res) quand res→1, Q→∞)
-        // On limite Q pour éviter l'auto-oscillation destructrice
-        k = 2.0 - 2.0 * res * 0.98; // légère limitation
+        // k = damping = 2 - 2*resonance (Q = 1/k, k→0 = self-oscillation)
+        // Limit k to small positive value to prevent destructive self-oscillation
+        k = std::max(0.01, 2.0 - 2.0 * res);
 
         a1 = 1.0 / (1.0 + g * (g + k));
         a2 = g * a1;
@@ -51,6 +51,10 @@ public:
         // Mise à jour des états (intégrateurs)
         ic1eq = 2.0 * v1 - ic1eq;
         ic2eq = 2.0 * v2 - ic2eq;
+
+        // Flush denormals to prevent CPU spikes when filter is idle
+        if (std::abs(ic1eq) < 1e-18) ic1eq = 0.0;
+        if (std::abs(ic2eq) < 1e-18) ic2eq = 0.0;
 
         // Sorties : v2 = LP, v1 = BP, v0 - k*v1 - v2 = HP
         switch (mode)

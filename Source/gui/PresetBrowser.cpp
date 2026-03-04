@@ -149,24 +149,69 @@ void PresetBrowser::showPresetMenu()
         });
 }
 
-void PresetBrowser::navigatePreset(int direction)
+std::vector<int> PresetBrowser::buildSortedOrder()
 {
     auto& registry = proc.getPresetRegistry();
-    int total = static_cast<int>(registry.size());
-    if (total == 0) return;
+    std::vector<int> order;
+
+    // Same category order as showPresetMenu
+    static const juce::StringArray categoryOrder { "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+
+    for (auto& cat : categoryOrder)
+    {
+        std::vector<int> catIndices;
+        for (int i = 0; i < static_cast<int>(registry.size()); ++i)
+        {
+            auto& entry = registry[static_cast<size_t>(i)];
+            if (entry.isFactory && entry.category == cat)
+                catIndices.push_back(i);
+        }
+        std::sort(catIndices.begin(), catIndices.end(), [&](int a, int b) {
+            return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
+                   registry[static_cast<size_t>(b)].name) < 0;
+        });
+        for (int i : catIndices)
+            order.push_back(i);
+    }
+
+    // User presets sorted alphabetically
+    std::vector<int> userIndices;
+    for (int i = 0; i < static_cast<int>(registry.size()); ++i)
+        if (!registry[static_cast<size_t>(i)].isFactory)
+            userIndices.push_back(i);
+    std::sort(userIndices.begin(), userIndices.end(), [&](int a, int b) {
+        return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
+               registry[static_cast<size_t>(b)].name) < 0;
+    });
+    for (int i : userIndices)
+        order.push_back(i);
+
+    return order;
+}
+
+void PresetBrowser::navigatePreset(int direction)
+{
+    auto order = buildSortedOrder();
+    if (order.empty()) return;
 
     int current = proc.getCurrentPresetIndex();
 
-    // Step in direction, skipping Init-category entries
-    for (int i = 0; i < total; ++i)
+    // Find current position in sorted order
+    int pos = 0;
+    for (int i = 0; i < static_cast<int>(order.size()); ++i)
     {
-        current = (current + direction + total) % total;
-        if (!(registry[static_cast<size_t>(current)].isFactory
-              && registry[static_cast<size_t>(current)].category == "Init"))
+        if (order[static_cast<size_t>(i)] == current)
+        {
+            pos = i;
             break;
+        }
     }
 
-    proc.loadPresetAt(current);
+    // Step in direction, wrapping around
+    int n = static_cast<int>(order.size());
+    pos = (pos + direction + n) % n;
+
+    proc.loadPresetAt(order[static_cast<size_t>(pos)]);
     updatePresetName();
     if (onPresetChanged) onPresetChanged();
 }

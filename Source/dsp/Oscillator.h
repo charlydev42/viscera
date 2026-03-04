@@ -46,6 +46,7 @@ public:
         sr = sampleRate;
         phase = 0.0;
         syncPulse = false;
+        triIntegrator = 0.0;
     }
 
     void setFrequency(double freqHz) noexcept
@@ -133,18 +134,28 @@ private:
     bool syncPulse = false;
     float syncFraction = 0.0f;
 
+    // Triangle via integrated PolyBLEP square
+    double triIntegrator = 0.0;
+
     // Analog drift state
     float driftAmount = 0.0f;
     double driftLFOPhase = 0.0;
-    double driftLFOFreq = 0.5; // Hz, wanders slowly
+    double driftLFOFreq = 0.1 + (static_cast<double>(nextDriftSeed() & 0xFFFF) / 65535.0) * 0.8; // Hz, unique per instance
 
-    // Minimal deterministic RNG for drift (xorshift32, no <random> header needed)
-    uint32_t driftSeed = 0x12345678;
+    // Minimal deterministic RNG for drift (xorshift32, unique seed per instance)
+    static inline uint32_t nextDriftSeed() noexcept
+    {
+        static uint32_t counter = 0x12345678;
+        counter += 0x9E3779B9; // golden ratio hash increment
+        return counter;
+    }
+    uint32_t driftSeed = nextDriftSeed();
     double driftRNG() noexcept
     {
         driftSeed ^= driftSeed << 13;
         driftSeed ^= driftSeed >> 17;
         driftSeed ^= driftSeed << 5;
+        if (driftSeed == 0) driftSeed = 0x12345678; // prevent zero-lock
         return static_cast<double>(driftSeed) / static_cast<double>(0xFFFFFFFF);
     }
 
@@ -168,7 +179,7 @@ private:
         return 0.0;
     }
 
-    float renderWave(WaveType type, double p) const noexcept
+    float renderWave(WaveType type, double p) noexcept
     {
         switch (type)
         {
@@ -194,10 +205,13 @@ private:
 
         case WaveType::Triangle:
         {
-            // Triangle via intégration du square PolyBLEP (leaky integrator)
-            // Approximation simple : 2*|2p-1| - 1
-            double out = 2.0 * std::abs(2.0 * p - 1.0) - 1.0;
-            return static_cast<float>(out);
+            // Triangle via integration of PolyBLEP-corrected square (industry standard)
+            double sq = (p < 0.5) ? 1.0 : -1.0;
+            sq += polyBlep(p, inc);
+            sq -= polyBlep(std::fmod(p + 0.5, 1.0), inc);
+            // Leaky integrator: integrates square into triangle, leak prevents DC drift
+            triIntegrator = 0.999 * triIntegrator + sq * inc * 4.0;
+            return static_cast<float>(triIntegrator);
         }
 
         case WaveType::Pulse:

@@ -74,8 +74,16 @@ public:
     const juce::String& getUserPresetName() const { return currentUserPresetName; }
 
     // Display name override (e.g. "Random", "Custom") — empty = use preset name
-    void setDisplayName(const juce::String& name) { displayName = name; }
-    const juce::String& getDisplayName() const { return displayName; }
+    void setDisplayName(const juce::String& name)
+    {
+        const juce::SpinLock::ScopedLockType lock(displayNameLock);
+        displayName = name;
+    }
+    juce::String getDisplayName() const
+    {
+        const juce::SpinLock::ScopedLockType lock(displayNameLock);
+        return displayName;
+    }
 
     // Global LFO phase getter (for GUI display)
     float getGlobalLFOPhase(int index) const
@@ -98,11 +106,16 @@ private:
     bool isUserPresetLoaded = false;
     juce::String currentUserPresetName;
     juce::String displayName; // override for preset display (e.g. "Random")
+    mutable juce::SpinLock displayNameLock;
     std::vector<PresetEntry> presetRegistry;
 
     // Shared logic for loading preset XML
     void loadPresetFromXml(const juce::String& xmlStr);
     void loadFactoryPreset(const juce::String& resourceName);
+
+    // DRY helpers for state serialization
+    void serializeCustomData(juce::ValueTree& state) const;
+    void deserializeCustomData(const juce::ValueTree& tree);
 
     // 3 global assignable LFOs
     bb::LFO globalLFO[3];

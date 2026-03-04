@@ -310,6 +310,29 @@ void VolumeShaperSection::timerCallback()
         depthLabel.setText(juce::String(static_cast<int>(depthKnob.getValue() * 100)) + "%", juce::dontSendNotification);
     else
         depthLabel.setText("Depth", juce::dontSendNotification);
+
+    // Sync combo box with actual table data (after preset loads etc.)
+    int matched = matchCurrentPreset();
+    if (matched != shapePresetBox.getSelectedItemIndex())
+        shapePresetBox.setSelectedItemIndex(matched, juce::dontSendNotification);
+}
+
+int VolumeShaperSection::matchCurrentPreset() const
+{
+    for (int p = 0; p < kNumShapePresets; ++p)
+    {
+        bool match = true;
+        for (int i = 0; i < bb::VolumeShaper::kNumSteps; ++i)
+        {
+            if (std::abs(volumeShaper.getStep(i) - kShapePresets[p][i]) > 0.02f)
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match) return p;
+    }
+    return -1; // custom / no match
 }
 
 int VolumeShaperSection::getSyncParam() const

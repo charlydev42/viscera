@@ -218,9 +218,14 @@ public:
 
     void deserializeTable(const juce::String& s)
     {
+        if (s.isEmpty()) { resetCurve(); return; }
         auto tokens = juce::StringArray::fromTokens(s, ",", "");
+        if (tokens.size() < kNumSteps) { resetCurve(); return; }
         for (int i = 0; i < kNumSteps && i < tokens.size(); ++i)
-            customTable[i].store(tokens[i].getFloatValue(), std::memory_order_relaxed);
+        {
+            float val = tokens[i].getFloatValue();
+            customTable[i].store(std::clamp(val, 0.0f, 1.0f), std::memory_order_relaxed);
+        }
     }
 
     // Curve serialization: "x,y;x,y;x,y"
@@ -245,16 +250,23 @@ public:
 
     void deserializeCurve(const juce::String& s)
     {
+        if (s.isEmpty()) { resetCurve(); return; }
         auto pointTokens = juce::StringArray::fromTokens(s, ";", "");
         std::vector<CurvePoint> pts;
         for (const auto& tok : pointTokens)
         {
             auto xy = juce::StringArray::fromTokens(tok, ",", "");
             if (xy.size() >= 2)
-                pts.push_back({ xy[0].getFloatValue(), xy[1].getFloatValue() });
+            {
+                float x = std::clamp(xy[0].getFloatValue(), 0.0f, 1.0f);
+                float y = std::clamp(xy[1].getFloatValue(), 0.0f, 1.0f);
+                pts.push_back({ x, y });
+            }
         }
         if (pts.size() >= 2)
             setCurvePoints(pts); // sorts, clamps, bakes
+        else
+            resetCurve();
     }
 
 private:
@@ -266,7 +278,7 @@ private:
     // Sample & Hold
     float sAndHValue = 0.0f;
     bool prevPhaseWasHigh = false;
-    std::mt19937 rng { 42 };
+    std::mt19937 rng { std::random_device{}() };
     std::uniform_real_distribution<float> dist { -1.0f, 1.0f };
 
     // Custom drawable table (32 steps, [0,1])

@@ -328,6 +328,8 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 VisceraEditor::~VisceraEditor()
 {
     stopTimer();
+    ModSlider::voiceParamsPtr = nullptr;
+    ModSlider::onLearnClick = nullptr;
     setLookAndFeel(nullptr);
 }
 

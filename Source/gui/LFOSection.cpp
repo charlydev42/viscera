@@ -706,8 +706,12 @@ void LFOSection::enterLearnMode(int slotIdx)
     int capturedTab = activeTab;
     int capturedSlot = slotIdx;
 
-    ModSlider::onLearnClick = [this, capturedTab, capturedSlot](bb::LFODest dest)
+    auto safeThis = juce::Component::SafePointer<LFOSection>(this);
+    ModSlider::onLearnClick = [safeThis, capturedTab, capturedSlot](bb::LFODest dest)
     {
+        if (safeThis == nullptr) return;
+        auto& self = *safeThis;
+
         // Policy: max 1 LFO per knob — remove any existing assignment from ANY LFO
         for (int l = 0; l < 3; ++l)
         {
@@ -716,12 +720,12 @@ void LFOSection::enterLearnMode(int slotIdx)
             {
                 auto dId = otherPfx + "DEST" + juce::String(s);
                 auto aId = otherPfx + "AMT"  + juce::String(s);
-                int curDest = static_cast<int>(safeParamLoad(state, dId));
+                int curDest = static_cast<int>(safeParamLoad(self.state, dId));
                 if (curDest == static_cast<int>(dest))
                 {
-                    if (auto* dp = state.getParameter(dId))
+                    if (auto* dp = self.state.getParameter(dId))
                         dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
-                    if (auto* ap = state.getParameter(aId))
+                    if (auto* ap = self.state.getParameter(aId))
                         ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
                 }
             }
@@ -732,12 +736,12 @@ void LFOSection::enterLearnMode(int slotIdx)
         auto destId = pfx + "DEST" + juce::String(capturedSlot + 1);
         auto amtId  = pfx + "AMT"  + juce::String(capturedSlot + 1);
 
-        if (auto* dp = state.getParameter(destId))
+        if (auto* dp = self.state.getParameter(destId))
             dp->setValueNotifyingHost(dp->convertTo0to1(static_cast<float>(static_cast<int>(dest))));
-        if (auto* ap = state.getParameter(amtId))
+        if (auto* ap = self.state.getParameter(amtId))
             ap->setValueNotifyingHost(ap->convertTo0to1(0.5f)); // default amount 0.5
 
-        cancelLearnMode();
+        self.cancelLearnMode();
     };
 
     updateAssignmentLabels();

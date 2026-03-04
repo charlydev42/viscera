@@ -73,6 +73,7 @@ private:
     void setSyncParam(int idx);
     int getSyncParam() const;
     void loadShapePreset(int presetIdx);
+    int matchCurrentPreset() const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VolumeShaperSection)
 };

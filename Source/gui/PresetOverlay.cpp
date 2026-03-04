@@ -263,11 +263,11 @@ juce::Rectangle<int> PresetOverlay::deleteXBounds(int cardIndex) const
     return { card.bounds.getX() + 4, card.bounds.getY() + 4, 16, 16 };
 }
 
-void PresetOverlay::mouseUp(const juce::MouseEvent& e)
+void PresetOverlay::mouseDown(const juce::MouseEvent& e)
 {
     auto pt = e.getPosition();
 
-    // Handle delete confirmation clicks
+    // If in delete confirmation, handle on mouseDown
     if (confirmDeleteCard >= 0 && confirmDeleteCard < static_cast<int>(cards.size()))
     {
         auto& card = cards[static_cast<size_t>(confirmDeleteCard)];
@@ -279,7 +279,6 @@ void PresetOverlay::mouseUp(const juce::MouseEvent& e)
 
             if (yesArea.contains(pt))
             {
-                // Delete the preset
                 auto& registry = proc.getPresetRegistry();
                 auto& entry = registry[static_cast<size_t>(card.registryIndex)];
                 proc.deleteUserPreset(entry.userFileName);
@@ -296,20 +295,19 @@ void PresetOverlay::mouseUp(const juce::MouseEvent& e)
                 repaint();
                 return;
             }
-            // Clicked elsewhere on the confirm card — cancel
             confirmDeleteCard = -1;
             repaint();
             return;
         }
-        // Clicked outside the confirm card — cancel
         confirmDeleteCard = -1;
         repaint();
     }
 
+    // Instant card selection on mouseDown (like Ableton/Serum browser)
     int idx = cardAtPoint(pt);
     if (idx >= 0)
     {
-        // Check if click is on the delete cross
+        // Check delete cross first
         auto& entry = proc.getPresetRegistry()[static_cast<size_t>(cards[static_cast<size_t>(idx)].registryIndex)];
         if (!entry.isFactory && deleteXBounds(idx).contains(pt))
         {
@@ -321,12 +319,16 @@ void PresetOverlay::mouseUp(const juce::MouseEvent& e)
     }
 }
 
+void PresetOverlay::mouseUp(const juce::MouseEvent&)
+{
+    // Selection handled in mouseDown for instant feedback
+}
+
 void PresetOverlay::mouseDoubleClick(const juce::MouseEvent& e)
 {
     int idx = cardAtPoint(e.getPosition());
     if (idx >= 0)
     {
-        proc.loadPresetAt(cards[static_cast<size_t>(idx)].registryIndex);
         stopPreviewNote();
         if (onClose) onClose();
     }
