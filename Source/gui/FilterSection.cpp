@@ -19,7 +19,7 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
     cutoffKnob.initMod(apvts, bb::LFODest::FilterCutoff);
     cutoffKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     cutoffKnob.setSliderSnapsToMousePosition(false);
-    cutoffKnob.setMouseDragSensitivity(200);
+    cutoffKnob.setMouseDragSensitivity(500);
     cutoffKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     addAndMakeVisible(cutoffKnob);
     cutoffLabel.setText("Cutoff", juce::dontSendNotification);
@@ -40,7 +40,7 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
     resAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "FILT_RES", resKnob);
 
-    startTimerHz(5);
+    startTimerHz(20);
 }
 
 void FilterSection::timerCallback()

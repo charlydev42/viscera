@@ -474,13 +474,14 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         {
             // Vein modulation: multiplicative ±2 octaves
             float veinMod = std::exp2f(veinAmount * lfo2Val * 2.0f);
-            // Global LFO: additive in normalized knob space (0=20Hz, 1=20kHz)
-            // so LFO at max with amount 1.0 → cutoff reaches 20kHz
-            float cutLinear = juce::jlimit(0.0f, 1.0f, (cutoff - 20.0f) / 19980.0f);
-            float cutNorm = std::sqrt(std::sqrt(cutLinear)); // x^0.25 = sqrt(sqrt(x))
+            // Global LFO: additive in normalized knob space (skew=0.23, centre=1kHz, Serum/Vital style)
+            // Forward: norm = ((hz-20)/19980)^skew  |  Inverse: hz = 20 + 19980 * norm^(1/skew)
+            constexpr float kCutSkew = 0.2299f;
+            constexpr float kCutInvSkew = 1.0f / kCutSkew; // ~4.35
+            float cutLin = juce::jlimit(0.0f, 1.0f, (cutoff - 20.0f) / 19980.0f);
+            float cutNorm = std::pow(cutLin, kCutSkew);
             cutNorm = juce::jlimit(0.0f, 1.0f, cutNorm + gLfoModCutoff);
-            float cn2 = cutNorm * cutNorm;
-            float modulatedCutoff = (20.0f + 19980.0f * cn2 * cn2) * veinMod; // x^4
+            float modulatedCutoff = (20.0f + 19980.0f * std::pow(cutNorm, kCutInvSkew)) * veinMod;
             modulatedCutoff = juce::jlimit(20.0f, 20000.0f, modulatedCutoff);
             float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + gLfoModRes * 0.5f);
             filterL.setParameters(modulatedCutoff, modulatedRes);

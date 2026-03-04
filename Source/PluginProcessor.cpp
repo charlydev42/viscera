@@ -287,8 +287,12 @@ VisceraProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterBool>("FILT_ON", "Filter On", true));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("FILT_TYPE", "Filter Type",
             juce::StringArray{ "LP", "HP", "BP", "Notch" }, 0));
-        g->addChild(std::make_unique<juce::AudioParameterFloat>("FILT_CUTOFF", "Filter Cutoff",
-            juce::NormalisableRange<float>(20.0f, 20000.0f, 0.0f, 0.25f), 20000.0f));
+        {
+            juce::NormalisableRange<float> cutoffRange(20.0f, 20000.0f);
+            cutoffRange.setSkewForCentre(1000.0f); // 1 kHz at knob center — standard Serum/Vital style
+            g->addChild(std::make_unique<juce::AudioParameterFloat>(
+                "FILT_CUTOFF", "Filter Cutoff", cutoffRange, 20000.0f));
+        }
         g->addChild(std::make_unique<juce::AudioParameterFloat>("FILT_RES", "Filter Resonance",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         groups.push_back(std::move(g));

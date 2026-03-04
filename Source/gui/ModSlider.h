@@ -278,10 +278,12 @@ public:
             float delta = (std::abs(dx) > std::abs(dy)) ? dx : dy;
             lastDragPos = e.position;
 
-            double sens = e.mods.isShiftDown() ? 2000.0 : 200.0;
-            double range = getMaximum() - getMinimum();
-            customDragValue += (delta / sens) * range;
-            customDragValue = juce::jlimit(getMinimum(), getMaximum(), customDragValue);
+            // Work in normalised (0-1) space so NormalisableRange skew is respected
+            double sens = e.mods.isShiftDown() ? 4000.0 : 500.0;
+            double proportion = valueToProportionOfLength(customDragValue);
+            proportion += delta / sens;
+            proportion = juce::jlimit(0.0, 1.0, proportion);
+            customDragValue = proportionOfLengthToValue(proportion);
             setValue(customDragValue, juce::sendNotificationSync);
             return;
         }
