@@ -234,6 +234,11 @@ struct VoiceParams
 
     // Per-LFO unipolar peak (for arc scaling in GUI)
     std::atomic<float> lfoPeak[3]    { {1.0f}, {1.0f}, {1.0f} };
+
+    // Velocity swap: when true, voice ignores velocity for volume
+    std::atomic<bool> velSwap { false };
+    // Last note-on velocity (raw 0-1, written by voice, read by processor for LFO rate)
+    std::atomic<float> lastVelocity { 0.7f };
 };
 
 class FMVoice : public juce::SynthesiserVoice

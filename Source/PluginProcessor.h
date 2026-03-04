@@ -115,6 +115,7 @@ private:
         std::atomic<float>* wave    = nullptr;
         std::atomic<float>* sync    = nullptr;
         std::atomic<float>* retrig  = nullptr;
+        std::atomic<float>* vel     = nullptr;
         std::atomic<float>* dest[kSlotsPerLFO] = {};
         std::atomic<float>* amt[kSlotsPerLFO]  = {};
     } lfoCache[3];

@@ -71,6 +71,7 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
 {
     currentNote = midiNoteNumber;
     noteVelocity = std::pow(velocity, 0.65f);
+    params.lastVelocity.store(velocity, std::memory_order_relaxed);
     stealFadeSamples = 0;  // cancel any in-progress steal fade
 
     // Convertir note MIDI → fréquence : f = 440 × 2^((note-69)/12)
@@ -441,6 +442,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // --- Carrier noise mix (+ global LFO) ---
         float noiseMix = juce::jlimit(0.0f, 1.0f, smoothCarNoise.getNextValue() + gLfoModNoise);
         float outputL, outputR;
+        float velGain = params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity;
         if (noiseMix > 0.0001f)
         {
             // xorshift32 white noise: [-1, +1]
@@ -450,14 +452,14 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             float whiteNoise = static_cast<float>(static_cast<int32_t>(noiseSeed))
                                / static_cast<float>(INT32_MAX);
             outputL = (carrierOutL * (1.0f - noiseMix) + whiteNoise * noiseMix)
-                      * env3Val * noteVelocity;
+                      * env3Val * velGain;
             outputR = (carrierOutR * (1.0f - noiseMix) + whiteNoise * noiseMix)
-                      * env3Val * noteVelocity;
+                      * env3Val * velGain;
         }
         else
         {
-            outputL = carrierOutL * env3Val * noteVelocity;
-            outputR = carrierOutR * env3Val * noteVelocity;
+            outputL = carrierOutL * env3Val * velGain;
+            outputR = carrierOutR * env3Val * velGain;
         }
 
         // --- XOR distortion ---

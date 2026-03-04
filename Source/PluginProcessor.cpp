@@ -148,6 +148,7 @@ void VisceraProcessor::cacheParameterPointers()
         lfoCache[n].wave   = apvts.getRawParameterValue(id("WAVE"));
         lfoCache[n].sync   = apvts.getRawParameterValue(id("SYNC"));
         lfoCache[n].retrig = apvts.getRawParameterValue(id("RETRIG"));
+        lfoCache[n].vel    = apvts.getRawParameterValue(id("VEL"));
         for (int s = 0; s < kSlotsPerLFO; ++s)
         {
             lfoCache[n].dest[s] = apvts.getRawParameterValue(id("DEST" + juce::String(s + 1)));
@@ -395,6 +396,7 @@ VisceraProcessor::createParameterLayout()
                 juce::StringArray{ "Free", "8 bar", "4 bar", "2 bar", "1 bar", "1/2", "1/4", "1/8", "1/16", "1/32",
                                    "1/4T", "1/8T", "1/16T" }, 0));
             g->addChild(std::make_unique<juce::AudioParameterBool>(id("RETRIG"), nm("Retrigger"), false));
+            g->addChild(std::make_unique<juce::AudioParameterBool>(id("VEL"), nm("Vel Rate"), false));
 
             for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
@@ -492,6 +494,15 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // Reset all modulation accumulators
         float modSums[static_cast<int>(bb::LFODest::Count)] = {};
 
+        // Check if any LFO has velocity-rate enabled → swap velocity away from volume
+        bool anyVel = false;
+        for (int l = 0; l < 3; ++l)
+            if (lfoCache[l].vel->load() > 0.5f)
+                anyVel = true;
+        voiceParams.velSwap.store(anyVel, std::memory_order_relaxed);
+
+        float lastVel = voiceParams.lastVelocity.load(std::memory_order_relaxed);
+
         for (int l = 0; l < 3; ++l)
         {
             auto& c = lfoCache[l];
@@ -512,6 +523,11 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 }
                 lfoRate = bpm / (60.0f * beatDurations[lfoSyncIdx - 1]);
             }
+
+            // Velocity → LFO rate: scale rate by velocity (0.1x at vel=0, 1x at vel=1)
+            if (c.vel->load() > 0.5f)
+                lfoRate *= 0.1f + 0.9f * lastVel;
+
             globalLFO[l].setRate(lfoRate);
             globalLFO[l].setWaveType(static_cast<bb::LFOWaveType>(static_cast<int>(c.wave->load())));
 

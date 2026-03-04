@@ -125,10 +125,14 @@ private:
     // Retrigger toggle
     juce::ToggleButton retrigToggle;
 
+    // Velocity → Rate toggle
+    juce::ToggleButton velToggle;
+
     // APVTS attachments (re-created on tab switch)
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> rateAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> retrigAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velAttach;
 
     juce::StringArray syncNames;
 

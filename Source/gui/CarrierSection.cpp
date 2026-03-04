@@ -87,7 +87,19 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts,
     addAndMakeVisible(waveCombo);
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts, "CAR_WAVE", waveCombo);
-    // waveLabel hidden (removed for cleaner look)
+    waveCombo.onChange = [this] {
+        int waveIdx = waveCombo.getSelectedId() - 1;
+        if (waveIdx == 5 && !designMode)
+        {
+            // Only auto-switch if user clicked the combo popup (mouse near it)
+            auto mousePos = juce::Desktop::getInstance().getMainMouseSource().getScreenPosition();
+            if (waveCombo.getScreenBounds().toFloat().expanded(0, 200).contains(mousePos))
+            {
+                lastDesignWave = 5;
+                setDesignMode(true);
+            }
+        }
+    };
 
     // --- Coarse knob (ratio mode, LFO assignable) ---
     coarseKnob.initMod(apvts, bb::LFODest::CarCoarse);

@@ -427,8 +427,12 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     addAndMakeVisible(syncValueLabel);
 
     // Retrigger toggle
-    retrigToggle.setButtonText("R");
+    retrigToggle.setButtonText("Rtrg");
     addAndMakeVisible(retrigToggle);
+
+    // Velocity → Rate toggle
+    velToggle.setButtonText("Vel");
+    addAndMakeVisible(velToggle);
 
     // Wave display
     addAndMakeVisible(waveDisplay);
@@ -516,6 +520,7 @@ LFOSection::~LFOSection()
     waveAttach.reset();
     rateAttach.reset();
     retrigAttach.reset();
+    velAttach.reset();
 }
 
 int LFOSection::getSyncParam() const
@@ -552,6 +557,7 @@ void LFOSection::switchTab(int tab)
     waveAttach.reset();
     rateAttach.reset();
     retrigAttach.reset();
+    velAttach.reset();
 
     auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -560,6 +566,8 @@ void LFOSection::switchTab(int tab)
         state, pfx + "RATE", rateKnob);
     retrigAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         state, pfx + "RETRIG", retrigToggle);
+    velAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        state, pfx + "VEL", velToggle);
 
     waveDisplay.setLFOIndex(activeTab);
     waveDisplay.setLFOPointer(&processor.getGlobalLFO(activeTab));
@@ -876,10 +884,12 @@ void LFOSection::resized()
 
     area.removeFromTop(2);
 
-    // Bottom: retrig toggle + dynamic slot pills
+    // Bottom: retrig toggle + vel toggle + dynamic slot pills
     area.removeFromBottom(1);
     auto bottomRow = area.removeFromBottom(16);
-    retrigToggle.setBounds(bottomRow.removeFromLeft(36).withSizeKeepingCentre(36, 16));
+    retrigToggle.setBounds(bottomRow.removeFromLeft(56).withSizeKeepingCentre(56, 16));
+    bottomRow.removeFromLeft(2);
+    velToggle.setBounds(bottomRow.removeFromLeft(46).withSizeKeepingCentre(46, 16));
     bottomRow.removeFromLeft(2);
     slotArea = bottomRow;
 
