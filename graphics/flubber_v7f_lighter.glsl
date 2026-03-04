@@ -36,6 +36,7 @@ float noise3D(vec3 p) {
     return mix(
         mix(mix(dot(hash33(i), f),
                 dot(hash33(i+vec3(1,0,0)), f-vec3(1,0,0)), u.x),
+                
             mix(dot(hash33(i+vec3(0,1,0)), f-vec3(0,1,0)),
                 dot(hash33(i+vec3(1,1,0)), f-vec3(1,1,0)), u.x), u.y),
         mix(mix(dot(hash33(i+vec3(0,0,1)), f-vec3(0,0,1)),

@@ -50,8 +50,9 @@ private:
     juce::ToggleButton fixedToggle;
     juce::String kbParamId;
 
-    // Fine knob (LFO assignable)
+    // Fine knob (ratio mode) / Multi knob (fixed mode)
     ModSlider fineKnob;
+    juce::Slider multiKnob;
     juce::Label fineLabel;
 
     // ADSR display + knobs
@@ -82,7 +83,7 @@ private:
 
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttach;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> coarseAttach, fixedFreqAttach, fineAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> coarseAttach, fixedFreqAttach, fineAttach, multiAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> xorAttach, syncAttach;
 
     // Design mode (harmonic editor)

@@ -27,6 +27,7 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
             {
                 proc.loadPresetAt(i);
                 updatePresetName();
+                if (onPresetChanged) onPresetChanged();
                 return;
             }
         }
@@ -37,6 +38,7 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
         if (onRandomize) onRandomize();
         proc.setDisplayName("Random");
         updatePresetName();
+        if (onPresetChanged) onPresetChanged();
     };
     addAndMakeVisible(randomButton);
 
@@ -131,6 +133,7 @@ void PresetBrowser::showPresetMenu()
                 int index = result - 1;
                 proc.loadPresetAt(index);
                 updatePresetName();
+                if (onPresetChanged) onPresetChanged();
             }
         });
 }
@@ -154,6 +157,7 @@ void PresetBrowser::navigatePreset(int direction)
 
     proc.loadPresetAt(current);
     updatePresetName();
+    if (onPresetChanged) onPresetChanged();
 }
 
 void PresetBrowser::resized()

@@ -83,6 +83,7 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts,
 {
     // Waveform combo
     waveCombo.addItemList({"Sine", "Saw", "Square", "Tri", "Pulse", "Custom"}, 1);
+    waveCombo.setWantsKeyboardFocus(false);
     addAndMakeVisible(waveCombo);
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts, "CAR_WAVE", waveCombo);
@@ -123,6 +124,11 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts,
     setupKnob(fineKnob, fineLabel, "Fine");
     fineAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "CAR_FINE", fineKnob);
+
+    // --- Multi knob (fixed mode — same as modulators) ---
+    setupKnob(multiKnob);
+    multiAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "CAR_MULTI", multiKnob);
 
     // Env display
     addAndMakeVisible(envDisplay);
@@ -229,6 +235,8 @@ void CarrierSection::timerCallback()
     {
         coarseKnob.setVisible(!isFixed);
         fixedFreqKnob.setVisible(isFixed);
+        fineKnob.setVisible(!isFixed);
+        multiKnob.setVisible(isFixed);
     }
 
     // Update main knob label with formatted value
@@ -246,14 +254,23 @@ void CarrierSection::timerCallback()
         mainKnobLabel.setText(idx == 0 ? "x0.5" : "x" + juce::String(idx), juce::dontSendNotification);
     }
 
-    // Update fine label with formatted value
-    float fine = fineKnob.getValue();
-    if (fine > 0.5f)
-        fineLabel.setText("+" + juce::String(static_cast<int>(fine)) + "ct", juce::dontSendNotification);
-    else if (fine < -0.5f)
-        fineLabel.setText(juce::String(static_cast<int>(fine)) + "ct", juce::dontSendNotification);
+    // Update fine/multi label with formatted value
+    if (isFixed)
+    {
+        int multiIdx = static_cast<int>(multiKnob.getValue());
+        static const char* kMVLabels[] = { "x0", "x0.001", "x0.01", "x0.1", "x1", "x10" };
+        fineLabel.setText(kMVLabels[juce::jlimit(0, 5, multiIdx)], juce::dontSendNotification);
+    }
     else
-        fineLabel.setText("0ct", juce::dontSendNotification);
+    {
+        float fine = fineKnob.getValue();
+        if (fine > 0.5f)
+            fineLabel.setText("+" + juce::String(static_cast<int>(fine)) + "ct", juce::dontSendNotification);
+        else if (fine < -0.5f)
+            fineLabel.setText(juce::String(static_cast<int>(fine)) + "ct", juce::dontSendNotification);
+        else
+            fineLabel.setText("0ct", juce::dontSendNotification);
+    }
 
     // Drift / Noise / Spread labels
     auto showPct = [](juce::Slider& knob, juce::Label& label, const char* name) {
@@ -298,7 +315,8 @@ void CarrierSection::setDesignMode(bool on)
     coarseKnob.setVisible(!on && !isFixed);
     fixedFreqKnob.setVisible(!on && isFixed);
     mainKnobLabel.setVisible(!on);
-    fineKnob.setVisible(!on);
+    fineKnob.setVisible(!on && !isFixed);
+    multiKnob.setVisible(!on && isFixed);
     fineLabel.setVisible(!on);
     driftKnob.setVisible(!on);
     driftLabel.setVisible(!on);
@@ -404,6 +422,7 @@ void CarrierSection::resized()
         auto fineArea = knobRow1.removeFromLeft(colW);
         fineLabel.setBounds(fineArea.removeFromBottom(labelH));
         fineKnob.setBounds(fineArea.reduced(2, 0));
+        multiKnob.setBounds(fineArea.reduced(2, 0));
 
         auto driftArea = knobRow1.removeFromLeft(colW);
         driftLabel.setBounds(driftArea.removeFromBottom(labelH));

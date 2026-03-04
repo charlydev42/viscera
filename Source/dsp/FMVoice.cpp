@@ -210,6 +210,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     float carFineCents   = (params.carFine ? params.carFine->load() : 0.0f)
                            + params.lfoModCarFine.load(std::memory_order_relaxed) * 100.0f;
     float carFixedHz     = params.carFixedFreq ? params.carFixedFreq->load() : 440.0f;
+    int   carMultiVal    = params.carMulti ? static_cast<int>(params.carMulti->load()) : 4;
     bool  carKB          = params.carKB ? params.carKB->load() > 0.5f : true;
     float carNoiseP      = params.carNoise ? params.carNoise->load() : 0.0f;
     float carSpreadP     = params.carSpread ? params.carSpread->load() : 0.0f;
@@ -416,7 +417,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // --- Carrier ---
         double carrierFreq = calcModFreq(baseFreq, carCoarseIdx, carFineCents,
-                                          carFixedHz, 1, carKB);
+                                          carFixedHz, carMultiVal, carKB);
         carrierOsc.setFrequency(carrierFreq);
         carrierOsc.setDrift(driftParam);
 

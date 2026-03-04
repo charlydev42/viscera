@@ -191,6 +191,7 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
         apvts, "SHAPER_ON", onToggle);
 
     // Shape preset selector
+    shapePresetBox.setWantsKeyboardFocus(false);
     shapePresetBox.addItemList({ "Sidechain", "Pump", "Trance",
                                   "Choppy", "Sine", "Saw Down",
                                   "Saw Up", "Bounce", "Wobble",

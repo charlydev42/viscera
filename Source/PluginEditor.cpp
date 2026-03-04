@@ -96,6 +96,9 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // Wire randomize to PresetBrowser's ? button
     presetBrowser.onRandomize = [this] { randomizeParams(); };
 
+    // Reset LFO section to tab 1 on any preset change
+    presetBrowser.onPresetChanged = [this] { lfoSection.resetToTab(0); };
+
     // Wire preset overlay
     presetBrowser.onBrowse = [this] {
         if (showPresetOverlay)
@@ -125,6 +128,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     };
     presetOverlay.onPresetChanged = [this] {
         presetBrowser.refreshPresetList();
+        lfoSection.resetToTab(0);
     };
     addChildComponent(presetOverlay); // hidden by default
 

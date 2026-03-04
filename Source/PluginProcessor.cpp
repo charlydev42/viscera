@@ -62,6 +62,7 @@ void VisceraProcessor::cacheParameterPointers()
     voiceParams.carCoarse    = apvts.getRawParameterValue("CAR_COARSE");
     voiceParams.carFine      = apvts.getRawParameterValue("CAR_FINE");
     voiceParams.carFixedFreq = apvts.getRawParameterValue("CAR_FIXED_FREQ");
+    voiceParams.carMulti     = apvts.getRawParameterValue("CAR_MULTI");
     voiceParams.carKB        = apvts.getRawParameterValue("CAR_KB");
     voiceParams.carNoise     = apvts.getRawParameterValue("CAR_NOISE");
     voiceParams.carSpread    = apvts.getRawParameterValue("CAR_SPREAD");
@@ -227,6 +228,7 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(-1000.0f, 1000.0f, 0.1f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("CAR_FIXED_FREQ", "Carrier Fixed Freq",
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
+        g->addChild(std::make_unique<juce::AudioParameterInt>("CAR_MULTI", "Carrier Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterBool>("CAR_KB", "Carrier KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_A", "Env3 Attack",
             juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
@@ -268,7 +270,7 @@ VisceraProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_AMT", "Pitch Env Amount",
             juce::NormalisableRange<float>(-96.0f, 96.0f, 0.1f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_A", "Pitch Env Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.001f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.001f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_D", "Pitch Env Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.15f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_S", "Pitch Env Sustain",

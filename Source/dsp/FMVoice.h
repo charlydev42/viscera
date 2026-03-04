@@ -132,6 +132,7 @@ struct VoiceParams
     std::atomic<float>* carCoarse   = nullptr;
     std::atomic<float>* carFine     = nullptr;
     std::atomic<float>* carFixedFreq = nullptr;
+    std::atomic<float>* carMulti    = nullptr;
     std::atomic<float>* carKB       = nullptr;
     std::atomic<float>* carNoise    = nullptr;
     std::atomic<float>* carSpread   = nullptr;

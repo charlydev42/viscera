@@ -245,6 +245,9 @@ public:
         if (statePtr && hitTestRingDrag(e.position))
             return;
 
+        customDrag = true;
+        customDragValue = getValue();
+        lastDragPos = e.position;
         juce::Slider::mouseDown(e);
         grabKeyboardFocus();
     }
@@ -267,11 +270,26 @@ public:
             repaint();
             return;
         }
+        if (customDrag)
+        {
+            float dy = -(e.position.y - lastDragPos.y);
+            float dx = e.position.x - lastDragPos.x;
+            float delta = (std::abs(dx) > std::abs(dy)) ? dx : dy;
+            lastDragPos = e.position;
+
+            double sens = e.mods.isShiftDown() ? 2000.0 : 200.0;
+            double range = getMaximum() - getMinimum();
+            customDragValue += (delta / sens) * range;
+            customDragValue = juce::jlimit(getMinimum(), getMaximum(), customDragValue);
+            setValue(customDragValue, juce::sendNotificationSync);
+            return;
+        }
         juce::Slider::mouseDrag(e);
     }
 
     void mouseUp(const juce::MouseEvent& e) override
     {
+        customDrag = false;
         if (isRingDrag)
         {
             isRingDrag = false;
@@ -283,10 +301,21 @@ public:
         juce::Slider::mouseUp(e);
     }
 
+    void mouseDoubleClick(const juce::MouseEvent&) override
+    {
+        showTextBox();
+    }
+
+
 private:
     juce::AudioProcessorValueTreeState* statePtr = nullptr;
     bb::LFODest myDest = bb::LFODest::None;
     bool dragHover = false;
+
+    // Custom drag state (frame-by-frame for seamless shift toggle)
+    bool customDrag = false;
+    double customDragValue = 0.0;
+    juce::Point<float> lastDragPos;
 
     // Ring drag state
     bool isRingDrag = false;

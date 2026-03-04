@@ -10,6 +10,7 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
 
     // Filter type ComboBox
     typeBox.addItemList({ "LP", "HP", "BP", "Notch" }, 1);
+    typeBox.setWantsKeyboardFocus(false);
     addAndMakeVisible(typeBox);
     typeLabel.setVisible(false);
     typeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(

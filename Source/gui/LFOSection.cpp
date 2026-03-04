@@ -378,6 +378,7 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
 
     // Wave combo (6 options including Custom)
     waveCombo.addItemList({ "Sine", "Tri", "Saw", "Sq", "S&H", "Custom" }, 1);
+    waveCombo.setWantsKeyboardFocus(false);
     addAndMakeVisible(waveCombo);
 
     // Rate knob

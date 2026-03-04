@@ -13,6 +13,7 @@ ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
 {
     // Waveform combo
     waveCombo.addItemList({"Sine", "Saw", "Square", "Tri", "Pulse", "Custom"}, 1);
+    waveCombo.setWantsKeyboardFocus(false);
     addAndMakeVisible(waveCombo);
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts, prefix + "_WAVE", waveCombo);
