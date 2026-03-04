@@ -1,6 +1,8 @@
 // PresetBrowser.cpp — Categorized preset browser (factory + user)
 #include "PresetBrowser.h"
 #include "../PluginProcessor.h"
+#include <algorithm>
+#include <vector>
 
 PresetBrowser::PresetBrowser(VisceraProcessor& processor)
     : proc(processor)
@@ -86,41 +88,50 @@ void PresetBrowser::showPresetMenu()
     juce::PopupMenu menu;
 
     // Category order for factory presets
-    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
-
-    // Group factory presets by category
-    juce::String lastCategory;
-    bool hasUserPresets = false;
+    static const juce::StringArray categoryOrder { "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
     int currentIdx = proc.getCurrentPresetIndex();
 
-    for (int i = 0; i < static_cast<int>(registry.size()); ++i)
+    // Collect indices per category, then sort alphabetically within each
+    for (auto& cat : categoryOrder)
     {
-        auto& entry = registry[static_cast<size_t>(i)];
-
-        // Skip Init category — handled by dedicated Init button
-        if (entry.isFactory && entry.category == "Init")
-            continue;
-
-        if (entry.isFactory)
+        std::vector<int> indices;
+        for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
-            if (entry.category != lastCategory)
-            {
-                if (lastCategory.isNotEmpty())
-                    menu.addSeparator();
-                menu.addSectionHeader(entry.category);
-                lastCategory = entry.category;
-            }
-            menu.addItem(i + 1, entry.name, true, i == currentIdx);
+            auto& entry = registry[static_cast<size_t>(i)];
+            if (entry.isFactory && entry.category == cat)
+                indices.push_back(i);
         }
-        else
+        if (indices.empty()) continue;
+
+        std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+            return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
+                   registry[static_cast<size_t>(b)].name) < 0;
+        });
+
+        menu.addSeparator();
+        menu.addSectionHeader(cat);
+        for (int i : indices)
+            menu.addItem(i + 1, registry[static_cast<size_t>(i)].name, true, i == currentIdx);
+    }
+
+    // User presets — sorted alphabetically
+    {
+        std::vector<int> userIndices;
+        for (int i = 0; i < static_cast<int>(registry.size()); ++i)
+            if (!registry[static_cast<size_t>(i)].isFactory)
+                userIndices.push_back(i);
+
+        if (!userIndices.empty())
         {
-            if (!hasUserPresets)
-            {
-                menu.addSeparator();
-                menu.addSectionHeader("User");
-                hasUserPresets = true;
-            }
-            menu.addItem(i + 1, entry.name, true, i == currentIdx);
+            std::sort(userIndices.begin(), userIndices.end(), [&](int a, int b) {
+                return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
+                       registry[static_cast<size_t>(b)].name) < 0;
+            });
+
+            menu.addSeparator();
+            menu.addSectionHeader("User");
+            for (int i : userIndices)
+                menu.addItem(i + 1, registry[static_cast<size_t>(i)].name, true, i == currentIdx);
         }
     }
 

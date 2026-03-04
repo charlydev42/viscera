@@ -248,6 +248,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
         vec3 hitP=ro+rd*d;vec3 N=calcNormal(hitP);
         vec3 sc=shade(hitP,rd,N);
         sc=sc/(sc+0.9);sc+=max(sc-0.6,0.0)*0.3;
+        // Chromatic aberration on blob only (not background)
         float chr=length(fragCoord/iResolution.xy-0.5)*(0.001+loud*0.004)*22.0;
         sc.r*=1.0-chr*0.4;sc.g*=1.0+chr*0.2;sc.b*=1.0-chr*0.8;
         sc=pow(sc,vec3(0.4545));
@@ -466,6 +467,9 @@ vec3 traceSample(vec3 ro, mat3 cam, vec3 bg, vec2 fc, float loud){
         vec3 hitP=ro+rd*d;vec3 N=calcNormal(hitP);
         vec3 sc=shade(hitP,rd,N);
         sc=sc/(sc+1.0);sc+=max(sc-(0.55-loud*0.12),0.0)*(0.55+loud*0.4);
+        // Chromatic aberration on blob only (not background)
+        float chr=length(fc/iResolution.xy-0.5)*(0.001+loud*0.005)*28.0;
+        sc.r*=1.0-chr*0.5;sc.g*=1.0+chr*0.3;sc.b*=1.0-chr;
         sc=pow(sc,vec3(0.4545));
         float NdV=max(dot(N,-rd),0.0);
         float silhouette=smoothstep(0.0,0.12,NdV);
@@ -518,10 +522,6 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
              + traceSample(ro, cam, bg, fragCoord+vec2(-0.25, 0.25), loud)
              + traceSample(ro, cam, bg, fragCoord+vec2( 0.25, 0.25), loud);
     col*=0.25;
-
-    // Chromatic aberration (once at center)
-    float chr=length(fragCoord/iResolution.xy-0.5)*(0.001+loud*0.005)*28.0;
-    col.r*=1.0-chr*0.5;col.g*=1.0+chr*0.3;col.b*=1.0-chr;
 
     col=mix(uBgColor,col,ovalMask);
     fragColor=vec4(col,1.0);

@@ -2,6 +2,8 @@
 #include "PresetOverlay.h"
 #include "VisceraLookAndFeel.h"
 #include "../PluginProcessor.h"
+#include <algorithm>
+#include <vector>
 
 static const juce::StringArray kCategories { "All", "Bass", "Lead", "Pad", "FX", "Drums", "Texture", "User" };
 
@@ -111,48 +113,60 @@ void PresetOverlay::rebuildCards()
         y += sepH + gap;
     };
 
+    // Helper: sort indices alphabetically by preset name
+    auto sortByName = [&](std::vector<int>& indices) {
+        std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+            return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
+                   registry[static_cast<size_t>(b)].name) < 0;
+        });
+    };
+
     bool isCategoryTab = (selectedCategory != "All" && selectedCategory != "User");
 
     if (isCategoryTab)
     {
-        // Two-pass: factory presets first, then user presets of same category
+        // Factory presets in this category, sorted alphabetically
+        std::vector<int> factoryIndices;
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
             auto& entry = registry[static_cast<size_t>(i)];
-            if (entry.isFactory && entry.category == "Init") continue;
-            if (!entry.isFactory) continue;
-            if (entry.category != selectedCategory) continue;
-            addCard(i);
+            if (entry.isFactory && entry.category != "Init" && entry.category == selectedCategory)
+                factoryIndices.push_back(i);
         }
+        sortByName(factoryIndices);
+        for (int i : factoryIndices)
+            addCard(i);
 
-        // Collect user presets matching this category
-        bool hasUserPresets = false;
+        // User presets in this category, sorted alphabetically
+        std::vector<int> userIndices;
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
             auto& entry = registry[static_cast<size_t>(i)];
-            if (entry.isFactory) continue;
-            if (entry.category != selectedCategory) continue;
-            if (!hasUserPresets)
-            {
-                addSeparator();
-                hasUserPresets = true;
-            }
-            addCard(i);
+            if (!entry.isFactory && entry.category == selectedCategory)
+                userIndices.push_back(i);
+        }
+        if (!userIndices.empty())
+        {
+            sortByName(userIndices);
+            addSeparator();
+            for (int i : userIndices)
+                addCard(i);
         }
     }
     else
     {
-        // "All" or "User" — single pass
+        // "All" or "User" — collect, sort, add
+        std::vector<int> indices;
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
             auto& entry = registry[static_cast<size_t>(i)];
             if (entry.isFactory && entry.category == "Init") continue;
-
-            if (selectedCategory == "User" && entry.isFactory)
-                continue;
-
-            addCard(i);
+            if (selectedCategory == "User" && entry.isFactory) continue;
+            indices.push_back(i);
         }
+        sortByName(indices);
+        for (int i : indices)
+            addCard(i);
     }
 
     // Compute total content height
