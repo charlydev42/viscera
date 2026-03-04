@@ -59,17 +59,17 @@ public:
     // Couleurs du theme — neumorphism (mutable for dark mode toggle)
     static inline uint32_t kBgColor       = 0xFFE0E5EC;
     static inline uint32_t kPanelColor    = 0xFFE0E5EC;
-    static inline uint32_t kKnobColor     = 0xFFA0A0A8;
-    static inline uint32_t kKnobMarker    = 0xFF2A2A32;
-    static inline uint32_t kTextColor     = 0xFF2C2C34;
+    static inline uint32_t kKnobColor     = 0xFF9696A0;
+    static inline uint32_t kKnobMarker    = 0xFF222230;
+    static inline uint32_t kTextColor     = 0xFF24242E;
     static inline uint32_t kAccentColor   = 0xFF8BC34A;
     static inline uint32_t kToggleOn      = 0xFF8BC34A;
-    static inline uint32_t kToggleOff     = 0xFFC0C5CE;
-    static inline uint32_t kHeaderBg      = 0xFFCCD2DA;
-    static inline uint32_t kDisplayBg     = 0xFFD6DBE4;
+    static inline uint32_t kToggleOff     = 0xFFB6BCC6;
+    static inline uint32_t kHeaderBg      = 0xFFC4CAD4;
+    static inline uint32_t kDisplayBg     = 0xFFD0D6E0;
 
     // Neumorphic shadow colours
-    static inline uint32_t kShadowDark    = 0xFF94A2B8;
+    static inline uint32_t kShadowDark    = 0xFF8896AC;
     static inline uint32_t kShadowLight   = 0xFFFFFFFF;
 
     // Dark mode toggle

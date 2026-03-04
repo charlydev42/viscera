@@ -58,15 +58,15 @@ void VisceraLookAndFeel::setDarkMode(bool dark)
     {
         kBgColor     = 0xFFE0E5EC;
         kPanelColor  = 0xFFE0E5EC;
-        kKnobColor   = 0xFFA0A0A8;
-        kKnobMarker  = 0xFF2A2A32;
-        kTextColor   = 0xFF2C2C34;
+        kKnobColor   = 0xFF9696A0;
+        kKnobMarker  = 0xFF222230;
+        kTextColor   = 0xFF24242E;
         kAccentColor = 0xFF8BC34A;
         kToggleOn    = 0xFF8BC34A;
-        kToggleOff   = 0xFFC0C5CE;
-        kHeaderBg    = 0xFFCCD2DA;
-        kDisplayBg   = 0xFFD6DBE4;
-        kShadowDark  = 0xFF94A2B8;
+        kToggleOff   = 0xFFB6BCC6;
+        kHeaderBg    = 0xFFC4CAD4;
+        kDisplayBg   = 0xFFD0D6E0;
+        kShadowDark  = 0xFF8896AC;
         kShadowLight = 0xFFFFFFFF;
     }
 }
