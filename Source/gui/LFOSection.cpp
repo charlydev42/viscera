@@ -99,23 +99,12 @@ void LFOWaveDisplay::mouseDrag(const juce::MouseEvent& e)
         return;
     }
 
-    // Standard mode: drag & drop source
-    if (!isCustom && e.getDistanceFromDragStart() > 4)
-    {
-        if (auto* container = findParentComponentOfClass<juce::DragAndDropContainer>())
-        {
-            ModSlider::showDropTargets = true;
-            juce::String dragDesc = "LFO_" + juce::String(lfoIdx);
-            container->startDragging(dragDesc, this);
-        }
-    }
 }
 
 void LFOWaveDisplay::mouseUp(const juce::MouseEvent&)
 {
     isDraggingPoint = false;
     dragPointIndex = -1;
-    ModSlider::showDropTargets = false;
     repaint();
 }
 
@@ -436,6 +425,10 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     syncValueLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
     addAndMakeVisible(syncValueLabel);
 
+    // Retrigger toggle
+    retrigToggle.setButtonText("R");
+    addAndMakeVisible(retrigToggle);
+
     // Wave display
     addAndMakeVisible(waveDisplay);
 
@@ -509,13 +502,6 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     countLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
     addAndMakeVisible(countLabel);
 
-    // Hint label — right-justified, always visible
-    hintLabel.setText("drag to knob to assign", juce::dontSendNotification);
-    hintLabel.setJustificationType(juce::Justification::centredRight);
-    hintLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 8.5f, juce::Font::italic));
-    hintLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.3f));
-    addAndMakeVisible(hintLabel);
-
     // Initial tab
     switchTab(0);
 
@@ -528,6 +514,7 @@ LFOSection::~LFOSection()
     cancelLearnMode();
     waveAttach.reset();
     rateAttach.reset();
+    retrigAttach.reset();
 }
 
 int LFOSection::getSyncParam() const
@@ -554,19 +541,24 @@ void LFOSection::switchTab(int tab)
     {
         bool active = (i == activeTab);
         tabButtons[i].setColour(juce::TextButton::buttonColourId,
-            active ? accentCol.withAlpha(0.6f)
-                   : juce::Colour(VisceraLookAndFeel::kPanelColor));
+            juce::Colour(VisceraLookAndFeel::kPanelColor));
+        tabButtons[i].setColour(juce::TextButton::textColourOffId,
+            active ? accentCol
+                   : juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
     }
 
     // Detach old, reattach to new LFO params
     waveAttach.reset();
     rateAttach.reset();
+    retrigAttach.reset();
 
     auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         state, pfx + "WAVE", waveCombo);
     rateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         state, pfx + "RATE", rateKnob);
+    retrigAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        state, pfx + "RETRIG", retrigToggle);
 
     waveDisplay.setLFOIndex(activeTab);
     waveDisplay.setLFOPointer(&processor.getGlobalLFO(activeTab));
@@ -599,14 +591,13 @@ void LFOSection::timerCallback()
     updateSyncDisplay();
     updateAssignmentLabels();
 
-    // Pulse the "+" button when in assignment mode (learn or drag)
+    // Highlight "+" button when in assignment mode (learn or drag)
     if (ModSlider::showDropTargets || learnSlotIndex >= 0)
     {
-        float pulse = 0.5f + 0.3f * std::sin(
-            static_cast<float>(juce::Time::getMillisecondCounterHiRes() * 0.004));
         addSlotBtn.setColour(juce::TextButton::buttonColourId,
-            juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(pulse));
-        addSlotBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+            juce::Colour(VisceraLookAndFeel::kPanelColor));
+        addSlotBtn.setColour(juce::TextButton::textColourOffId,
+            juce::Colour(VisceraLookAndFeel::kAccentColor));
     }
     else
     {
@@ -683,15 +674,14 @@ void LFOSection::layoutSlots()
     if (slotArea.isEmpty()) return;
     auto row = slotArea;
 
-    // [+] [-] [count]                    [hint right-justified]
+    // Right-justified: [-] [count] [+]
     if (addSlotBtn.isVisible())
-        addSlotBtn.setBounds(row.removeFromLeft(20).reduced(1, 0));
+        addSlotBtn.setBounds(row.removeFromRight(20).reduced(1, 0));
+
+    countLabel.setBounds(row.removeFromRight(14));
 
     if (removeSlotBtn.isVisible())
-        removeSlotBtn.setBounds(row.removeFromLeft(20).reduced(1, 0));
-
-    countLabel.setBounds(row.removeFromLeft(14));
-    hintLabel.setBounds(row);
+        removeSlotBtn.setBounds(row.removeFromRight(20).reduced(1, 0));
 }
 
 // ============================================================================
@@ -842,18 +832,13 @@ void LFOSection::showAssignmentsPopup()
         });
 }
 
-// ============================================================================
-// Paint — accent underline on active tab
-// ============================================================================
-
 void LFOSection::paint(juce::Graphics& g)
 {
-    auto accent = juce::Colour(VisceraLookAndFeel::kAccentColor);
-    auto tabBounds = tabButtons[activeTab].getBounds().toFloat();
-    // Small accent bar below the active tab
-    g.setColour(accent);
-    g.fillRoundedRectangle(tabBounds.getX() + 2.0f, tabBounds.getBottom(),
-                           tabBounds.getWidth() - 4.0f, 2.0f, 1.0f);
+    // Green circle around active tab number
+    auto tb = tabButtons[activeTab].getBounds().toFloat();
+    auto circle = tb.reduced(2.0f).withSizeKeepingCentre(tb.getHeight() - 4.0f, tb.getHeight() - 4.0f);
+    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.9f));
+    g.drawEllipse(circle, 1.5f);
 }
 
 // ============================================================================
@@ -890,9 +875,12 @@ void LFOSection::resized()
 
     area.removeFromTop(2);
 
-    // Bottom: dynamic slot pills + "+" button
+    // Bottom: retrig toggle + dynamic slot pills
     area.removeFromBottom(1);
-    slotArea = area.removeFromBottom(16);
+    auto bottomRow = area.removeFromBottom(16);
+    retrigToggle.setBounds(bottomRow.removeFromLeft(36).withSizeKeepingCentre(36, 16));
+    bottomRow.removeFromLeft(2);
+    slotArea = bottomRow;
 
     // Remaining: wave display
     waveDisplay.setBounds(area);

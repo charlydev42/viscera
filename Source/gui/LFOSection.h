@@ -114,17 +114,20 @@ private:
     juce::TextButton slotButtons[kNumSlots];
     juce::TextButton slotClearBtns[kNumSlots]; // small "x" to unmap
 
-    // "+" button to add a new routing, "-" to remove last, count/hint label
+    // "+" button to add a new routing, "-" to remove last, count label
     juce::TextButton addSlotBtn;
     juce::TextButton removeSlotBtn;
     juce::Label countLabel;
-    juce::Label hintLabel;
     juce::Rectangle<int> slotArea; // cached from resized()
     void layoutSlots(); // dynamic layout of visible slots
+
+    // Retrigger toggle
+    juce::ToggleButton retrigToggle;
 
     // APVTS attachments (re-created on tab switch)
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> rateAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> retrigAttach;
 
     juce::StringArray syncNames;
 

@@ -73,6 +73,10 @@ public:
     bool isUserPreset() const { return isUserPresetLoaded; }
     const juce::String& getUserPresetName() const { return currentUserPresetName; }
 
+    // Display name override (e.g. "Random", "Custom") — empty = use preset name
+    void setDisplayName(const juce::String& name) { displayName = name; }
+    const juce::String& getDisplayName() const { return displayName; }
+
     // Global LFO phase getter (for GUI display)
     float getGlobalLFOPhase(int index) const
     {
@@ -93,6 +97,7 @@ private:
     int currentPreset = 0;
     bool isUserPresetLoaded = false;
     juce::String currentUserPresetName;
+    juce::String displayName; // override for preset display (e.g. "Random")
     std::vector<PresetEntry> presetRegistry;
 
     // Shared logic for loading preset XML
@@ -106,9 +111,10 @@ private:
 
     // Cached APVTS pointers for global LFOs (rate+wave+8×dest+8×amt per LFO)
     struct LFOParamCache {
-        std::atomic<float>* rate  = nullptr;
-        std::atomic<float>* wave  = nullptr;
-        std::atomic<float>* sync  = nullptr;
+        std::atomic<float>* rate    = nullptr;
+        std::atomic<float>* wave    = nullptr;
+        std::atomic<float>* sync    = nullptr;
+        std::atomic<float>* retrig  = nullptr;
         std::atomic<float>* dest[kSlotsPerLFO] = {};
         std::atomic<float>* amt[kSlotsPerLFO]  = {};
     } lfoCache[3];

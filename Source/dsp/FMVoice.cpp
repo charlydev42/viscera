@@ -469,11 +469,14 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // --- Filtre SVF ---
         if (filtEnabled)
         {
-            // Modulation du cutoff par LFO "vein" + global LFO : ±2 octaves
+            // Vein modulation: multiplicative ±2 octaves
             float veinMod = std::pow(2.0f, veinAmount * lfo2Val * 2.0f);
-            float gLfoCutoffMod = std::pow(2.0f, gLfoModCutoff * 2.0f);
-            float modulatedCutoff = cutoff * veinMod * gLfoCutoffMod;
-            modulatedCutoff = std::max(20.0f, std::min(modulatedCutoff, 20000.0f));
+            // Global LFO: additive in normalized knob space (0=20Hz, 1=20kHz)
+            // so LFO at max with amount 1.0 → cutoff reaches 20kHz
+            float cutNorm = std::pow(juce::jlimit(0.0f, 1.0f, (cutoff - 20.0f) / 19980.0f), 0.25f);
+            cutNorm = juce::jlimit(0.0f, 1.0f, cutNorm + gLfoModCutoff);
+            float modulatedCutoff = (20.0f + 19980.0f * std::pow(cutNorm, 4.0f)) * veinMod;
+            modulatedCutoff = juce::jlimit(20.0f, 20000.0f, modulatedCutoff);
             float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + gLfoModRes * 0.5f);
             filterL.setParameters(modulatedCutoff, modulatedRes);
             filterR.setParameters(modulatedCutoff, modulatedRes);

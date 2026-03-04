@@ -143,9 +143,10 @@ void VisceraProcessor::cacheParameterPointers()
         auto id = [&](const juce::String& suffix) {
             return "LFO" + juce::String(n + 1) + "_" + suffix;
         };
-        lfoCache[n].rate = apvts.getRawParameterValue(id("RATE"));
-        lfoCache[n].wave = apvts.getRawParameterValue(id("WAVE"));
-        lfoCache[n].sync = apvts.getRawParameterValue(id("SYNC"));
+        lfoCache[n].rate   = apvts.getRawParameterValue(id("RATE"));
+        lfoCache[n].wave   = apvts.getRawParameterValue(id("WAVE"));
+        lfoCache[n].sync   = apvts.getRawParameterValue(id("SYNC"));
+        lfoCache[n].retrig = apvts.getRawParameterValue(id("RETRIG"));
         for (int s = 0; s < kSlotsPerLFO; ++s)
         {
             lfoCache[n].dest[s] = apvts.getRawParameterValue(id("DEST" + juce::String(s + 1)));
@@ -179,7 +180,7 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD1_MULTI", "Mod1 Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_A", "Env1 Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_D", "Env1 Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_S", "Env1 Sustain",
@@ -206,7 +207,7 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD2_MULTI", "Mod2 Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_A", "Env2 Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_D", "Env2 Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_S", "Env2 Sustain",
@@ -228,7 +229,7 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterBool>("CAR_KB", "Carrier KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_A", "Env3 Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_D", "Env3 Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_S", "Env3 Sustain",
@@ -391,6 +392,7 @@ VisceraProcessor::createParameterLayout()
             g->addChild(std::make_unique<juce::AudioParameterChoice>(id("SYNC"), nm("Sync"),
                 juce::StringArray{ "Free", "8 bar", "4 bar", "2 bar", "1 bar", "1/2", "1/4", "1/8", "1/16", "1/32",
                                    "1/4T", "1/8T", "1/16T" }, 0));
+            g->addChild(std::make_unique<juce::AudioParameterBool>(id("RETRIG"), nm("Retrigger"), false));
 
             for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
@@ -471,13 +473,14 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Injecter les notes du clavier GUI dans le buffer MIDI
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
-    // --- LFO retrigger on note-on ---
+    // --- LFO retrigger on note-on (only if retrig enabled per LFO) ---
     for (const auto metadata : midiMessages)
     {
         if (metadata.getMessage().isNoteOn())
         {
             for (int l = 0; l < 3; ++l)
-                globalLFO[l].resetPhase();
+                if (lfoCache[l].retrig && lfoCache[l].retrig->load() > 0.5f)
+                    globalLFO[l].resetPhase();
             break; // one reset per block is enough
         }
     }
@@ -803,6 +806,10 @@ void VisceraProcessor::changeProgramName(int, const juce::String&) {}
 void VisceraProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    state.setProperty("_presetIndex", currentPreset, nullptr);
+    state.setProperty("_isUserPreset", isUserPresetLoaded, nullptr);
+    state.setProperty("_userPresetName", currentUserPresetName, nullptr);
+    state.setProperty("_displayName", displayName, nullptr);
     state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
     state.setProperty("lfo1Table", globalLFO[0].serializeTable(), nullptr);
     state.setProperty("lfo2Table", globalLFO[1].serializeTable(), nullptr);
@@ -883,6 +890,22 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
                 }
             }
         }
+
+        // Restore preset identity so the GUI shows the correct name
+        if (tree.hasProperty("_presetIndex"))
+            currentPreset = static_cast<int>(tree.getProperty("_presetIndex"));
+        if (tree.hasProperty("_isUserPreset"))
+            isUserPresetLoaded = static_cast<bool>(tree.getProperty("_isUserPreset"));
+        if (tree.hasProperty("_userPresetName"))
+            currentUserPresetName = tree.getProperty("_userPresetName").toString();
+        if (tree.hasProperty("_displayName"))
+            displayName = tree.getProperty("_displayName").toString();
+
+        // Strip meta-properties before replacing APVTS state
+        tree.removeProperty("_presetIndex", nullptr);
+        tree.removeProperty("_isUserPreset", nullptr);
+        tree.removeProperty("_userPresetName", nullptr);
+        tree.removeProperty("_displayName", nullptr);
 
         apvts.replaceState(tree);
         undoManager.clearUndoHistory();
@@ -1117,6 +1140,7 @@ void VisceraProcessor::loadPresetAt(int index)
         loadUserPreset(entry.userFileName);
     }
     currentPreset = index;
+    displayName.clear(); // clear override when loading a named preset
 }
 
 // --- Migration anciens presets : MOD_PITCH → COARSE+FINE ou FIXED_FREQ ---

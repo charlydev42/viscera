@@ -63,10 +63,6 @@ target_sources(Viscera PRIVATE
 juce_add_binary_data(VisceraData SOURCES
     logo.png
     "viscera logo fat.png"
-    graphics/Knob_virgin.png
-    graphics/Knob_empty_circle.png
-    graphics/Knob_Blue.png
-    graphics/Knob_circle_green.png
     graphics/viscera_logo_light.png
     graphics/viscera_logo_dark.png
     graphics/viscera_logo_light_nodolph.png

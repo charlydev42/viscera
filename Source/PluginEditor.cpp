@@ -377,7 +377,7 @@ void VisceraEditor::randomizeParams()
     randFloat("CAR_FINE", -100.0f, 100.0f);
     randBool("CAR_KB", 0.9f);
     randFloat("CAR_DRIFT", 0.0f, 0.3f);
-    randFloat("CAR_NOISE", 0.0f, 0.3f);
+    randFloat("CAR_NOISE", 0.0f, rng.nextFloat() < 0.15f ? 0.15f : 0.0f);
     randFloat("CAR_SPREAD", 0.0f, 0.5f);
 
     // Carrier envelope

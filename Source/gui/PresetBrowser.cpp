@@ -35,7 +35,8 @@ PresetBrowser::PresetBrowser(VisceraProcessor& processor)
 
     randomButton.onClick = [this] {
         if (onRandomize) onRandomize();
-        presetNameBtn.setButtonText("Random");
+        proc.setDisplayName("Random");
+        updatePresetName();
     };
     addAndMakeVisible(randomButton);
 
@@ -55,18 +56,26 @@ void PresetBrowser::refreshPresetList()
 
 void PresetBrowser::updatePresetName()
 {
+    // If the processor has a display name override (e.g. "Random"), use it
+    auto override = proc.getDisplayName();
+    if (override.isNotEmpty())
+    {
+        presetNameBtn.setButtonText(override);
+        return;
+    }
+
     auto& registry = proc.getPresetRegistry();
     int idx = proc.getCurrentPresetIndex();
 
-    juce::String displayName;
+    juce::String name;
     if (proc.isUserPreset())
-        displayName = proc.getUserPresetName();
+        name = proc.getUserPresetName();
     else if (idx >= 0 && idx < static_cast<int>(registry.size()))
-        displayName = registry[static_cast<size_t>(idx)].name;
+        name = registry[static_cast<size_t>(idx)].name;
     else
-        displayName = "Init";
+        name = "Init";
 
-    presetNameBtn.setButtonText(displayName);
+    presetNameBtn.setButtonText(name);
 }
 
 void PresetBrowser::showPresetMenu()

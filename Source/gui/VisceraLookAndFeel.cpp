@@ -91,16 +91,6 @@ void VisceraLookAndFeel::refreshJuceColours()
 
 VisceraLookAndFeel::VisceraLookAndFeel()
 {
-    // Load filmstrip knob images from binary data
-    knobVirgin = juce::ImageCache::getFromMemory(BinaryData::Knob_virgin_png,
-                                                  BinaryData::Knob_virgin_pngSize);
-    knobCircle = juce::ImageCache::getFromMemory(BinaryData::Knob_empty_circle_png,
-                                                  BinaryData::Knob_empty_circle_pngSize);
-    knobBlue   = juce::ImageCache::getFromMemory(BinaryData::Knob_Blue_png,
-                                                  BinaryData::Knob_Blue_pngSize);
-    knobCircleGreen = juce::ImageCache::getFromMemory(BinaryData::Knob_circle_green_png,
-                                                       BinaryData::Knob_circle_green_pngSize);
-
     refreshJuceColours();
 }
 

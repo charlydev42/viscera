@@ -56,9 +56,6 @@ public:
     // Make popup window transparent so no white rect behind rounded corners
     void preparePopupMenuWindow(juce::Component& newWindow) override;
 
-    // Filmstrip knob images
-    juce::Image knobVirgin, knobCircle, knobBlue, knobCircleGreen;
-
     // Couleurs du theme — neumorphism (mutable for dark mode toggle)
     static inline uint32_t kBgColor       = 0xFFE0E5EC;
     static inline uint32_t kPanelColor    = 0xFFE0E5EC;
