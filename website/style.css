@@ -60,6 +60,8 @@ body {
     align-items: center;
     justify-content: flex-end;
     padding: 20px 24px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .brand-logo {
@@ -222,6 +224,9 @@ body {
     z-index: 1;
     filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.4));
     transition: filter var(--transition), opacity var(--transition);
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
 }
 
 [data-theme="light"] .hero-logo {

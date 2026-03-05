@@ -304,9 +304,12 @@ public:
         juce::Slider::mouseUp(e);
     }
 
-    void mouseDoubleClick(const juce::MouseEvent&) override
+    void mouseDoubleClick(const juce::MouseEvent& e) override
     {
-        showTextBox();
+        if (isDoubleClickReturnEnabled())
+            juce::Slider::mouseDoubleClick(e);
+        else
+            showTextBox();
     }
 
 
@@ -503,6 +506,9 @@ private:
             case bb::LFODest::Tremor:        return voiceParamsPtr->lfoModTremor.load(std::memory_order_relaxed);
             case bb::LFODest::Vein:          return voiceParamsPtr->lfoModVein.load(std::memory_order_relaxed);
             case bb::LFODest::Flux:          return voiceParamsPtr->lfoModFlux.load(std::memory_order_relaxed);
+            case bb::LFODest::Cortex:        return voiceParamsPtr->lfoModCortex.load(std::memory_order_relaxed);
+            case bb::LFODest::Ichor:         return voiceParamsPtr->lfoModIchor.load(std::memory_order_relaxed);
+            case bb::LFODest::Plasma:        return voiceParamsPtr->lfoModPlasma.load(std::memory_order_relaxed);
             default: return 0.0f;
         }
     }

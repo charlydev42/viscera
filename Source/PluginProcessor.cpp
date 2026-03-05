@@ -98,6 +98,9 @@ void VisceraProcessor::cacheParameterPointers()
     voiceParams.porta      = apvts.getRawParameterValue("PORTA");
     voiceParams.dispAmt    = apvts.getRawParameterValue("DISP_AMT");
     voiceParams.carDrift   = apvts.getRawParameterValue("CAR_DRIFT");
+    voiceParams.cortex     = apvts.getRawParameterValue("CORTEX");
+    voiceParams.ichor      = apvts.getRawParameterValue("ICHOR");
+    voiceParams.plasma     = apvts.getRawParameterValue("PLASMA");
 
     // FX on/off pointers
     dlyOnParam   = apvts.getRawParameterValue("DLY_ON");
@@ -383,7 +386,8 @@ VisceraProcessor::createParameterLayout()
                                       "PEA", "PED", "PES", "PER",
                                       "ShpRate", "ShpDep",
                                       "M1Coar", "M2Coar", "CCoar",
-                                      "Tremor", "Vein", "Flux" };
+                                      "Tremor", "Vein", "Flux",
+                                      "Cortex", "Ichor", "Plasma" };
 
         for (int n = 1; n <= 3; ++n)
         {
@@ -442,6 +446,12 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DISP_AMT", "HemoFold",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("CORTEX", "Cortex",
+            juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("ICHOR", "Ichor",
+            juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("PLASMA", "Plasma",
+            juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
         groups.push_back(std::move(g));
     }
 
@@ -671,6 +681,12 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                       std::memory_order_relaxed);
         voiceParams.lfoModFlux.store(modSums[static_cast<int>(bb::LFODest::Flux)],
                                       std::memory_order_relaxed);
+        voiceParams.lfoModCortex.store(modSums[static_cast<int>(bb::LFODest::Cortex)],
+                                        std::memory_order_relaxed);
+        voiceParams.lfoModIchor.store(modSums[static_cast<int>(bb::LFODest::Ichor)],
+                                       std::memory_order_relaxed);
+        voiceParams.lfoModPlasma.store(modSums[static_cast<int>(bb::LFODest::Plasma)],
+                                        std::memory_order_relaxed);
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());

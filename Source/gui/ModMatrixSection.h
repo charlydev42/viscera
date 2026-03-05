@@ -1,4 +1,4 @@
-// ModMatrixSection.h — LFO routing knobs (tremor/vein/flux)
+// ModMatrixSection.h — FM macro knobs (Cortex/Ichor/Plasma)
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -14,10 +14,11 @@ public:
     void timerCallback() override;
 
 private:
-    ModSlider tremorKnob, veinKnob, fluxKnob;
-    juce::Label tremorLabel, veinLabel, fluxLabel;
+    ModSlider cortexKnob, ichorKnob, plasmaKnob;
+    juce::Label cortexLabel, ichorLabel, plasmaLabel;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> tremorAttach, veinAttach, fluxAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
+        cortexAttach, ichorAttach, plasmaAttach;
 
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 

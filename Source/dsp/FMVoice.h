@@ -77,6 +77,9 @@ enum class LFODest : int {
     Tremor,        // ±tremor (per-voice pitch vibrato amount)
     Vein,          // ±vein (per-voice filter LFO amount)
     Flux,          // ±flux (per-voice mod index LFO amount)
+    Cortex,        // ±harmonic spread macro
+    Ichor,         // ±inharmonicity offset
+    Plasma,        // ±FM depth multiplier
     Count
 };
 
@@ -169,6 +172,9 @@ struct VoiceParams
     std::atomic<float>* porta      = nullptr; // Portamento time (0-1)
     std::atomic<float>* dispAmt    = nullptr; // Disperser amount
     std::atomic<float>* carDrift   = nullptr; // Carrier analog drift
+    std::atomic<float>* cortex    = nullptr; // Harmonic spread macro (0=unison, 0.5=neutral, 1=wide)
+    std::atomic<float>* ichor     = nullptr; // Inharmonicity offset (0=harmonic, 1=metallic)
+    std::atomic<float>* plasma    = nullptr; // FM depth multiplier (0=pure, 1=full FM)
 
     // Global LFO modulation sums (written by processor, read by voice)
     std::atomic<float> lfoModPitch   { 0.0f };
@@ -231,6 +237,9 @@ struct VoiceParams
     std::atomic<float> lfoModTremor      { 0.0f };
     std::atomic<float> lfoModVein        { 0.0f };
     std::atomic<float> lfoModFlux        { 0.0f };
+    std::atomic<float> lfoModCortex      { 0.0f };
+    std::atomic<float> lfoModIchor       { 0.0f };
+    std::atomic<float> lfoModPlasma      { 0.0f };
 
     // Per-LFO unipolar peak (for arc scaling in GUI)
     std::atomic<float> lfoPeak[3]    { {1.0f}, {1.0f}, {1.0f} };
@@ -309,7 +318,8 @@ private:
 
     // Calcul de la fréquence d'un modulateur (Operator-style: ratio or fixed mode)
     double calcModFreq(double baseFreq, int coarseIdx, float fineCents,
-                       float fixedFreqHz, int multi, bool kbTrack) const;
+                       float fixedFreqHz, int multi, bool kbTrack,
+                       float cortexSpread = 0.5f, float ichorOffset = 0.0f) const;
 };
 
 } // namespace bb

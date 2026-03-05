@@ -335,7 +335,8 @@ static const juce::StringArray kDestNames {
     "PEA", "PED", "PES", "PER",
     "ShpRate", "ShpDep",
     "M1Coar", "M2Coar", "CCoar",
-    "Tremor", "Vein", "Flux"
+    "Tremor", "Vein", "Flux",
+    "Cortex", "Ichor", "Plasma"
 };
 
 // --- RefreshButton ---

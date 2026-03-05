@@ -1,22 +1,27 @@
-// ModMatrixSection.cpp — LFO routing: tremor/vein/flux
+// ModMatrixSection.cpp — FM macros: Cortex/Ichor/Plasma
 #include "ModMatrixSection.h"
 
 ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
 {
-    tremorKnob.initMod(apvts, bb::LFODest::Tremor);
-    setupKnob(tremorKnob, tremorLabel, "Tremor");
-    tremorAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "TREMOR", tremorKnob);
+    cortexKnob.initMod(apvts, bb::LFODest::Cortex);
+    setupKnob(cortexKnob, cortexLabel, "Cortex");
+    cortexAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "CORTEX", cortexKnob);
 
-    veinKnob.initMod(apvts, bb::LFODest::Vein);
-    setupKnob(veinKnob, veinLabel, "Vein");
-    veinAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "VEIN", veinKnob);
+    ichorKnob.initMod(apvts, bb::LFODest::Ichor);
+    setupKnob(ichorKnob, ichorLabel, "Ichor");
+    ichorAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "ICHOR", ichorKnob);
 
-    fluxKnob.initMod(apvts, bb::LFODest::Flux);
-    setupKnob(fluxKnob, fluxLabel, "Flux");
-    fluxAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "FLUX", fluxKnob);
+    plasmaKnob.initMod(apvts, bb::LFODest::Plasma);
+    setupKnob(plasmaKnob, plasmaLabel, "Plasma");
+    plasmaAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "PLASMA", plasmaKnob);
+
+    // Double-click resets to default
+    cortexKnob.setDoubleClickReturnValue(true, 0.5);
+    ichorKnob.setDoubleClickReturnValue(true, 0.0);
+    plasmaKnob.setDoubleClickReturnValue(true, 1.0);
 
     startTimerHz(5);
 }
@@ -29,9 +34,9 @@ void ModMatrixSection::timerCallback()
         else
             label.setText(name, juce::dontSendNotification);
     };
-    showPct(tremorKnob, tremorLabel, "Tremor");
-    showPct(veinKnob, veinLabel, "Vein");
-    showPct(fluxKnob, fluxLabel, "Flux");
+    showPct(cortexKnob, cortexLabel, "Cortex");
+    showPct(ichorKnob, ichorLabel, "Ichor");
+    showPct(plasmaKnob, plasmaLabel, "Plasma");
 }
 
 void ModMatrixSection::setupKnob(juce::Slider& knob, juce::Label& label,
@@ -57,15 +62,13 @@ void ModMatrixSection::resized()
     auto knobRow = area.withSizeKeepingCentre(area.getWidth(), knobSize + labelH);
     int colW = knobRow.getWidth() / 3;
 
-    auto tremorArea = knobRow.removeFromLeft(colW);
-    tremorLabel.setBounds(tremorArea.removeFromBottom(labelH));
-    tremorKnob.setBounds(tremorArea);
+    auto placeKnob = [&](juce::Slider& knob, juce::Label& label) {
+        auto col = knobRow.removeFromLeft(colW);
+        label.setBounds(col.removeFromBottom(labelH));
+        knob.setBounds(col);
+    };
 
-    auto veinArea = knobRow.removeFromLeft(colW);
-    veinLabel.setBounds(veinArea.removeFromBottom(labelH));
-    veinKnob.setBounds(veinArea);
-
-    auto fluxArea = knobRow;
-    fluxLabel.setBounds(fluxArea.removeFromBottom(labelH));
-    fluxKnob.setBounds(fluxArea);
+    placeKnob(cortexKnob, cortexLabel);
+    placeKnob(ichorKnob, ichorLabel);
+    placeKnob(plasmaKnob, plasmaLabel);
 }

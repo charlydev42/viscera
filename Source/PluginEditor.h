@@ -80,7 +80,7 @@ private:
     bool darkModeTransitioning = false;
 
 
-    // Main page macro knobs (Volume, Drive, Cutoff, Res, Fold, Spread)
+    // Main page macro knobs (Volume, Drive, Cortex, Plasma, Fold, Ichor)
     ModSlider macroKnobs[6];
     juce::Label macroLabels[6];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> macroAttach[6];

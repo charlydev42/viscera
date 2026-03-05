@@ -148,7 +148,8 @@ void FMVoice::controllerMoved(int /*controllerNumber*/, int /*newControllerValue
 }
 
 double FMVoice::calcModFreq(double baseFreq, int coarseIdx, float fineCents,
-                             float fixedFreqHz, int multi, bool kbTrack) const
+                             float fixedFreqHz, int multi, bool kbTrack,
+                             float cortexSpread, float ichorOffset) const
 {
     if (kbTrack)
     {
@@ -156,6 +157,11 @@ double FMVoice::calcModFreq(double baseFreq, int coarseIdx, float fineCents,
         double fineShift = std::exp2(static_cast<double>(fineCents) / 1200.0);
         int idx = juce::jlimit(0, kMaxCoarseIdx, coarseIdx);
         double ratio = static_cast<double>(coarseRatio(idx));
+        // Cortex: pow(ratio, cortex*2) → 0=unison, 0.5=neutral, 1=wide
+        if (ratio > 0.0)
+            ratio = std::pow(ratio, static_cast<double>(cortexSpread) * 2.0);
+        // Ichor: inharmonicity offset → 0=harmonic, 1=metallic/bell
+        ratio += static_cast<double>(ichorOffset) * 0.3 * ratio;
         return baseFreq * ratio * fineShift;
     }
     else
@@ -178,10 +184,21 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     }
 
     // --- Lire les paramètres une fois par bloc ---
+    // Macros (read first, used by mod levels below)
+    float cortexP      = juce::jlimit(0.0f, 1.0f,
+        (params.cortex ? params.cortex->load() : 0.5f)
+        + params.lfoModCortex.load(std::memory_order_relaxed));
+    float ichorP       = juce::jlimit(0.0f, 1.0f,
+        (params.ichor ? params.ichor->load() : 0.0f)
+        + params.lfoModIchor.load(std::memory_order_relaxed));
+    float plasmaP      = juce::jlimit(0.0f, 1.0f,
+        (params.plasma ? params.plasma->load() : 1.0f)
+        + params.lfoModPlasma.load(std::memory_order_relaxed));
+
     bool  mod1OnP        = !params.mod1On || params.mod1On->load() > 0.5f;
     auto mod1WaveIdx     = static_cast<int>(params.mod1Wave->load());
     bool  mod1KB         = params.mod1KB->load() > 0.5f;
-    float mod1LevelP     = mod1OnP ? params.mod1Level->load() : 0.0f;
+    float mod1LevelP     = (mod1OnP ? params.mod1Level->load() : 0.0f) * plasmaP;
     int   mod1CoarseIdx  = juce::jlimit(0, kMaxCoarseIdx,
         static_cast<int>(params.mod1Coarse->load()
             + params.lfoModMod1Coarse.load(std::memory_order_relaxed) * 24.0f));
@@ -193,7 +210,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     bool  mod2OnP        = !params.mod2On || params.mod2On->load() > 0.5f;
     auto mod2WaveIdx     = static_cast<int>(params.mod2Wave->load());
     bool  mod2KB         = params.mod2KB->load() > 0.5f;
-    float mod2LevelP     = mod2OnP ? params.mod2Level->load() : 0.0f;
+    float mod2LevelP     = (mod2OnP ? params.mod2Level->load() : 0.0f) * plasmaP;
     int   mod2CoarseIdx  = juce::jlimit(0, kMaxCoarseIdx,
         static_cast<int>(params.mod2Coarse->load()
             + params.lfoModMod2Coarse.load(std::memory_order_relaxed) * 24.0f));
@@ -345,7 +362,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // --- Modulateur 1 ---
         double mod1Freq = calcModFreq(baseFreq, mod1CoarseIdx, mod1FineCents,
-                                       mod1FixedHz, mod1MultiVal, mod1KB);
+                                       mod1FixedHz, mod1MultiVal, mod1KB, cortexP, ichorP);
         mod1Osc.setFrequency(mod1Freq);
         float mod1Out = mod1Osc.tick();
         float env1Val = env1.tick();
@@ -354,7 +371,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // --- Modulateur 2 ---
         double mod2Freq = calcModFreq(baseFreq, mod2CoarseIdx, mod2FineCents,
-                                       mod2FixedHz, mod2MultiVal, mod2KB);
+                                       mod2FixedHz, mod2MultiVal, mod2KB, cortexP, ichorP);
         mod2Osc.setFrequency(mod2Freq);
 
         double phaseMod = 0.0;
@@ -419,7 +436,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // --- Carrier ---
         double carrierFreq = calcModFreq(baseFreq, carCoarseIdx, carFineCents,
-                                          carFixedHz, carMultiVal, carKB);
+                                          carFixedHz, carMultiVal, carKB, cortexP, ichorP);
         carrierOsc.setFrequency(carrierFreq);
         carrierOsc.setDrift(driftParam);
 

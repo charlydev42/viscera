@@ -149,7 +149,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     addChildComponent(saveOverlay); // hidden by default
 
     // Page toggle button
-    pageToggleBtn.setButtonText("Edit");
+    pageToggleBtn.setButtonText("Advanced");
     pageToggleBtn.onClick = [this] {
         if (showSaveOverlay)
         {
@@ -223,12 +223,12 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     {
         struct MacroDef { const char* paramId; const char* label; bb::LFODest dest; };
         const MacroDef defs[6] = {
-            { "VOLUME",      "Volume", bb::LFODest::Volume       },
-            { "DRIVE",       "Drive",  bb::LFODest::Drive        },
-            { "FILT_CUTOFF", "Cutoff", bb::LFODest::FilterCutoff },
-            { "FILT_RES",    "Reso",   bb::LFODest::FilterRes    },
-            { "DISP_AMT",    "Fold",   bb::LFODest::FoldAmt      },
-            { "CAR_SPREAD",  "Spread", bb::LFODest::CarSpread    },
+            { "VOLUME",      "Volume",  bb::LFODest::Volume       },
+            { "DRIVE",       "Drive",   bb::LFODest::Drive        },
+            { "CORTEX",      "Cortex",  bb::LFODest::Cortex       },
+            { "PLASMA",      "Plasma",  bb::LFODest::Plasma       },
+            { "DISP_AMT",    "Fold",    bb::LFODest::FoldAmt      },
+            { "ICHOR",       "Ichor",   bb::LFODest::Ichor        },
         };
 
         for (int i = 0; i < 6; ++i)
@@ -236,10 +236,15 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
             macroKnobs[i].setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
             macroKnobs[i].setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
             macroKnobs[i].initMod(processor.apvts, defs[i].dest);
-            addChildComponent(macroKnobs[i]); // hidden initially (main page not shown by default... we call setPage below)
+            addChildComponent(macroKnobs[i]);
 
             macroAttach[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
                 processor.apvts, defs[i].paramId, macroKnobs[i]);
+
+            // Double-click resets to parameter default
+            auto* param = processor.apvts.getParameter(defs[i].paramId);
+            macroKnobs[i].setDoubleClickReturnValue(true,
+                param->convertFrom0to1(param->getDefaultValue()));
 
             macroLabels[i].setText(defs[i].label, juce::dontSendNotification);
             macroLabels[i].setJustificationType(juce::Justification::centred);
@@ -483,7 +488,7 @@ void VisceraEditor::setPresetOverlayVisible(bool visible)
     else if (showAdvanced)
         pageToggleBtn.setButtonText("Home");
     else
-        pageToggleBtn.setButtonText("Edit");
+        pageToggleBtn.setButtonText("Advanced");
 
     if (showAdvanced)
     {
@@ -561,7 +566,7 @@ void VisceraEditor::setSaveOverlayVisible(bool visible)
     else if (showAdvanced)
         pageToggleBtn.setButtonText("Home");
     else
-        pageToggleBtn.setButtonText("Edit");
+        pageToggleBtn.setButtonText("Advanced");
 
     if (showAdvanced)
     {
@@ -612,7 +617,7 @@ void VisceraEditor::setSaveOverlayVisible(bool visible)
 void VisceraEditor::setPage(bool advanced)
 {
     showAdvanced = advanced;
-    pageToggleBtn.setButtonText(advanced ? "Home" : "Edit");
+    pageToggleBtn.setButtonText(advanced ? "Home" : "Advanced");
 
     // Close overlays when switching pages
     if (showPresetOverlay)
@@ -651,7 +656,6 @@ void VisceraEditor::setPage(bool advanced)
         fxMixKnob[i].setVisible(!advanced);
         fxLabel[i].setVisible(!advanced);
     }
-
     // Flubber visualizer only on main page (and not during overlays)
     flubberVisualizer.setVisible(!advanced && !showPresetOverlay && !showSaveOverlay);
     if (advanced)
@@ -748,7 +752,7 @@ void VisceraEditor::resized()
     algoRightBtn.setBounds(topBar.removeFromLeft(22));
     topBar.removeFromLeft(sp);
 
-    pageToggleBtn.setBounds(topBar.removeFromRight(40));
+    pageToggleBtn.setBounds(topBar.removeFromRight(62));
     topBar.removeFromRight(sp);
     darkModeBtn.setBounds(topBar.removeFromRight(40));
     topBar.removeFromRight(sp);
@@ -791,7 +795,8 @@ void VisceraEditor::resized()
         float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.45f;
         float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * 0.9f;
 
-        // Left: Cutoff(2), Res(3), Spread(5)  |  Right: Drive(1), Fold(4), Volume(0)
+        // Left: Cortex(2), Plasma(3), Ichor(5)  |  Right: Drive(1), Fold(4), Volume(0)
+        // Cortex=harmonic spread, Plasma=FM depth, Ichor=inharmonicity
         float leftAngles[3]  = { 150.0f * pi / 180.0f, 180.0f * pi / 180.0f, 210.0f * pi / 180.0f };
         float rightAngles[3] = {  30.0f * pi / 180.0f,   0.0f * pi / 180.0f, 330.0f * pi / 180.0f };
         int leftIdx[3]  = { 2, 3, 5 };
