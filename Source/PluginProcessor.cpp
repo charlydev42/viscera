@@ -1,7 +1,9 @@
 // PluginProcessor.cpp — Implémentation du processeur principal
 // Contient : layout des paramètres, synthesiser, presets factory, state save/load
 #include "PluginProcessor.h"
+#ifndef VISCERA_HEADLESS_TESTS
 #include "PluginEditor.h"
+#endif
 #include "dsp/FMSound.h"
 #include <BinaryData.h>
 
@@ -1246,10 +1248,14 @@ void VisceraProcessor::migrateOldPitchParams(juce::ValueTree& tree)
 
 
 // --- Création de l'éditeur ---
+#ifdef VISCERA_HEADLESS_TESTS
+juce::AudioProcessorEditor* VisceraProcessor::createEditor() { return nullptr; }
+#else
 juce::AudioProcessorEditor* VisceraProcessor::createEditor()
 {
     return new VisceraEditor(*this);
 }
+#endif
 
 // --- Point d'entrée JUCE ---
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

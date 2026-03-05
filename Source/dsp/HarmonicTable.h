@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <juce_core/juce_core.h>
 
 namespace bb {
 
