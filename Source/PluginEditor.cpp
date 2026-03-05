@@ -242,9 +242,9 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
                 processor.apvts, defs[i].paramId, macroKnobs[i]);
 
             // Double-click resets to parameter default
-            auto* param = processor.apvts.getParameter(defs[i].paramId);
-            macroKnobs[i].setDoubleClickReturnValue(true,
-                param->convertFrom0to1(param->getDefaultValue()));
+            if (auto* param = processor.apvts.getParameter(defs[i].paramId))
+                macroKnobs[i].setDoubleClickReturnValue(true,
+                    param->convertFrom0to1(param->getDefaultValue()));
 
             macroLabels[i].setText(defs[i].label, juce::dontSendNotification);
             macroLabels[i].setJustificationType(juce::Justification::centred);
@@ -295,7 +295,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     startTimerHz(5);
 
     setWantsKeyboardFocus(true);
-    setSize(920, 660);
+    setSize(920, 615);
 
     // Start on main (perform) page
     setPage(false);
@@ -342,6 +342,15 @@ void VisceraEditor::timerCallback()
 {
     updateAlgoLabel();
     proc.getUndoManager().beginNewTransaction();
+
+    // Keep macro label colors in sync with theme
+    auto labelCol = VisceraLookAndFeel::darkMode
+        ? juce::Colour(VisceraLookAndFeel::kAccentColor)
+        : juce::Colour(VisceraLookAndFeel::kAccentColor).darker(0.25f);
+    for (int i = 0; i < 6; ++i)
+        macroLabels[i].setColour(juce::Label::textColourId, labelCol);
+    for (int i = 0; i < 4; ++i)
+        fxLabel[i].setColour(juce::Label::textColourId, labelCol);
 }
 
 void VisceraEditor::randomizeParams()
@@ -726,7 +735,7 @@ void VisceraEditor::paint(juce::Graphics& g)
     {
         // Advanced page: 10 section headers (no visualizer)
         static const char* titles[] = {
-            "Mod 1", "Mod 2", "Carrier", "Vibrato",
+            "Mod 1", "Mod 2", "Carrier", "Macros",
             "LFO", "Filter", "Pitch Env",
             "Effects", "Vol Shaper", "Global"
         };
@@ -775,15 +784,27 @@ void VisceraEditor::resized()
         // =============================================
         // MAIN (PERFORM) PAGE — Oval viz + macro knobs + FX controls around ellipse
         // =============================================
-        int knobSize = 58;
-        int fxKnobSize = 44;
-        int labelH = 14;
+        // Layout constants
+        constexpr int   kMacroKnobSize    = 58;
+        constexpr int   kFxKnobSize       = 44;
+        constexpr int   kLabelH           = 14;
+        constexpr float kVizWidthRatio    = 0.62f;   // visualizer width as fraction of area
+        constexpr float kVizHeightRatio   = 0.66f;   // visualizer height as fraction of area
+        constexpr int   kVizVerticalShift = -50;      // shift viz upward
+        constexpr float kMacroOrbitXMul   = 1.45f;    // macro orbit X padding multiplier
+        constexpr float kMacroOrbitYMul   = 0.9f;     // macro orbit Y padding multiplier
+        constexpr float kFxOrbitPadX      = 28.0f;    // FX orbit extra X beyond macro
+        constexpr float kFxOrbitPadY      = 22.0f;    // FX orbit extra Y beyond macro
+
+        int knobSize = kMacroKnobSize;
+        int fxKnobSize = kFxKnobSize;
+        int labelH = kLabelH;
 
         // Rectangular flubber visualizer centered
-        int vizW = static_cast<int>(area.getWidth() * 0.62f);
-        int vizH = static_cast<int>(area.getHeight() * 0.66f);
+        int vizW = static_cast<int>(area.getWidth() * kVizWidthRatio);
+        int vizH = static_cast<int>(area.getHeight() * kVizHeightRatio);
         auto vizBounds = area.withSizeKeepingCentre(vizW, vizH);
-        vizBounds.translate(0, -50);
+        vizBounds.translate(0, kVizVerticalShift);
         mainSectionBounds[0] = vizBounds;
         flubberVisualizer.setBounds(vizBounds);
 
@@ -792,14 +813,13 @@ void VisceraEditor::resized()
         constexpr float pi = juce::MathConstants<float>::pi;
 
         // --- Macro knobs: 3 left, 3 right (along sides of ellipse) ---
-        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * 1.45f;
-        float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * 0.9f;
+        float macroRx = static_cast<float>(vizW) * 0.5f + static_cast<float>(knobSize) * kMacroOrbitXMul;
+        float macroRy = static_cast<float>(vizH) * 0.5f + static_cast<float>(knobSize) * kMacroOrbitYMul;
 
-        // Left: Cortex(2), Plasma(3), Ichor(5)  |  Right: Drive(1), Fold(4), Volume(0)
-        // Cortex=harmonic spread, Plasma=FM depth, Ichor=inharmonicity
+        // Left: Cortex(2), Ichor(5), Plasma(3)  |  Right: Drive(1), Fold(4), Volume(0)
         float leftAngles[3]  = { 150.0f * pi / 180.0f, 180.0f * pi / 180.0f, 210.0f * pi / 180.0f };
         float rightAngles[3] = {  30.0f * pi / 180.0f,   0.0f * pi / 180.0f, 330.0f * pi / 180.0f };
-        int leftIdx[3]  = { 2, 3, 5 };
+        int leftIdx[3]  = { 2, 5, 3 };
         int rightIdx[3] = { 1, 4, 0 };
 
         auto placeKnob = [&](int idx, float angle)
@@ -818,8 +838,8 @@ void VisceraEditor::resized()
         }
 
         // --- Effect mini-controls: outer orbit, bottom arc ---
-        float fxRx = macroRx + 28.0f;
-        float fxRy = macroRy + 22.0f;
+        float fxRx = macroRx + kFxOrbitPadX;
+        float fxRy = macroRy + kFxOrbitPadY;
         // 4 effects centered at bottom: ~252°, 264°, 276°, 288°
         float fxAngles[4] = { 252.0f * pi / 180.0f, 264.0f * pi / 180.0f,
                                276.0f * pi / 180.0f, 288.0f * pi / 180.0f };
@@ -880,14 +900,14 @@ void VisceraEditor::resized()
         };
 
         // === CENTRE COLUMN heights (computed first so left can align) ===
-        int vibratoH = 70;
-        int filterH = 80;
-        int pitchH = 150;
+        int macrosH = 70;
+        int filterH = 70;
+        int pitchH = 160;
         int logoH = 60;
-        int lfoH = totalH - vibratoH - filterH - pitchH - logoH - gap * 4;
+        int lfoH = totalH - macrosH - filterH - pitchH - logoH - gap * 4;
 
-        // Filter top Y in centre column = vibratoH + gap + lfoH + gap + logoH + gap
-        int filterTopOffset = vibratoH + gap + lfoH + gap + logoH + gap;
+        // Filter top Y in centre column = macrosH + gap + lfoH + gap + logoH + gap
+        int filterTopOffset = macrosH + gap + lfoH + gap + logoH + gap;
 
         // === LEFT COLUMN: Mod1 → Mod2 → Carrier (FM chain) ===
         // Carrier should align its top with filter in centre column
@@ -903,9 +923,9 @@ void VisceraEditor::resized()
             carrierSection.setBounds(leftCol.withTrimmedTop(headerH).reduced(4, 0));
         }
 
-        // === CENTRE COLUMN: Vibrato | LFO Assign | Logo | Filter + Pitch Env ===
+        // === CENTRE COLUMN: Macros | LFO Assign | Logo | Filter + Pitch Env ===
         {
-            placeSection(centreCol, vibratoH, modMatrixSection, 3);
+            placeSection(centreCol, macrosH, modMatrixSection, 3);
             centreCol.removeFromTop(gap);
             placeSection(centreCol, lfoH, lfoSection, 4);
             centreCol.removeFromTop(gap);
@@ -919,8 +939,8 @@ void VisceraEditor::resized()
 
         // === RIGHT COLUMN: Effects | Vol Shaper | Global ===
         {
-            int globalH = 70;
-            int shaperH = 160;
+            int globalH = 75;
+            int shaperH = 155;
             int effectsH = totalH - globalH - shaperH - gap * 2;
 
             placeSection(rightCol, effectsH, tabbedEffects, 7);
@@ -977,7 +997,7 @@ void VisceraEditor::parentHierarchyChanged()
             docWindow->setUsingNativeTitleBar(true);
             // Re-set editor size so the window adapts
             juce::MessageManager::callAsync([this] {
-                setSize(920, 660);
+                setSize(920, 615);
             });
         }
     }

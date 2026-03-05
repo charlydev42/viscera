@@ -60,6 +60,12 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
     smoothMod2Level.reset(sr, 0.02);
     smoothCarNoise.reset(sr, 0.02);
     smoothCarSpread.reset(sr, 0.02);
+    smoothGLfoPitch.reset(sr, 0.005);  // 5ms smooth for global LFO pitch
+    smoothGLfoCutoff.reset(sr, 0.005); // 5ms smooth for global LFO cutoff
+
+    // Reset filter coefficient cache
+    lastFilterCutoff = -1.0f;
+    lastFilterRes    = -1.0f;
 
     // Anti-click fade: ~5ms
     stealFadeLength = static_cast<int>(sr * 0.005);
@@ -101,6 +107,7 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
         mod1Osc.resetPhase();
         mod2Osc.resetPhase();
         carrierOsc.resetPhase();
+        carrierOscR.resetPhase();
     }
 
     // Lancer les enveloppes
@@ -192,13 +199,15 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         (params.ichor ? params.ichor->load() : 0.0f)
         + params.lfoModIchor.load(std::memory_order_relaxed));
     float plasmaP      = juce::jlimit(0.0f, 1.0f,
-        (params.plasma ? params.plasma->load() : 1.0f)
+        (params.plasma ? params.plasma->load() : 0.5f)
         + params.lfoModPlasma.load(std::memory_order_relaxed));
+    // Exponential FM depth: 0→0.25×, 0.5→1× (neutral), 1→4× (±12dB range)
+    float plasmaMul    = std::pow(4.0f, plasmaP * 2.0f - 1.0f);
 
     bool  mod1OnP        = !params.mod1On || params.mod1On->load() > 0.5f;
     auto mod1WaveIdx     = static_cast<int>(params.mod1Wave->load());
     bool  mod1KB         = params.mod1KB->load() > 0.5f;
-    float mod1LevelP     = (mod1OnP ? params.mod1Level->load() : 0.0f) * plasmaP;
+    float mod1LevelP     = (mod1OnP ? params.mod1Level->load() : 0.0f) * plasmaMul;
     int   mod1CoarseIdx  = juce::jlimit(0, kMaxCoarseIdx,
         static_cast<int>(params.mod1Coarse->load()
             + params.lfoModMod1Coarse.load(std::memory_order_relaxed) * 24.0f));
@@ -210,7 +219,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     bool  mod2OnP        = !params.mod2On || params.mod2On->load() > 0.5f;
     auto mod2WaveIdx     = static_cast<int>(params.mod2Wave->load());
     bool  mod2KB         = params.mod2KB->load() > 0.5f;
-    float mod2LevelP     = (mod2OnP ? params.mod2Level->load() : 0.0f) * plasmaP;
+    float mod2LevelP     = (mod2OnP ? params.mod2Level->load() : 0.0f) * plasmaMul;
     int   mod2CoarseIdx  = juce::jlimit(0, kMaxCoarseIdx,
         static_cast<int>(params.mod2Coarse->load()
             + params.lfoModMod2Coarse.load(std::memory_order_relaxed) * 24.0f));
@@ -240,9 +249,9 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     float fluxAmount   = juce::jlimit(0.0f, 1.0f, params.flux->load()
                          + params.lfoModFlux.load(std::memory_order_relaxed));
 
-    // Global LFO modulation sums (from PluginProcessor)
-    float gLfoModPitch   = params.lfoModPitch.load(std::memory_order_relaxed);
-    float gLfoModCutoff  = params.lfoModCutoff.load(std::memory_order_relaxed);
+    // Global LFO modulation sums (from PluginProcessor) — smoothed for pitch + cutoff
+    smoothGLfoPitch.setTargetValue(params.lfoModPitch.load(std::memory_order_relaxed));
+    smoothGLfoCutoff.setTargetValue(params.lfoModCutoff.load(std::memory_order_relaxed));
     float gLfoModRes     = params.lfoModRes.load(std::memory_order_relaxed);
     float gLfoModMod1Lvl = params.lfoModMod1Lvl.load(std::memory_order_relaxed);
     float gLfoModMod2Lvl = params.lfoModMod2Lvl.load(std::memory_order_relaxed);
@@ -293,27 +302,30 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     smoothCarNoise.setTargetValue(carNoiseP);
     smoothCarSpread.setTargetValue(carSpreadP);
 
-    // Mettre à jour les paramètres d'enveloppe (+ LFO modulation)
+    // Envelope time macro: 0.5 = 1x, 0 = 0.25x, 1 = 4x (exponential)
+    float timeMul = std::pow(4.0f, params.macroTime->load() * 2.0f - 1.0f);
+
+    // Mettre à jour les paramètres d'enveloppe (+ LFO modulation + time macro)
     env1.setParameters(
-        std::max(0.001f, params.env1A->load() + params.lfoModEnv1A.load(std::memory_order_relaxed) * 5.0f),
-        std::max(0.001f, params.env1D->load() + params.lfoModEnv1D.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, (params.env1A->load() + params.lfoModEnv1A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.001f, (params.env1D->load() + params.lfoModEnv1D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env1S->load() + params.lfoModEnv1S.load(std::memory_order_relaxed)),
-        std::max(0.001f, params.env1R->load() + params.lfoModEnv1R.load(std::memory_order_relaxed) * 8.0f));
+        std::max(0.001f, (params.env1R->load() + params.lfoModEnv1R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
     env2.setParameters(
-        std::max(0.001f, params.env2A->load() + params.lfoModEnv2A.load(std::memory_order_relaxed) * 5.0f),
-        std::max(0.001f, params.env2D->load() + params.lfoModEnv2D.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, (params.env2A->load() + params.lfoModEnv2A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.001f, (params.env2D->load() + params.lfoModEnv2D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env2S->load() + params.lfoModEnv2S.load(std::memory_order_relaxed)),
-        std::max(0.001f, params.env2R->load() + params.lfoModEnv2R.load(std::memory_order_relaxed) * 8.0f));
+        std::max(0.001f, (params.env2R->load() + params.lfoModEnv2R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
     env3.setParameters(
-        std::max(0.001f, params.env3A->load() + params.lfoModEnv3A.load(std::memory_order_relaxed) * 5.0f),
-        std::max(0.001f, params.env3D->load() + params.lfoModEnv3D.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, (params.env3A->load() + params.lfoModEnv3A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.001f, (params.env3D->load() + params.lfoModEnv3D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env3S->load() + params.lfoModEnv3S.load(std::memory_order_relaxed)),
-        std::max(0.001f, params.env3R->load() + params.lfoModEnv3R.load(std::memory_order_relaxed) * 8.0f));
+        std::max(0.001f, (params.env3R->load() + params.lfoModEnv3R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
     pitchEnv.setParameters(
-        std::max(0.001f, params.pitchEnvA->load() + params.lfoModPEnvA.load(std::memory_order_relaxed) * 5.0f),
-        std::max(0.001f, params.pitchEnvD->load() + params.lfoModPEnvD.load(std::memory_order_relaxed) * 5.0f),
+        std::max(0.001f, (params.pitchEnvA->load() + params.lfoModPEnvA.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.001f, (params.pitchEnvD->load() + params.lfoModPEnvD.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.pitchEnvS->load() + params.lfoModPEnvS.load(std::memory_order_relaxed)),
-        std::max(0.001f, params.pitchEnvR->load() + params.lfoModPEnvR.load(std::memory_order_relaxed) * 8.0f));
+        std::max(0.001f, (params.pitchEnvR->load() + params.lfoModPEnvR.load(std::memory_order_relaxed) * 8.0f) * timeMul));
 
     // HemoFold (wavefolder) + global LFO fold mod
     float foldAmt = juce::jlimit(0.0f, 1.0f, dispAmount + gLfoModFold);
@@ -323,6 +335,31 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // XOR mask
     uint16_t xorMask = xorEnabled ? 0x5A5A : 0x0000;
     xorDist.setMask(xorMask);
+
+    // Pre-compute block-rate ratios (saves 3× exp2 + 3× pow per sample)
+    // For KB-track mode: ratio includes cortex, ichor and fine shift.
+    // For fixed mode: ratio is fixedFreqHz × multiValue (absolute freq, not multiplied by baseFreq).
+    auto precomputeRatio = [&](int coarseIdx, float fineCents, bool kbTrack,
+                                float fixedFreqHz, int multi) -> double
+    {
+        if (kbTrack) {
+            double fineShift = std::exp2(static_cast<double>(fineCents) / 1200.0);
+            int idx = juce::jlimit(0, kMaxCoarseIdx, coarseIdx);
+            double ratio = static_cast<double>(coarseRatio(idx));
+            if (ratio > 0.0)
+                ratio = std::pow(ratio, static_cast<double>(cortexP) * 2.0);
+            ratio += static_cast<double>(ichorP) * 0.3 * ratio;
+            return ratio * fineShift;
+        } else {
+            return static_cast<double>(fixedFreqHz) * static_cast<double>(multiValue(multi));
+        }
+    };
+    double mod1Ratio = precomputeRatio(mod1CoarseIdx, mod1FineCents, mod1KB, mod1FixedHz, mod1MultiVal);
+    double mod2Ratio = precomputeRatio(mod2CoarseIdx, mod2FineCents, mod2KB, mod2FixedHz, mod2MultiVal);
+    double carRatio  = precomputeRatio(carCoarseIdx,  carFineCents,  carKB,  carFixedHz,  carMultiVal);
+
+    // Detuning: linear approximation of exp2(x) for |x| < 0.013 (max error < 0.01%)
+    constexpr double kDetuneScale = 15.0 / 1200.0 * 0.693147180559945; // 15 cents × ln(2)
 
     // --- Boucle par échantillon ---
     for (int i = 0; i < numSamples; ++i)
@@ -342,9 +379,10 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         double pitchEnvSemitones = pitchEnvEnabled
             ? static_cast<double>(pitchEnvAmt * pitchEnvVal) : 0.0;
 
-        // Pitch modulation via LFO "tremor" : ±2 semitones max + global LFO pitch
+        // Pitch modulation via LFO "tremor" : ±2 semitones max + global LFO pitch (smoothed)
+        float gLfoPitchSmoothed = smoothGLfoPitch.getNextValue();
         double pitchModSemitones = static_cast<double>(lfo1Val * tremorAmount) * 2.0
-                                   + static_cast<double>(gLfoModPitch) * 2.0
+                                   + static_cast<double>(gLfoPitchSmoothed) * 2.0
                                    + pitchBendSemitones + pitchEnvSemitones;
         pitchModSemitones = juce::jlimit(-48.0, 48.0, pitchModSemitones);
         double pitchMod = std::exp2(pitchModSemitones / 12.0);
@@ -357,12 +395,11 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // Smooth parameters + apply global LFO modulations
         float vol      = juce::jlimit(0.0f, 1.0f, smoothVolume.getNextValue() + gLfoModVolume);
         float cutoff   = smoothCutoff.getNextValue();
-        float m1Level  = juce::jlimit(0.0f, 1.0f, smoothMod1Level.getNextValue() + gLfoModMod1Lvl);
-        float m2Level  = juce::jlimit(0.0f, 1.0f, smoothMod2Level.getNextValue() + gLfoModMod2Lvl);
+        float m1Level  = std::max(0.0f, smoothMod1Level.getNextValue() + gLfoModMod1Lvl);
+        float m2Level  = std::max(0.0f, smoothMod2Level.getNextValue() + gLfoModMod2Lvl);
 
-        // --- Modulateur 1 ---
-        double mod1Freq = calcModFreq(baseFreq, mod1CoarseIdx, mod1FineCents,
-                                       mod1FixedHz, mod1MultiVal, mod1KB, cortexP, ichorP);
+        // --- Modulateur 1 --- (use pre-computed ratio: baseFreq × ratio or absolute)
+        double mod1Freq = mod1KB ? baseFreq * mod1Ratio : mod1Ratio;
         mod1Osc.setFrequency(mod1Freq);
         float mod1Out = mod1Osc.tick();
         float env1Val = env1.tick();
@@ -370,8 +407,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                             * kMaxModIndex;
 
         // --- Modulateur 2 ---
-        double mod2Freq = calcModFreq(baseFreq, mod2CoarseIdx, mod2FineCents,
-                                       mod2FixedHz, mod2MultiVal, mod2KB, cortexP, ichorP);
+        double mod2Freq = mod2KB ? baseFreq * mod2Ratio : mod2Ratio;
         mod2Osc.setFrequency(mod2Freq);
 
         double phaseMod = 0.0;
@@ -434,15 +470,15 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             }
         }
 
-        // --- Carrier ---
-        double carrierFreq = calcModFreq(baseFreq, carCoarseIdx, carFineCents,
-                                          carFixedHz, carMultiVal, carKB, cortexP, ichorP);
+        // --- Carrier --- (use pre-computed ratio)
+        double carrierFreq = carKB ? baseFreq * carRatio : carRatio;
         carrierOsc.setFrequency(carrierFreq);
         carrierOsc.setDrift(driftParam);
 
         // Stereo spread: detune R carrier by up to ±15 cents (+ global LFO)
+        // Linear approximation of exp2(x) for small x: 1 + x * ln(2)
         float spread = juce::jlimit(0.0f, 1.0f, smoothCarSpread.getNextValue() + gLfoModSpread);
-        double detuneR = std::exp2(static_cast<double>(spread) * 15.0 / 1200.0);
+        double detuneR = 1.0 + static_cast<double>(spread) * kDetuneScale;
         carrierOscR.setFrequency(carrierFreq * detuneR);
         carrierOscR.setDrift(driftParam);
 
@@ -496,14 +532,22 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             // Forward: norm = ((hz-20)/19980)^skew  |  Inverse: hz = 20 + 19980 * norm^(1/skew)
             constexpr float kCutSkew = 0.2299f;
             constexpr float kCutInvSkew = 1.0f / kCutSkew; // ~4.35
+            float gLfoCutSmoothed = smoothGLfoCutoff.getNextValue();
             float cutLin = juce::jlimit(0.0f, 1.0f, (cutoff - 20.0f) / 19980.0f);
             float cutNorm = std::pow(cutLin, kCutSkew);
-            cutNorm = juce::jlimit(0.0f, 1.0f, cutNorm + gLfoModCutoff);
+            cutNorm = juce::jlimit(0.0f, 1.0f, cutNorm + gLfoCutSmoothed);
             float modulatedCutoff = (20.0f + 19980.0f * std::pow(cutNorm, kCutInvSkew)) * veinMod;
             modulatedCutoff = juce::jlimit(20.0f, 20000.0f, modulatedCutoff);
             float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + gLfoModRes);
-            filterL.setParameters(modulatedCutoff, modulatedRes);
-            filterR.setParameters(modulatedCutoff, modulatedRes);
+            // Only recalculate filter coefficients when parameters changed audibly
+            if (std::abs(modulatedCutoff - lastFilterCutoff) > 0.5f
+                || std::abs(modulatedRes - lastFilterRes) > 0.001f)
+            {
+                filterL.setParameters(modulatedCutoff, modulatedRes);
+                filterR.setParameters(modulatedCutoff, modulatedRes);
+                lastFilterCutoff = modulatedCutoff;
+                lastFilterRes    = modulatedRes;
+            }
             outputL = filterL.tick(outputL, filterMode);
             outputR = filterR.tick(outputR, filterMode);
         }

@@ -1,4 +1,4 @@
-// ModMatrixSection.h — FM macro knobs (Cortex/Ichor/Plasma)
+// ModMatrixSection.h — FM macro knobs (Cortex/Ichor/Plasma/Time)
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -15,10 +15,11 @@ public:
 
 private:
     ModSlider cortexKnob, ichorKnob, plasmaKnob;
-    juce::Label cortexLabel, ichorLabel, plasmaLabel;
+    juce::Slider timeKnob;
+    juce::Label cortexLabel, ichorLabel, plasmaLabel, timeLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
-        cortexAttach, ichorAttach, plasmaAttach;
+        cortexAttach, ichorAttach, plasmaAttach, timeAttach;
 
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 

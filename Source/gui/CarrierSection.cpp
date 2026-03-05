@@ -451,6 +451,7 @@ void CarrierSection::resized()
         area.removeFromTop(3);
 
         // Bottom: ADSR knobs (aligned with PitchEnv/Global)
+        area.removeFromBottom(5);
         auto knobRow2 = area.removeFromBottom(knobH + labelH);
         int adsrColW = knobRow2.getWidth() / 4;
         for (int i = 0; i < 4; ++i)

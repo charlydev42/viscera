@@ -102,7 +102,8 @@ void GlobalSection::resized()
     area.removeFromTop(2);
     int knobSize = 36;
     int labelH = 12;
-    auto knobRow = area.withSizeKeepingCentre(area.getWidth(), knobSize + labelH);
+    area.removeFromBottom(5);
+    auto knobRow = area.removeFromBottom(knobSize + labelH);
     int colW = knobRow.getWidth() / 5;
 
     // Col 1: Mono + Retrig stacked

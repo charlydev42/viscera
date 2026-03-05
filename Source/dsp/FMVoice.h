@@ -175,6 +175,7 @@ struct VoiceParams
     std::atomic<float>* cortex    = nullptr; // Harmonic spread macro (0=unison, 0.5=neutral, 1=wide)
     std::atomic<float>* ichor     = nullptr; // Inharmonicity offset (0=harmonic, 1=metallic)
     std::atomic<float>* plasma    = nullptr; // FM depth multiplier (0=pure, 1=full FM)
+    std::atomic<float>* macroTime = nullptr; // Envelope time scale (0.5=1x, 0=0.25x, 1=4x)
 
     // Global LFO modulation sums (written by processor, read by voice)
     std::atomic<float> lfoModPitch   { 0.0f };
@@ -306,6 +307,14 @@ private:
     juce::SmoothedValue<float> smoothMod2Level;
     juce::SmoothedValue<float> smoothCarNoise;
     juce::SmoothedValue<float> smoothCarSpread;
+
+    // Smooth global LFO modulation for pitch and cutoff (most audible)
+    juce::SmoothedValue<float> smoothGLfoPitch;
+    juce::SmoothedValue<float> smoothGLfoCutoff;
+
+    // Filter coefficient cache: skip recalculation when params haven't changed
+    float lastFilterCutoff = -1.0f;
+    float lastFilterRes    = -1.0f;
 
     // Anti-click fade-out for voice stealing
     int stealFadeSamples = 0;

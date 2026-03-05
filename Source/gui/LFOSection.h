@@ -116,10 +116,11 @@ private:
     juce::TextButton slotButtons[kNumSlots];
     juce::TextButton slotClearBtns[kNumSlots]; // small "x" to unmap
 
-    // "+" button to add a new routing, "-" to remove last, count label
+    // "+" button to add a new routing, "-" to remove last, count label, hint
     juce::TextButton addSlotBtn;
     juce::TextButton removeSlotBtn;
     juce::Label countLabel;
+    juce::Label learnHintLabel;
     juce::Rectangle<int> slotArea; // cached from resized()
     void layoutSlots(); // dynamic layout of visible slots
 

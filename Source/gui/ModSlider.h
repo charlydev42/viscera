@@ -549,19 +549,21 @@ private:
             menu.addSeparator();
         menu.addItem(100, juce::String::charToString(0x21BA) + "  Reset to Default");
 
+        auto safeThis = juce::Component::SafePointer<ModSlider>(this);
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
-            [this, hits, numHits](int result) {
-                if (!statePtr || result <= 0) return;
+            [safeThis, hits, numHits](int result) {
+                if (safeThis == nullptr || !safeThis->statePtr || result <= 0) return;
+                auto* statePtr = safeThis->statePtr;
 
                 if (result == 100)
                 {
                     // Reset slider to default value
-                    auto paramId = getComponentID();
+                    auto paramId = safeThis->getComponentID();
                     if (auto* param = statePtr->getParameter(paramId))
                         param->setValueNotifyingHost(param->getDefaultValue());
                     else
-                        setValue(getDoubleClickReturnValue(), juce::sendNotificationSync);
-                    repaint();
+                        safeThis->setValue(safeThis->getDoubleClickReturnValue(), juce::sendNotificationSync);
+                    safeThis->repaint();
                     return;
                 }
 
@@ -574,7 +576,7 @@ private:
                     statePtr->getParameter(destId)->convertTo0to1(0.0f));
                 statePtr->getParameter(amtId)->setValueNotifyingHost(
                     statePtr->getParameter(amtId)->convertTo0to1(0.0f));
-                repaint();
+                safeThis->repaint();
             });
     }
 

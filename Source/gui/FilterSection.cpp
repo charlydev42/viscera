@@ -69,23 +69,18 @@ void FilterSection::resized()
     int knobSize = 36;
     int labelH = 12;
     auto knobRow = area.withSizeKeepingCentre(area.getWidth(), knobSize + labelH);
-    int colW = knobRow.getWidth() / 4;
 
-    // On/Off toggle — aligned with effect toggles
-    auto onArea = knobRow.removeFromLeft(colW);
-    onToggle.setBounds(onArea.reduced(2, 8));
+    // On/Off toggle + Type selector (compact group on the left)
+    onToggle.setBounds(knobRow.removeFromLeft(48).reduced(2, 8));
+    typeBox.setBounds(knobRow.removeFromLeft(56).reduced(2, 8));
 
-    // Type selector
-    auto typeArea = knobRow.removeFromLeft(colW);
-    typeLabel.setBounds(typeArea.removeFromBottom(labelH));
-    typeBox.setBounds(typeArea.reduced(2, 4));
+    // Cutoff + Resonance share remaining space equally
+    int colW = knobRow.getWidth() / 2;
 
-    // Cutoff
     auto cutArea = knobRow.removeFromLeft(colW);
     cutoffLabel.setBounds(cutArea.removeFromBottom(labelH));
     cutoffKnob.setBounds(cutArea);
 
-    // Resonance
     auto resArea = knobRow;
     resLabel.setBounds(resArea.removeFromBottom(labelH));
     resKnob.setBounds(resArea);

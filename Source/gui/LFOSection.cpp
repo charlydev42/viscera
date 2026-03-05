@@ -508,6 +508,14 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     countLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
     addAndMakeVisible(countLabel);
 
+    // Learn mode hint
+    learnHintLabel.setText("Click a knob", juce::dontSendNotification);
+    learnHintLabel.setJustificationType(juce::Justification::centredLeft);
+    learnHintLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
+    learnHintLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.35f));
+    learnHintLabel.setVisible(false);
+    addAndMakeVisible(learnHintLabel);
+
     // Initial tab
     switchTab(0);
 
@@ -602,6 +610,12 @@ void LFOSection::timerCallback()
     updateSyncDisplay();
     updateAssignmentLabels();
 
+    // Keep label colors in sync with current theme
+    learnHintLabel.setColour(juce::Label::textColourId,
+        juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.45f));
+    countLabel.setColour(juce::Label::textColourId,
+        juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
+
     // Highlight "+" button when in assignment mode (learn or drag)
     if (ModSlider::showDropTargets || learnSlotIndex >= 0)
     {
@@ -666,14 +680,16 @@ void LFOSection::updateAssignmentLabels()
     }
 
     // "+" button: "..." during learn, hidden when all slots full
-    addSlotBtn.setButtonText(learnSlotIndex >= 0 ? "..." : "+");
-    addSlotBtn.setVisible(numMapped < kNumSlots || learnSlotIndex >= 0);
+    bool learning = learnSlotIndex >= 0;
+    addSlotBtn.setButtonText(learning ? "..." : "+");
+    addSlotBtn.setVisible(numMapped < kNumSlots || learning);
 
     // "-" button: visible when at least one assignment exists
     removeSlotBtn.setVisible(numMapped > 0);
 
     // Count + hint
     countLabel.setText(juce::String(numMapped), juce::dontSendNotification);
+    learnHintLabel.setVisible(learning);
 
     layoutSlots();
 }
@@ -693,6 +709,10 @@ void LFOSection::layoutSlots()
 
     if (removeSlotBtn.isVisible())
         removeSlotBtn.setBounds(row.removeFromRight(20).reduced(1, 0));
+
+    // Hint label centered in remaining space
+    if (learnHintLabel.isVisible())
+        learnHintLabel.setBounds(row.withTrimmedLeft(row.getWidth() / 3));
 }
 
 // ============================================================================

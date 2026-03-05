@@ -180,6 +180,7 @@ void PitchEnvSection::resized()
 
     int knobSize = 36;
     int labelH = 12;
+    area.removeFromBottom(5);
     auto knobRow = area.removeFromBottom(knobSize + labelH);
     int colW = knobRow.getWidth() / 5;
 

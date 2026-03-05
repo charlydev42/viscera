@@ -99,7 +99,7 @@ public:
         syncPulse = (phase >= 1.0);
         // Position fractionnelle du crossing pour interpolation subsample
         if (syncPulse)
-            syncFraction = static_cast<float>((1.0 - prevPhase) / inc);
+            syncFraction = static_cast<float>(std::min(1.0, (1.0 - prevPhase) / inc));
 
         phase -= std::floor(phase); // wrap [0,1)
 

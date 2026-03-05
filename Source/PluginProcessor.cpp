@@ -101,6 +101,7 @@ void VisceraProcessor::cacheParameterPointers()
     voiceParams.cortex     = apvts.getRawParameterValue("CORTEX");
     voiceParams.ichor      = apvts.getRawParameterValue("ICHOR");
     voiceParams.plasma     = apvts.getRawParameterValue("PLASMA");
+    voiceParams.macroTime  = apvts.getRawParameterValue("MACRO_TIME");
 
     // FX on/off pointers
     dlyOnParam   = apvts.getRawParameterValue("DLY_ON");
@@ -451,7 +452,9 @@ VisceraProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ICHOR", "Ichor",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PLASMA", "Plasma",
-            juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
+            juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("MACRO_TIME", "Time",
+            juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         groups.push_back(std::move(g));
     }
 

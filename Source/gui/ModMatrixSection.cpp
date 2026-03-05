@@ -1,4 +1,4 @@
-// ModMatrixSection.cpp — FM macros: Cortex/Ichor/Plasma
+// ModMatrixSection.cpp — FM macros: Cortex/Ichor/Plasma/Time
 #include "ModMatrixSection.h"
 
 ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
@@ -18,10 +18,15 @@ ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
     plasmaAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "PLASMA", plasmaKnob);
 
+    setupKnob(timeKnob, timeLabel, "Time");
+    timeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "MACRO_TIME", timeKnob);
+
     // Double-click resets to default
     cortexKnob.setDoubleClickReturnValue(true, 0.5);
     ichorKnob.setDoubleClickReturnValue(true, 0.0);
-    plasmaKnob.setDoubleClickReturnValue(true, 1.0);
+    plasmaKnob.setDoubleClickReturnValue(true, 0.5);
+    timeKnob.setDoubleClickReturnValue(true, 0.5);
 
     startTimerHz(5);
 }
@@ -37,6 +42,15 @@ void ModMatrixSection::timerCallback()
     showPct(cortexKnob, cortexLabel, "Cortex");
     showPct(ichorKnob, ichorLabel, "Ichor");
     showPct(plasmaKnob, plasmaLabel, "Plasma");
+
+    // Time: show multiplier value
+    if (timeKnob.isMouseOverOrDragging())
+    {
+        float mul = std::pow(4.0f, static_cast<float>(timeKnob.getValue()) * 2.0f - 1.0f);
+        timeLabel.setText(juce::String(mul, 2) + "x", juce::dontSendNotification);
+    }
+    else
+        timeLabel.setText("Time", juce::dontSendNotification);
 }
 
 void ModMatrixSection::setupKnob(juce::Slider& knob, juce::Label& label,
@@ -60,7 +74,7 @@ void ModMatrixSection::resized()
     int knobSize = 36;
     int labelH = 12;
     auto knobRow = area.withSizeKeepingCentre(area.getWidth(), knobSize + labelH);
-    int colW = knobRow.getWidth() / 3;
+    int colW = knobRow.getWidth() / 4;
 
     auto placeKnob = [&](juce::Slider& knob, juce::Label& label) {
         auto col = knobRow.removeFromLeft(colW);
@@ -71,4 +85,5 @@ void ModMatrixSection::resized()
     placeKnob(cortexKnob, cortexLabel);
     placeKnob(ichorKnob, ichorLabel);
     placeKnob(plasmaKnob, plasmaLabel);
+    placeKnob(timeKnob, timeLabel);
 }
