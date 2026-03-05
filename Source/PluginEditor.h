@@ -15,7 +15,6 @@
 #include "gui/PitchEnvSection.h"
 #include "gui/TabbedEffectSection.h"
 #include "gui/VolumeShaperSection.h"
-#include "gui/VisualizerDisplay.h"
 #include "gui/FlubberVisualizer.h"
 #include "gui/LFOSection.h"
 #include "gui/ModSlider.h"
@@ -49,7 +48,6 @@ private:
     PitchEnvSection pitchEnvSection;
     TabbedEffectSection tabbedEffects;
     VolumeShaperSection shaperSection;
-    VisualizerDisplay visualizerDisplay;
     FlubberVisualizer flubberVisualizer;
     LFOSection lfoSection;
     GlobalSection globalSection;
@@ -77,8 +75,6 @@ private:
 
     // Dark mode toggle
     juce::TextButton darkModeBtn;
-    bool darkModeTransitioning = false;
-
 
     // Main page macro knobs (Volume, Drive, Cortex, Plasma, Fold, Ichor)
     ModSlider macroKnobs[6];
@@ -98,8 +94,6 @@ private:
 
     // Stored bounds for section headers (set in resized, used in paint)
     juce::Rectangle<int> sectionBounds[11];
-    // Main page section bounds: 0=visualizer, 1=macros, 2=effects
-    juce::Rectangle<int> mainSectionBounds[3];
     // Individual knob card rects for main page painting
     juce::Rectangle<int> macroCardBounds[6];
     // White panel bounds for main page background

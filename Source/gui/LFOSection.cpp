@@ -47,7 +47,7 @@ void LFOWaveDisplay::mouseDown(const juce::MouseEvent& e)
     if (isCustom && lfoPtr != nullptr)
     {
         auto inner = getLocalBounds().toFloat().reduced(4.0f);
-        auto& pts = lfoPtr->getCurvePoints();
+        auto pts = lfoPtr->getCurvePoints();
 
         // Hit-test control points
         for (int i = 0; i < static_cast<int>(pts.size()); ++i)
@@ -240,7 +240,7 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
         g.strokePath(curvePath, juce::PathStrokeType(1.5f));
 
         // Draw control points (outline only, filled when dragging)
-        auto& pts = lfoPtr->getCurvePoints();
+        auto pts = lfoPtr->getCurvePoints();
         for (int i = 0; i < static_cast<int>(pts.size()); ++i)
         {
             auto pp = pointToPixel(pts[i], inner);
@@ -452,13 +452,6 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
         waveDisplay.repaint();
     };
     addAndMakeVisible(resetCurveBtn);
-
-    // Slot buttons & clear buttons — hidden, managed internally
-    for (int i = 0; i < kNumSlots; ++i)
-    {
-        slotButtons[i].setVisible(false);
-        slotClearBtns[i].setVisible(false);
-    }
 
     // "+" button — click enters learn mode + shows drop targets, right-click shows assignments popup
     addSlotBtn.setButtonText("+");
@@ -854,15 +847,16 @@ void LFOSection::showAssignmentsPopup()
         return;
     }
 
+    auto safeThis = juce::Component::SafePointer<LFOSection>(this);
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&addSlotBtn),
-        [this, pfx](int result) {
-            if (result <= 0) return;
+        [safeThis, pfx](int result) {
+            if (safeThis == nullptr || result <= 0) return;
             int slot = result - 1;
             auto destId = pfx + "DEST" + juce::String(slot + 1);
             auto amtId  = pfx + "AMT"  + juce::String(slot + 1);
-            if (auto* dp = state.getParameter(destId))
+            if (auto* dp = safeThis->state.getParameter(destId))
                 dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
-            if (auto* ap = state.getParameter(amtId))
+            if (auto* ap = safeThis->state.getParameter(amtId))
                 ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
         });
 }

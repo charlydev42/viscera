@@ -88,7 +88,7 @@ static constexpr int kMaxCoarseIdx = 48;
 inline float coarseRatio(int idx) { return (idx == 0) ? 0.5f : static_cast<float>(idx); }
 
 // Operator-style fixed-mode multi values (decades): index 0-5
-static constexpr float kMultiValues[] = { 0.0f, 0.001f, 0.01f, 0.1f, 1.0f, 10.0f };
+static constexpr float kMultiValues[] = { 0.0001f, 0.001f, 0.01f, 0.1f, 1.0f, 10.0f };
 static constexpr int kNumMultiValues = 6;
 inline float multiValue(int idx) {
     return kMultiValues[juce::jlimit(0, kNumMultiValues - 1, idx)];
@@ -100,7 +100,6 @@ struct VoiceParams
 {
     std::atomic<float>* mod1On        = nullptr;
     std::atomic<float>* mod1Wave      = nullptr;
-    std::atomic<float>* mod1Pitch     = nullptr; // legacy, kept for backward-compat
     std::atomic<float>* mod1KB        = nullptr;
     std::atomic<float>* mod1Level     = nullptr;
     std::atomic<float>* mod1Coarse    = nullptr;
@@ -114,7 +113,6 @@ struct VoiceParams
 
     std::atomic<float>* mod2On        = nullptr;
     std::atomic<float>* mod2Wave      = nullptr;
-    std::atomic<float>* mod2Pitch     = nullptr; // legacy, kept for backward-compat
     std::atomic<float>* mod2KB        = nullptr;
     std::atomic<float>* mod2Level     = nullptr;
     std::atomic<float>* mod2Coarse    = nullptr;
@@ -131,7 +129,6 @@ struct VoiceParams
     HarmonicTable* carHarmonics  = nullptr;
 
     std::atomic<float>* carWave      = nullptr;
-    std::atomic<float>* carOctave   = nullptr; // legacy, kept for backward-compat
     std::atomic<float>* carCoarse   = nullptr;
     std::atomic<float>* carFine     = nullptr;
     std::atomic<float>* carFixedFreq = nullptr;
@@ -324,11 +321,6 @@ private:
     uint32_t noiseSeed = 0x12345678;
 
     double sampleRate = 44100.0;
-
-    // Calcul de la fréquence d'un modulateur (Operator-style: ratio or fixed mode)
-    double calcModFreq(double baseFreq, int coarseIdx, float fineCents,
-                       float fixedFreqHz, int multi, bool kbTrack,
-                       float cortexSpread = 0.5f, float ichorOffset = 0.0f) const;
 };
 
 } // namespace bb

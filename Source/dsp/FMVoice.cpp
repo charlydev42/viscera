@@ -10,9 +10,6 @@ namespace bb {
 static constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
 // Index de modulation maximum (en radians) — 12 rad = gros son FM
 static constexpr double kMaxModIndex = 12.0;
-// Middle C en MIDI (pour KB tracking off)
-static constexpr double kMiddleCFreq = 261.6255653;
-
 FMVoice::FMVoice(VoiceParams& p)
     : params(p)
 {
@@ -68,7 +65,7 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
     lastFilterRes    = -1.0f;
 
     // Anti-click fade: ~5ms
-    stealFadeLength = static_cast<int>(sr * 0.005);
+    stealFadeLength = std::max(1, static_cast<int>(sr * 0.005));
     stealFadeSamples = 0;
 }
 
@@ -122,6 +119,7 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     pitchEnv.setParameters(params.pitchEnvA->load(), params.pitchEnvD->load(),
                            params.pitchEnvS->load(), params.pitchEnvR->load());
 
+    mod2FeedbackSample = 0.0f;
     env1.noteOn();
     env2.noteOn();
     env3.noteOn();
@@ -152,31 +150,6 @@ void FMVoice::pitchWheelMoved(int newPitchWheelValue)
 
 void FMVoice::controllerMoved(int /*controllerNumber*/, int /*newControllerValue*/)
 {
-}
-
-double FMVoice::calcModFreq(double baseFreq, int coarseIdx, float fineCents,
-                             float fixedFreqHz, int multi, bool kbTrack,
-                             float cortexSpread, float ichorOffset) const
-{
-    if (kbTrack)
-    {
-        // Ratio mode: freq = baseFreq × coarseRatio(idx) × 2^(fineCents/1200)
-        double fineShift = std::exp2(static_cast<double>(fineCents) / 1200.0);
-        int idx = juce::jlimit(0, kMaxCoarseIdx, coarseIdx);
-        double ratio = static_cast<double>(coarseRatio(idx));
-        // Cortex: pow(ratio, cortex*2) → 0=unison, 0.5=neutral, 1=wide
-        if (ratio > 0.0)
-            ratio = std::pow(ratio, static_cast<double>(cortexSpread) * 2.0);
-        // Ichor: inharmonicity offset → 0=harmonic, 1=metallic/bell
-        ratio += static_cast<double>(ichorOffset) * 0.3 * ratio;
-        return baseFreq * ratio * fineShift;
-    }
-    else
-    {
-        // Fixed mode: freq = fixedFreqHz × multiValue(idx) — no fine cents
-        float mv = multiValue(multi);
-        return static_cast<double>(fixedFreqHz) * static_cast<double>(mv);
-    }
 }
 
 void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
@@ -267,8 +240,8 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
     bool pitchEnvEnabled = params.pitchEnvOn->load() > 0.5f;
     float pitchEnvAmt  = pitchEnvEnabled
-        ? juce::jlimit(-48.0f, 48.0f, params.pitchEnvAmt->load()
-              + params.lfoModPEnvAmt.load(std::memory_order_relaxed) * 48.0f)
+        ? juce::jlimit(-96.0f, 96.0f, params.pitchEnvAmt->load()
+              + params.lfoModPEnvAmt.load(std::memory_order_relaxed) * 96.0f)
         : 0.0f;
 
     bool filtEnabled   = params.filtOn->load() > 0.5f;
@@ -499,15 +472,20 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float velGain = params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity;
         if (noiseMix > 0.0001f)
         {
-            // xorshift32 white noise: [-1, +1]
+            // xorshift32 white noise: stereo (independent L/R samples)
             noiseSeed ^= noiseSeed << 13;
             noiseSeed ^= noiseSeed >> 17;
             noiseSeed ^= noiseSeed << 5;
-            float whiteNoise = static_cast<float>(static_cast<int32_t>(noiseSeed))
-                               / 2147483648.0f;
-            outputL = (carrierOutL * (1.0f - noiseMix) + whiteNoise * noiseMix)
+            float noiseL = static_cast<float>(static_cast<int32_t>(noiseSeed))
+                           / 2147483648.0f;
+            noiseSeed ^= noiseSeed << 13;
+            noiseSeed ^= noiseSeed >> 17;
+            noiseSeed ^= noiseSeed << 5;
+            float noiseR = static_cast<float>(static_cast<int32_t>(noiseSeed))
+                           / 2147483648.0f;
+            outputL = (carrierOutL * (1.0f - noiseMix) + noiseL * noiseMix)
                       * env3Val * velGain;
-            outputR = (carrierOutR * (1.0f - noiseMix) + whiteNoise * noiseMix)
+            outputR = (carrierOutR * (1.0f - noiseMix) + noiseR * noiseMix)
                       * env3Val * velGain;
         }
         else
@@ -527,7 +505,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         if (filtEnabled)
         {
             // Vein modulation: multiplicative ±2 octaves
-            float veinMod = std::exp2f(veinAmount * lfo2Val * 2.0f);
+            float veinMod = (veinAmount > 0.001f) ? std::exp2f(veinAmount * lfo2Val * 2.0f) : 1.0f;
             // Global LFO: additive in normalized knob space (skew=0.23, centre=1kHz, Serum/Vital style)
             // Forward: norm = ((hz-20)/19980)^skew  |  Inverse: hz = 20 + 19980 * norm^(1/skew)
             constexpr float kCutSkew = 0.2299f;
@@ -582,6 +560,10 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 return;
             }
         }
+
+        // --- NaN/Inf guard ---
+        if (!std::isfinite(outputL)) outputL = 0.0f;
+        if (!std::isfinite(outputR)) outputR = 0.0f;
 
         // --- Écrire dans le buffer de sortie (true stereo) ---
         if (outputBuffer.getNumChannels() >= 2)

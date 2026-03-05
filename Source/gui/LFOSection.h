@@ -112,10 +112,6 @@ private:
 
     static constexpr int kNumSlots = 8;
 
-    // Assignment slot buttons (only visible when mapped)
-    juce::TextButton slotButtons[kNumSlots];
-    juce::TextButton slotClearBtns[kNumSlots]; // small "x" to unmap
-
     // "+" button to add a new routing, "-" to remove last, count label, hint
     juce::TextButton addSlotBtn;
     juce::TextButton removeSlotBtn;

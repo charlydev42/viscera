@@ -95,6 +95,19 @@ public:
                 freq[d] += (freqTarget[d] - freq[d]) * freqSmooth;
             }
 
+            // Pre-compute SVF g coefficients (8 tan() + Taylor for R instead of 16 tan())
+            float gSvf[2][kNum];
+            float kInv = 1.0f / Q;
+            for (int d = 0; d < kNum; ++d)
+            {
+                float fBase = std::clamp(freq[d], 30.0f, srf * 0.45f);
+                float ang = pi * fBase / srf;
+                float g0 = std::tan(ang);
+                gSvf[0][d] = g0;
+                float detune = (d & 1) ? 0.025f : -0.025f;
+                gSvf[1][d] = g0 + ang * detune * (1.0f + g0 * g0);
+            }
+
             // --- Per channel ---
             for (int ch = 0; ch < 2; ++ch)
             {
@@ -113,15 +126,9 @@ public:
                 float sum = 0.0f;
                 for (int d = 0; d < kNum; ++d)
                 {
-                    // More aggressive stereo detuning than Liquid (2.5% vs 1.5%)
-                    float f = freq[d];
-                    if (ch == 1) f *= (1.0f + ((d & 1) ? 0.025f : -0.025f));
-                    f = std::clamp(f, 30.0f, srf * 0.45f);
-
-                    // Cytomic TPT SVF bandpass
-                    float g  = std::tan(pi * f / srf);
-                    float k  = 1.0f / Q;
-                    float a1 = 1.0f / (1.0f + g * (g + k));
+                    // Cytomic TPT SVF bandpass (g pre-computed above)
+                    float g  = gSvf[ch][d];
+                    float a1 = 1.0f / (1.0f + g * (g + kInv));
                     float a2 = g * a1;
                     float a3 = g * a2;
 

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <array>
+#include <atomic>
 #include "HarmonicTable.h"
 
 namespace bb {
@@ -116,7 +117,7 @@ public:
     float getSyncFraction() const noexcept { return syncFraction; }
     double getPhase() const noexcept { return phase; }
 
-    void resetPhase() noexcept { phase = 0.0; }
+    void resetPhase() noexcept { phase = 0.0; triIntegrator = 0.0; }
 
     // Accès public à la table sinus (utilisé par le LFO)
     static float lookupSinePublic(double phase) noexcept
@@ -145,9 +146,8 @@ private:
     // Minimal deterministic RNG for drift (xorshift32, unique seed per instance)
     static inline uint32_t nextDriftSeed() noexcept
     {
-        static uint32_t counter = 0x12345678;
-        counter += 0x9E3779B9; // golden ratio hash increment
-        return counter;
+        static std::atomic<uint32_t> counter { 0x12345678 };
+        return counter.fetch_add(0x9E3779B9, std::memory_order_relaxed);
     }
     uint32_t driftSeed = nextDriftSeed();
     double driftRNG() noexcept
@@ -236,8 +236,9 @@ private:
     {
         const auto& table = getSineTable();
         double idx = phase * SINE_TABLE_SIZE;
-        int i0 = static_cast<int>(idx);
-        float frac = static_cast<float>(idx - i0);
+        int i0 = static_cast<int>(idx) & (SINE_TABLE_SIZE - 1); // guard OOB / NaN
+        float frac = static_cast<float>(idx - static_cast<int>(idx));
+        if (frac < 0.0f) frac = 0.0f; // NaN guard
         return table.data[i0] + frac * (table.data[i0 + 1] - table.data[i0]);
     }
 };

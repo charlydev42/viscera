@@ -40,7 +40,7 @@ FilterSection::FilterSection(juce::AudioProcessorValueTreeState& apvts)
     resAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "FILT_RES", resKnob);
 
-    startTimerHz(20);
+    startTimerHz(5);
 }
 
 void FilterSection::timerCallback()

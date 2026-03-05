@@ -31,7 +31,6 @@ void VisceraProcessor::cacheParameterPointers()
 {
     voiceParams.mod1On        = apvts.getRawParameterValue("MOD1_ON");
     voiceParams.mod1Wave      = apvts.getRawParameterValue("MOD1_WAVE");
-    voiceParams.mod1Pitch     = apvts.getRawParameterValue("MOD1_PITCH");
     voiceParams.mod1KB        = apvts.getRawParameterValue("MOD1_KB");
     voiceParams.mod1Level     = apvts.getRawParameterValue("MOD1_LEVEL");
     voiceParams.mod1Coarse    = apvts.getRawParameterValue("MOD1_COARSE");
@@ -45,7 +44,6 @@ void VisceraProcessor::cacheParameterPointers()
 
     voiceParams.mod2On        = apvts.getRawParameterValue("MOD2_ON");
     voiceParams.mod2Wave      = apvts.getRawParameterValue("MOD2_WAVE");
-    voiceParams.mod2Pitch     = apvts.getRawParameterValue("MOD2_PITCH");
     voiceParams.mod2KB        = apvts.getRawParameterValue("MOD2_KB");
     voiceParams.mod2Level     = apvts.getRawParameterValue("MOD2_LEVEL");
     voiceParams.mod2Coarse    = apvts.getRawParameterValue("MOD2_COARSE");
@@ -58,7 +56,6 @@ void VisceraProcessor::cacheParameterPointers()
     voiceParams.env2R         = apvts.getRawParameterValue("ENV2_R");
 
     voiceParams.carWave      = apvts.getRawParameterValue("CAR_WAVE");
-    voiceParams.carOctave    = apvts.getRawParameterValue("CAR_OCTAVE");
     voiceParams.carCoarse    = apvts.getRawParameterValue("CAR_COARSE");
     voiceParams.carFine      = apvts.getRawParameterValue("CAR_FINE");
     voiceParams.carFixedFreq = apvts.getRawParameterValue("CAR_FIXED_FREQ");
@@ -186,7 +183,7 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD1_MULTI", "Mod1 Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_A", "Env1 Attack",
-            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_D", "Env1 Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_S", "Env1 Sustain",
@@ -213,7 +210,7 @@ VisceraProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD2_MULTI", "Mod2 Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_A", "Env2 Attack",
-            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_D", "Env2 Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_S", "Env2 Sustain",
@@ -236,7 +233,7 @@ VisceraProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterInt>("CAR_MULTI", "Carrier Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterBool>("CAR_KB", "Carrier KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_A", "Env3 Attack",
-            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_D", "Env3 Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_S", "Env3 Sustain",
@@ -275,7 +272,7 @@ VisceraProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_AMT", "Pitch Env Amount",
             juce::NormalisableRange<float>(-96.0f, 96.0f, 0.1f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_A", "Pitch Env Attack",
-            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.001f));
+            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.001f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_D", "Pitch Env Decay",
             juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.15f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_S", "Pitch Env Sustain",
@@ -703,7 +700,7 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                          + voiceParams.lfoModLiqDepth.load(std::memory_order_relaxed));
         float liqMix   = juce::jlimit(0.0f, 1.0f, liqMixParam->load()
                          + voiceParams.lfoModLiqMix.load(std::memory_order_relaxed));
-        float liqRate = juce::jlimit(0.0f, 1.0f, liqRateParam->load()
+        float liqRate = juce::jlimit(0.05f, 3.0f, liqRateParam->load()
                        + voiceParams.lfoModLiqRate.load(std::memory_order_relaxed));
         float liqTone = juce::jlimit(0.0f, 1.0f, liqToneParam->load()
                         + voiceParams.lfoModLiqTone.load(std::memory_order_relaxed));
@@ -952,7 +949,7 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
         if (tree.hasProperty("_userPresetName"))
             currentUserPresetName = tree.getProperty("_userPresetName").toString();
         if (tree.hasProperty("_displayName"))
-            displayName = tree.getProperty("_displayName").toString();
+            setDisplayName(tree.getProperty("_displayName").toString());
 
         // Strip meta-properties before replacing APVTS state
         tree.removeProperty("_presetIndex", nullptr);
@@ -1018,33 +1015,7 @@ void VisceraProcessor::loadUserPreset(const juce::String& name)
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
         auto tree = juce::ValueTree::fromXml(*xml);
-        if (tree.hasProperty("shaperTable"))
-            volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
-        else
-            volumeShaper.resetTable();
-        for (int n = 0; n < 3; ++n)
-        {
-            auto curveKey = "lfo" + juce::String(n + 1) + "Curve";
-            auto tableKey = "lfo" + juce::String(n + 1) + "Table";
-            if (tree.hasProperty(curveKey))
-                globalLFO[n].deserializeCurve(tree.getProperty(curveKey).toString());
-            else if (tree.hasProperty(tableKey))
-                globalLFO[n].deserializeTable(tree.getProperty(tableKey).toString());
-            else
-                globalLFO[n].resetCurve();
-        }
-        if (tree.hasProperty("mod1Harmonics"))
-            mod1Harmonics.deserializeHarmonics(tree.getProperty("mod1Harmonics").toString());
-        else
-            mod1Harmonics.resetHarmonics();
-        if (tree.hasProperty("mod2Harmonics"))
-            mod2Harmonics.deserializeHarmonics(tree.getProperty("mod2Harmonics").toString());
-        else
-            mod2Harmonics.resetHarmonics();
-        if (tree.hasProperty("carHarmonics"))
-            carHarmonics.deserializeHarmonics(tree.getProperty("carHarmonics").toString());
-        else
-            carHarmonics.resetHarmonics();
+        deserializeCustomData(tree);
         migrateOldPitchParams(tree);
         apvts.replaceState(tree);
         undoManager.clearUndoHistory();
@@ -1163,7 +1134,7 @@ void VisceraProcessor::loadPresetAt(int index)
         loadUserPreset(entry.userFileName);
     }
     currentPreset = index;
-    displayName.clear(); // clear override when loading a named preset
+    setDisplayName({}); // clear override when loading a named preset
 }
 
 // --- Migration anciens presets : MOD_PITCH → COARSE+FINE ou FIXED_FREQ ---

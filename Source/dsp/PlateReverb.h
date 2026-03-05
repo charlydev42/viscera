@@ -231,9 +231,8 @@ private:
 
         float readAt(int delay) const noexcept
         {
-            int idx = writeIdx - delay;
-            while (idx < 0) idx += len;
-            return buf[static_cast<size_t>(idx % len)];
+            int idx = ((writeIdx - delay) % len + len) % len;
+            return buf[static_cast<size_t>(idx)];
         }
 
         void reset() noexcept

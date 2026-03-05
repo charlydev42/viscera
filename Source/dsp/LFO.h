@@ -5,11 +5,11 @@
 #include "Oscillator.h"
 #include <array>
 #include <atomic>
-#include <random>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 #include <juce_core/juce_core.h>
+#include <mutex>
 
 namespace bb {
 
@@ -76,7 +76,15 @@ public:
         {
             bool high = (phase >= 0.5);
             if (high && !prevPhaseWasHigh)
-                sAndHValue = dist(rng);
+            {
+                // xorshift32 — lightweight RNG suitable for audio thread
+                sAndHSeed ^= sAndHSeed << 13;
+                sAndHSeed ^= sAndHSeed >> 17;
+                sAndHSeed ^= sAndHSeed << 5;
+                // Map to [-1, +1]
+                sAndHValue = static_cast<float>(static_cast<int32_t>(sAndHSeed))
+                           / static_cast<float>(INT32_MAX);
+            }
             prevPhaseWasHigh = high;
             out = sAndHValue;
             break;
@@ -84,8 +92,14 @@ public:
 
         case LFOWaveType::Custom:
         {
-            // Evaluate Catmull-Rom directly for smooth output
-            float v = evalCatmullRom(static_cast<float>(phase));
+            // Use baked atomic table for thread safety (curvePoints is GUI-only)
+            float t = std::clamp(static_cast<float>(phase), 0.0f, 1.0f);
+            float idx = t * static_cast<float>(kNumSteps - 1);
+            int i0 = static_cast<int>(idx);
+            int i1 = std::min(i0 + 1, kNumSteps - 1);
+            float frac = idx - static_cast<float>(i0);
+            float v = customTable[i0].load(std::memory_order_relaxed) * (1.0f - frac)
+                    + customTable[i1].load(std::memory_order_relaxed) * frac;
             out = v * 2.0f - 1.0f; // [0,1] -> [-1,+1]
             break;
         }
@@ -130,9 +144,10 @@ public:
         return 0.5f;
     }
 
-    // --- Curve point system (GUI thread only) ---
+    // --- Curve point system (GUI thread only, mutex for async safety) ---
     void setCurvePoints(const std::vector<CurvePoint>& pts)
     {
+        std::lock_guard<std::mutex> lock(curveMutex);
         curvePoints = pts;
         // Sort by x
         std::sort(curvePoints.begin(), curvePoints.end(),
@@ -148,7 +163,11 @@ public:
         bakeToTable();
     }
 
-    const std::vector<CurvePoint>& getCurvePoints() const { return curvePoints; }
+    std::vector<CurvePoint> getCurvePoints() const
+    {
+        std::lock_guard<std::mutex> lock(curveMutex);
+        return curvePoints;
+    }
 
     // Evaluate Catmull-Rom curve at position t in [0,1], returns y in [0,1]
     float evalCatmullRom(float t) const
@@ -231,6 +250,7 @@ public:
     // Curve serialization: "x,y;x,y;x,y"
     juce::String serializeCurve() const
     {
+        std::lock_guard<std::mutex> lock(curveMutex);
         juce::String s;
         for (size_t i = 0; i < curvePoints.size(); ++i)
         {
@@ -243,6 +263,7 @@ public:
     // Reset curve + table to defaults (flat 0.5)
     void resetCurve()
     {
+        std::lock_guard<std::mutex> lock(curveMutex);
         curvePoints = { {0.0f, 0.5f}, {1.0f, 0.5f} };
         for (int i = 0; i < kNumSteps; ++i)
             customTable[i].store(0.5f, std::memory_order_relaxed);
@@ -275,16 +296,16 @@ private:
     double phase = 0.0;
     LFOWaveType waveType = LFOWaveType::Sine;
 
-    // Sample & Hold
+    // Sample & Hold (xorshift32 — lightweight, no heap, audio-safe)
     float sAndHValue = 0.0f;
     bool prevPhaseWasHigh = false;
-    std::mt19937 rng { std::random_device{}() };
-    std::uniform_real_distribution<float> dist { -1.0f, 1.0f };
+    uint32_t sAndHSeed = 0x12345678 + static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this) & 0xFFFF);
 
     // Custom drawable table (32 steps, [0,1])
     std::array<std::atomic<float>, kNumSteps> customTable;
 
-    // Curve control points (GUI thread only)
+    // Curve control points (protected by mutex for GUI thread safety)
+    mutable std::mutex curveMutex;
     std::vector<CurvePoint> curvePoints;
 };
 

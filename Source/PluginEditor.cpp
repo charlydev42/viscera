@@ -15,7 +15,6 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       pitchEnvSection(processor.apvts),
       tabbedEffects(processor.apvts),
       shaperSection(processor.apvts, processor.getVolumeShaper()),
-      visualizerDisplay(processor.getVisualBuffer(), processor.getVisualBufferR()),
       flubberVisualizer(processor.getVisualBuffer(), processor.getVisualBufferR()),
       lfoSection(processor.apvts, processor),
       globalSection(processor.apvts),
@@ -37,7 +36,6 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     addAndMakeVisible(tabbedEffects);
     addAndMakeVisible(shaperSection);
     addAndMakeVisible(flubberVisualizer);
-    visualizerDisplay.setVisible(false);
     addAndMakeVisible(lfoSection);
     addAndMakeVisible(globalSection);
 
@@ -447,12 +445,12 @@ void VisceraEditor::randomizeParams()
         auto pfx = "LFO" + juce::String(n) + "_";
         randFloat(pfx + "RATE", 0.2f, 8.0f);
         randInt(pfx + "WAVE", 0, 4);
-        // 30% chance of one active assignment per LFO
-        for (int s = 1; s <= 4; ++s)
+        // 30% chance of one active assignment per LFO, clear all 8 slots
+        for (int s = 1; s <= 8; ++s)
         {
             if (s == 1 && rng.nextFloat() < 0.3f)
             {
-                randInt(pfx + "DEST" + juce::String(s), 1, 10);
+                randInt(pfx + "DEST" + juce::String(s), 1, 11);
                 randFloat(pfx + "AMT" + juce::String(s), -0.5f, 0.5f);
             }
             else
@@ -805,7 +803,6 @@ void VisceraEditor::resized()
         int vizH = static_cast<int>(area.getHeight() * kVizHeightRatio);
         auto vizBounds = area.withSizeKeepingCentre(vizW, vizH);
         vizBounds.translate(0, kVizVerticalShift);
-        mainSectionBounds[0] = vizBounds;
         flubberVisualizer.setBounds(vizBounds);
 
         float cx = static_cast<float>(vizBounds.getCentreX());
@@ -996,8 +993,10 @@ void VisceraEditor::parentHierarchyChanged()
         {
             docWindow->setUsingNativeTitleBar(true);
             // Re-set editor size so the window adapts
-            juce::MessageManager::callAsync([this] {
-                setSize(920, 615);
+            auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
+            juce::MessageManager::callAsync([safeThis] {
+                if (safeThis != nullptr)
+                    safeThis->setSize(920, 615);
             });
         }
     }

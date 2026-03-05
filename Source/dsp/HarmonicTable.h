@@ -44,9 +44,9 @@ public:
     float lookup(double phase) const noexcept
     {
         const float* table = readTable.load(std::memory_order_acquire);
-        double idx = phase * kWavetableSize;
-        int i0 = static_cast<int>(idx);
-        float frac = static_cast<float>(idx - i0);
+        double idx = (phase - std::floor(phase)) * kWavetableSize;
+        int i0 = static_cast<int>(idx) & (kWavetableSize - 1);
+        float frac = static_cast<float>(idx - std::floor(idx));
         return table[i0] + frac * (table[i0 + 1] - table[i0]);
     }
 

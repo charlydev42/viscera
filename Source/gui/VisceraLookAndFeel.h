@@ -2,6 +2,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <unordered_map>
+#include <atomic>
 
 class VisceraLookAndFeel : public juce::LookAndFeel_V4
 {
@@ -72,8 +73,8 @@ public:
     static inline uint32_t kShadowDark    = 0xFF8896AC;
     static inline uint32_t kShadowLight   = 0xFFFFFFFF;
 
-    // Dark mode toggle
-    static inline bool darkMode = false;
+    // Dark mode toggle (atomic: read by GL thread, written by GUI thread)
+    static inline std::atomic<bool> darkMode { false };
     static void setDarkMode(bool dark);
     void refreshJuceColours();
 

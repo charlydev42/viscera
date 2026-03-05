@@ -125,9 +125,9 @@ public:
         }
 
         static const juce::Colour lfoColors[] = {
-            juce::Colour(0xFF8BC34A), // LFO1 — #8BC34A
-            juce::Colour(0xFF8BC34A), // LFO2 — #8BC34A
-            juce::Colour(0xFF8BC34A)  // LFO3 — #8BC34A
+            juce::Colour(0xFFE57373), // LFO1 — red
+            juce::Colour(0xFF8BC34A), // LFO2 — green
+            juce::Colour(0xFF64B5F6)  // LFO3 — blue
         };
 
         auto bounds = getLocalBounds().toFloat().reduced(1.0f);
