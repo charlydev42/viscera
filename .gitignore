@@ -28,6 +28,10 @@ DerivedData/
 # Claude Code
 .claude/
 
+# Separated repos
+server/
+build-tests/
+
 # JUCE
 JuceLibraryCode/
 

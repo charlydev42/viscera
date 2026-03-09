@@ -31,7 +31,12 @@ private:
     VisceraProcessor& proc;
 
     juce::String selectedCategory { "All" };
-    juce::TextButton categoryButtons[8];
+    juce::TextButton categoryButtons[7];
+    bool favFilterOn = false;
+    juce::Rectangle<int> favToggleBounds;
+
+    juce::ComboBox packSelector;
+    juce::String selectedPack { "All" };
 
     struct CardRect {
         juce::Rectangle<int> bounds;
@@ -62,6 +67,7 @@ private:
     // Delete confirmation state
     int confirmDeleteCard = -1;   // card index showing confirmation, -1 = none
     juce::Rectangle<int> deleteXBounds(int cardIndex) const;
+    juce::Rectangle<int> favHeartBounds(int cardIndex) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetOverlay)
 };

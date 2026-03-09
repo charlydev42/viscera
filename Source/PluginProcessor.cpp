@@ -26,6 +26,21 @@ VisceraProcessor::VisceraProcessor()
     synth.addVoice(voice);
 
     buildPresetRegistry();
+    loadFavorites();
+
+    // Sync audio-thread license flag
+    dspGainToken.store(licenseManager.isLicensed() ? kDspActive : 0, std::memory_order_relaxed);
+    licenseManager.addListener(this);
+}
+
+VisceraProcessor::~VisceraProcessor()
+{
+    licenseManager.removeListener(this);
+}
+
+void VisceraProcessor::licenseStateChanged(bool licensed)
+{
+    dspGainToken.store(licensed ? kDspActive : 0, std::memory_order_relaxed);
 }
 
 // --- Cacher les pointeurs atomiques vers les paramètres ---
@@ -490,6 +505,13 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
 
+    // --- Input gate (primary) ---
+    if (dspGainToken.load(std::memory_order_relaxed) != kDspActive)
+    {
+        midiMessages.clear();
+        return;
+    }
+
     // Injecter les notes du clavier GUI dans le buffer MIDI
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
@@ -816,6 +838,10 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
+    // --- Output gate (secondary) ---
+    if (dspGainToken.load(std::memory_order_relaxed) != kDspActive)
+        buffer.clear();
+
     // Push L+R channels to visual buffers for GUI oscilloscope/FFT
     if (buffer.getNumChannels() > 0)
         visualBuffer.pushBlock(buffer.getReadPointer(0), numSamples);
@@ -987,6 +1013,7 @@ void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::Stri
     {
         xml->setAttribute("name", name);
         xml->setAttribute("category", category);
+        xml->setAttribute("pack", "User");
         auto file = getUserPresetsDir().getChildFile(safeName + ".visc");
         if (!xml->writeTo(file))
             DBG("Failed to save preset: " + file.getFullPathName());
@@ -1002,6 +1029,46 @@ bool VisceraProcessor::deleteUserPreset(const juce::String& name)
     if (file.existsAsFile())
         return file.deleteFile();
     return false;
+}
+
+// --- Favorites ---
+
+bool VisceraProcessor::isFavorite(const juce::String& presetName) const
+{
+    return favorites.contains(presetName);
+}
+
+void VisceraProcessor::toggleFavorite(const juce::String& presetName)
+{
+    if (favorites.contains(presetName))
+        favorites.removeString(presetName);
+    else
+        favorites.add(presetName);
+    saveFavorites();
+}
+
+void VisceraProcessor::saveFavorites()
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                   .getChildFile("Viscera");
+    dir.createDirectory();
+    auto file = dir.getChildFile("favorites.txt");
+    file.replaceWithText(favorites.joinIntoString("\n"));
+}
+
+void VisceraProcessor::loadFavorites()
+{
+    auto file = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                    .getChildFile("Viscera").getChildFile("favorites.txt");
+    if (file.existsAsFile())
+    {
+        juce::StringArray lines;
+        lines.addLines(file.loadFileAsString());
+        favorites.clear();
+        for (auto& l : lines)
+            if (l.isNotEmpty())
+                favorites.add(l);
+    }
 }
 
 void VisceraProcessor::loadUserPreset(const juce::String& name)
@@ -1070,6 +1137,7 @@ void VisceraProcessor::buildPresetRegistry()
         PresetEntry entry;
         entry.category = xml->getStringAttribute("category", "Init");
         entry.name = xml->getStringAttribute("name", origName.upToLastOccurrenceOf(".", false, false));
+        entry.pack = xml->getStringAttribute("pack", "Factory");
         entry.isFactory = true;
         entry.resourceName = resName;
         presetRegistry.push_back(std::move(entry));
@@ -1104,19 +1172,34 @@ void VisceraProcessor::buildPresetRegistry()
         PresetEntry entry;
         entry.name = baseName;
         entry.category = "User";
+        entry.pack = "User";
         entry.isFactory = false;
         entry.userFileName = baseName;
 
-        // Try to read category from file
+        // Try to read category and pack from file
         auto xml = juce::parseXML(f);
         if (xml)
         {
             auto cat = xml->getStringAttribute("category", "User");
             if (cat.isNotEmpty()) entry.category = cat;
+            auto p = xml->getStringAttribute("pack", "User");
+            if (p.isNotEmpty()) entry.pack = p;
         }
 
         presetRegistry.push_back(std::move(entry));
     }
+}
+
+juce::StringArray VisceraProcessor::getAvailablePacks() const
+{
+    juce::StringArray packs;
+    packs.add("All");
+    for (auto& entry : presetRegistry)
+    {
+        if (entry.pack.isNotEmpty() && !packs.contains(entry.pack))
+            packs.add(entry.pack);
+    }
+    return packs;
 }
 
 // --- Load preset by registry index ---

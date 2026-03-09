@@ -368,6 +368,15 @@ juce::Font VisceraLookAndFeel::getComboBoxFont(juce::ComboBox&)
     return juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain);
 }
 
+void VisceraLookAndFeel::positionComboBoxText(juce::ComboBox& box, juce::Label& label)
+{
+    // Indent text to account for pill-shaped rounded corners
+    int h = box.getHeight();
+    int indent = h / 3;  // roughly matches the pill radius
+    label.setBounds(indent, 0, box.getWidth() - indent - 20, h);
+    label.setFont(getComboBoxFont(box));
+}
+
 juce::Font VisceraLookAndFeel::getLabelFont(juce::Label&)
 {
     return juce::Font(juce::Font::getDefaultMonospacedFontName(), 11.0f, juce::Font::plain);

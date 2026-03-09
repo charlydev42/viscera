@@ -24,6 +24,7 @@ public:
                       juce::ComboBox& box) override;
 
     juce::Font getComboBoxFont(juce::ComboBox& box) override;
+    void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override;
     juce::Font getLabelFont(juce::Label& label) override;
 
     void drawButtonText(juce::Graphics& g, juce::TextButton& button,

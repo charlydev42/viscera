@@ -125,9 +125,9 @@ public:
         }
 
         static const juce::Colour lfoColors[] = {
-            juce::Colour(0xFFE57373), // LFO1 — red
+            juce::Colour(0xFF8BC34A), // LFO1 — green
             juce::Colour(0xFF8BC34A), // LFO2 — green
-            juce::Colour(0xFF64B5F6)  // LFO3 — blue
+            juce::Colour(0xFF8BC34A)  // LFO3 — green
         };
 
         auto bounds = getLocalBounds().toFloat().reduced(1.0f);
@@ -550,7 +550,10 @@ private:
         menu.addItem(100, juce::String::charToString(0x21BA) + "  Reset to Default");
 
         auto safeThis = juce::Component::SafePointer<ModSlider>(this);
-        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+        menu.setLookAndFeel(&getLookAndFeel());
+        menu.showMenuAsync(juce::PopupMenu::Options()
+            .withTargetComponent(this)
+            .withStandardItemHeight(28),
             [safeThis, hits, numHits](int result) {
                 if (safeThis == nullptr || !safeThis->statePtr || result <= 0) return;
                 auto* statePtr = safeThis->statePtr;

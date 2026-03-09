@@ -19,7 +19,8 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       lfoSection(processor.apvts, processor),
       globalSection(processor.apvts),
       presetOverlay(processor),
-      saveOverlay(processor)
+      saveOverlay(processor),
+      licenseOverlay(processor.getLicenseManager())
 {
     setLookAndFeel(&lookAndFeel);
 
@@ -145,6 +146,10 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         setSaveOverlayVisible(false);
     };
     addChildComponent(saveOverlay); // hidden by default
+
+    // License overlay — shown when not licensed
+    licenseOverlay.onLicensed = [this] { updateLicenseOverlay(); };
+    addChildComponent(licenseOverlay);
 
     // Page toggle button
     pageToggleBtn.setButtonText("Advanced");
@@ -297,6 +302,9 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
 
     // Start on main (perform) page
     setPage(false);
+
+    // Check license state
+    updateLicenseOverlay();
 
     // Allow neumorphic shadows to overflow on all interactive widgets
     std::function<void(juce::Component*)> enableUnclipped = [&](juce::Component* comp)
@@ -744,6 +752,10 @@ void VisceraEditor::paint(juce::Graphics& g)
 
 void VisceraEditor::resized()
 {
+    // License overlay covers entire window
+    if (licenseOverlay.isVisible())
+        licenseOverlay.setBounds(getLocalBounds());
+
     auto area = getLocalBounds().reduced(4);
     titleLabel.setBounds(0, 0, 0, 0); // hidden
 
@@ -1073,3 +1085,30 @@ bool VisceraEditor::keyStateChanged(bool /*isKeyDown*/)
 }
 
 #endif
+
+// =====================================================================
+// License overlay — shown when plugin is not licensed
+// =====================================================================
+
+void VisceraEditor::updateLicenseOverlay()
+{
+    bool licensed = proc.getLicenseManager().isLicensed();
+    licenseOverlay.setVisible(!licensed);
+
+    if (!licensed)
+    {
+        // Hide OpenGL visualizer — native view renders above JUCE components
+        flubberVisualizer.setVisible(false);
+        flubberVisualizer.setBounds(0, 0, 0, 0);
+
+        licenseOverlay.setBounds(getLocalBounds());
+        licenseOverlay.toFront(true);
+    }
+    else
+    {
+        // Restore visualizer if on main page
+        if (!showAdvanced && !showPresetOverlay && !showSaveOverlay)
+            flubberVisualizer.setVisible(true);
+        resized();
+    }
+}

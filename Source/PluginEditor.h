@@ -20,6 +20,7 @@
 #include "gui/ModSlider.h"
 #include "gui/PresetOverlay.h"
 #include "gui/SaveOverlay.h"
+#include "gui/LicenseOverlay.h"
 
 class VisceraEditor : public juce::AudioProcessorEditor,
                       public juce::DragAndDropContainer,
@@ -108,6 +109,10 @@ private:
     SaveOverlay saveOverlay;
     bool showSaveOverlay = false;
     void setSaveOverlayVisible(bool visible);
+
+    // License overlay (blocks UI when not licensed)
+    LicenseOverlay licenseOverlay;
+    void updateLicenseOverlay();
 
     // Key handler (undo/redo on all platforms + MIDI keyboard standalone-only)
     bool keyPressed(const juce::KeyPress& key) override;

@@ -37,7 +37,10 @@ target_sources(Viscera PRIVATE
     Source/PluginEditor.cpp
     # DSP
     Source/dsp/FMVoice.cpp
+    # License
+    Source/license/LicenseManager.cpp
     # GUI
+    Source/gui/LicenseOverlay.cpp
     Source/gui/LFOSection.cpp
     Source/gui/ModulatorSection.cpp
     Source/gui/CarrierSection.cpp
@@ -61,8 +64,6 @@ target_sources(Viscera PRIVATE
 )
 
 juce_add_binary_data(VisceraData SOURCES
-    logo.png
-    "viscera logo fat.png"
     graphics/viscera_logo_light.png
     graphics/viscera_logo_dark.png
     graphics/viscera_logo_light_nodolph.png
@@ -179,6 +180,8 @@ target_link_libraries(Viscera
         juce::juce_dsp
         juce::juce_gui_basics
         juce::juce_opengl
+        "-framework IOKit"
+        "-framework Security"
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags

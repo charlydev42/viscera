@@ -5,14 +5,50 @@
 #include <algorithm>
 #include <vector>
 
-static const juce::StringArray kCategories { "All", "Bass", "Lead", "Pad", "FX", "Drums", "Texture", "User" };
+static const juce::StringArray kCategories { "All", "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+
+// Draw a heart shape centered in a rectangle using vector paths
+static void drawHeart(juce::Graphics& g, juce::Rectangle<float> area, bool filled)
+{
+    float cx = area.getCentreX();
+    float cy = area.getCentreY();
+    float w = area.getWidth() * 0.45f;
+    float h = area.getHeight() * 0.45f;
+
+    juce::Path heart;
+    heart.startNewSubPath(cx, cy + h * 0.8f);
+    heart.cubicTo(cx - w * 1.5f, cy - h * 0.2f,
+                  cx - w * 0.8f, cy - h * 1.2f,
+                  cx, cy - h * 0.4f);
+    heart.cubicTo(cx + w * 0.8f, cy - h * 1.2f,
+                  cx + w * 1.5f, cy - h * 0.2f,
+                  cx, cy + h * 0.8f);
+    heart.closeSubPath();
+
+    if (filled)
+        g.fillPath(heart);
+    else
+        g.strokePath(heart, juce::PathStrokeType(1.2f));
+}
 
 PresetOverlay::PresetOverlay(VisceraProcessor& processor)
     : proc(processor)
 {
     setWantsKeyboardFocus(true);
 
-    for (int i = 0; i < 8; ++i)
+    // Pack selector dropdown
+    packSelector.setMouseClickGrabsKeyboardFocus(false);
+    packSelector.onChange = [this] {
+        selectedPack = packSelector.getText();
+        scrollOffset = 0;
+        confirmDeleteCard = -1;
+        rebuildCards();
+        focusedCard = -1;
+        repaint();
+    };
+    addAndMakeVisible(packSelector);
+
+    for (int i = 0; i < 7; ++i)
     {
         categoryButtons[i].setButtonText(kCategories[i]);
         categoryButtons[i].setMouseClickGrabsKeyboardFocus(false);
@@ -40,6 +76,14 @@ void PresetOverlay::stopPreviewNote()
 
 void PresetOverlay::refresh()
 {
+    // Rebuild pack dropdown
+    auto packs = proc.getAvailablePacks();
+    packSelector.clear(juce::dontSendNotification);
+    for (int i = 0; i < packs.size(); ++i)
+        packSelector.addItem(packs[i], i + 1);
+    int idx = packs.indexOf(selectedPack);
+    packSelector.setSelectedItemIndex(idx >= 0 ? idx : 0, juce::dontSendNotification);
+
     scrollOffset = 0;
     confirmDeleteCard = -1;
     savedPresetIndex = proc.getCurrentPresetIndex();
@@ -121,7 +165,23 @@ void PresetOverlay::rebuildCards()
         });
     };
 
-    bool isCategoryTab = (selectedCategory != "All" && selectedCategory != "User");
+    bool isCategoryTab = (selectedCategory != "All");
+
+    // Lambda to check if a preset passes the fav filter
+    auto passesFavFilter = [&](int i) {
+        if (!favFilterOn) return true;
+        return proc.isFavorite(registry[static_cast<size_t>(i)].name);
+    };
+
+    // Lambda to check if a preset passes the pack filter
+    auto passesPackFilter = [&](int i) {
+        if (selectedPack == "All") return true;
+        return registry[static_cast<size_t>(i)].pack == selectedPack;
+    };
+
+    auto passesFilters = [&](int i) {
+        return passesFavFilter(i) && passesPackFilter(i);
+    };
 
     if (isCategoryTab)
     {
@@ -130,7 +190,7 @@ void PresetOverlay::rebuildCards()
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
             auto& entry = registry[static_cast<size_t>(i)];
-            if (entry.isFactory && entry.category != "Init" && entry.category == selectedCategory)
+            if (entry.isFactory && entry.category != "Init" && entry.category == selectedCategory && passesFilters(i))
                 factoryIndices.push_back(i);
         }
         sortByName(factoryIndices);
@@ -142,7 +202,7 @@ void PresetOverlay::rebuildCards()
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
             auto& entry = registry[static_cast<size_t>(i)];
-            if (!entry.isFactory && entry.category == selectedCategory)
+            if (!entry.isFactory && entry.category == selectedCategory && passesFilters(i))
                 userIndices.push_back(i);
         }
         if (!userIndices.empty())
@@ -155,13 +215,13 @@ void PresetOverlay::rebuildCards()
     }
     else
     {
-        // "All" or "User" — collect, sort, add
+        // "All" — collect, sort, add
         std::vector<int> indices;
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
         {
             auto& entry = registry[static_cast<size_t>(i)];
             if (entry.isFactory && entry.category == "Init") continue;
-            if (selectedCategory == "User" && entry.isFactory) continue;
+            if (!passesFilters(i)) continue;
             indices.push_back(i);
         }
         sortByName(indices);
@@ -263,9 +323,29 @@ juce::Rectangle<int> PresetOverlay::deleteXBounds(int cardIndex) const
     return { card.bounds.getX() + 4, card.bounds.getY() + 4, 16, 16 };
 }
 
+juce::Rectangle<int> PresetOverlay::favHeartBounds(int cardIndex) const
+{
+    if (cardIndex < 0 || cardIndex >= static_cast<int>(cards.size()))
+        return {};
+    auto& card = cards[static_cast<size_t>(cardIndex)];
+    return { card.bounds.getRight() - 20, card.bounds.getBottom() - 18, 16, 16 };
+}
+
 void PresetOverlay::mouseDown(const juce::MouseEvent& e)
 {
     auto pt = e.getPosition();
+
+    // Heart toggle button
+    if (favToggleBounds.contains(pt))
+    {
+        favFilterOn = !favFilterOn;
+        scrollOffset = 0;
+        confirmDeleteCard = -1;
+        rebuildCards();
+        focusedCard = -1;
+        repaint();
+        return;
+    }
 
     // If in delete confirmation, handle on mouseDown
     if (confirmDeleteCard >= 0 && confirmDeleteCard < static_cast<int>(cards.size()))
@@ -307,14 +387,26 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
     int idx = cardAtPoint(pt);
     if (idx >= 0)
     {
-        // Check delete cross first
         auto& entry = proc.getPresetRegistry()[static_cast<size_t>(cards[static_cast<size_t>(idx)].registryIndex)];
+
+        // Check delete cross first
         if (!entry.isFactory && deleteXBounds(idx).contains(pt))
         {
             confirmDeleteCard = idx;
             repaint();
             return;
         }
+
+        // Check favorite heart
+        if (favHeartBounds(idx).contains(pt))
+        {
+            proc.toggleFavorite(entry.name);
+            if (favFilterOn)
+                rebuildCards();
+            repaint();
+            return;
+        }
+
         selectCard(idx);
     }
 }
@@ -398,8 +490,19 @@ void PresetOverlay::resized()
     int pillH = 26;
     auto pillRow = area.removeFromTop(pillH);
 
-    int pillW = (pillRow.getWidth() - 7 * 4) / 8;
-    for (int i = 0; i < 8; ++i)
+    // Pack selector dropdown on the left
+    int dropW = 90;
+    packSelector.setBounds(pillRow.removeFromLeft(dropW));
+    pillRow.removeFromLeft(6);
+
+    // Heart toggle on the right side of the pill row (same height as pills)
+    int heartW = pillH;
+    auto heartArea = pillRow.removeFromRight(heartW);
+    favToggleBounds = heartArea;
+    pillRow.removeFromRight(4);
+
+    int pillW = (pillRow.getWidth() - 6 * 4) / 7;
+    for (int i = 0; i < 7; ++i)
     {
         categoryButtons[i].setBounds(pillRow.removeFromLeft(pillW));
         pillRow.removeFromLeft(4);
@@ -419,20 +522,60 @@ void PresetOverlay::paint(juce::Graphics& g)
     auto monoFont = juce::Font(juce::Font::getDefaultMonospacedFontName(), 11.0f, juce::Font::plain);
     auto smallFont = juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain);
 
-    // Style category pills
-    for (int i = 0; i < 8; ++i)
+    auto accentCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+
+    for (int i = 0; i < 7; ++i)
     {
         bool sel = (kCategories[i] == selectedCategory);
         categoryButtons[i].setColour(juce::TextButton::textColourOnId,
-            sel ? juce::Colour(VisceraLookAndFeel::kAccentColor)
-                : juce::Colour(VisceraLookAndFeel::kTextColor));
+            sel ? accentCol : juce::Colour(VisceraLookAndFeel::kTextColor));
         categoryButtons[i].setColour(juce::TextButton::textColourOffId,
-            sel ? juce::Colour(VisceraLookAndFeel::kAccentColor)
-                : juce::Colour(VisceraLookAndFeel::kTextColor));
+            sel ? accentCol : juce::Colour(VisceraLookAndFeel::kTextColor));
     }
 
-    // Clip to grid area (below pills)
-    auto clipRect = getLocalBounds().withTop(gridTop);
+    // Draw heart toggle button (pill style, matching category tabs)
+    {
+        auto hb = favToggleBounds.toFloat().reduced(1.0f);
+        float cr = hb.getHeight() * 0.5f;
+
+        if (favFilterOn)
+        {
+            // Pressed inset style (subtle for small button)
+            g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor).darker(0.03f));
+            g.fillRoundedRectangle(hb, cr);
+            g.saveState();
+            juce::Path clip;
+            clip.addRoundedRectangle(hb, cr);
+            g.reduceClipRegion(clip);
+            juce::DropShadow darkIn(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.25f), 2, { 1, 1 });
+            darkIn.drawForRectangle(g, hb.toNearestInt());
+            juce::DropShadow lightIn(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.25f), 2, { -1, -1 });
+            lightIn.drawForRectangle(g, hb.toNearestInt());
+            g.restoreState();
+        }
+        else
+        {
+            // Raised pill style
+            juce::Path pillPath;
+            pillPath.addRoundedRectangle(hb, cr);
+            juce::DropShadow lightSh(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.5f), 2, { -1, -1 });
+            lightSh.drawForPath(g, pillPath);
+            juce::DropShadow darkSh(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.4f), 2, { 1, 1 });
+            darkSh.drawForPath(g, pillPath);
+            g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor));
+            g.fillRoundedRectangle(hb, cr);
+        }
+
+        auto heartRect = hb.reduced(4.0f);
+        if (favFilterOn)
+            g.setColour(accentCol);
+        else
+            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.4f));
+        drawHeart(g, heartRect, favFilterOn);
+    }
+
+    // Clip to grid area (below pills, with shadow padding above)
+    auto clipRect = getLocalBounds().withTop(gridTop - 4);
     g.saveState();
     g.reduceClipRegion(clipRect);
 
@@ -539,13 +682,12 @@ void PresetOverlay::paint(juce::Graphics& g)
         }
 
         // Preset name
-        g.setColour(isActive ? accent.withAlpha(0.95f)
+        g.setColour(isActive ? accentCol.darker(0.15f)
                              : juce::Colour(VisceraLookAndFeel::kTextColor));
         g.setFont(monoFont);
 
         // Show category subtitle in All, User, and for user presets in category tabs
         bool showSubtitle = (selectedCategory == "All")
-                         || (selectedCategory == "User")
                          || (!entry.isFactory);
 
         if (showSubtitle)
@@ -570,6 +712,18 @@ void PresetOverlay::paint(juce::Graphics& g)
             g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(hoverX ? 0.8f : 0.3f));
             g.setFont(juce::Font(10.0f));
             g.drawText(juce::String::charToString(0x2715), xr, juce::Justification::centred);
+        }
+
+        // Favorite heart (bottom-right corner)
+        {
+            auto hr = favHeartBounds(i);
+            bool isFav = proc.isFavorite(entry.name);
+            bool hoverH = (i == hoveredCard) && hr.contains(getMouseXYRelative());
+            if (isFav)
+                g.setColour(accentCol.withAlpha(hoverH ? 1.0f : 0.8f));
+            else
+                g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(hoverH ? 0.5f : 0.15f));
+            drawHeart(g, hr.toFloat(), isFav);
         }
     }
 

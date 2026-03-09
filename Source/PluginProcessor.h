@@ -14,12 +14,14 @@
 #include "dsp/RubberComb.h"
 #include "dsp/VolumeShaper.h"
 #include "dsp/AudioVisualBuffer.h"
+#include "license/LicenseManager.h"
 
-class VisceraProcessor : public juce::AudioProcessor
+class VisceraProcessor : public juce::AudioProcessor,
+                         private bb::LicenseManager::Listener
 {
 public:
     VisceraProcessor();
-    ~VisceraProcessor() override = default;
+    ~VisceraProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -54,6 +56,7 @@ public:
     struct PresetEntry {
         juce::String name;
         juce::String category;
+        juce::String pack;           // "Factory", "User", or pack name (e.g. "Dua Lipa")
         bool isFactory = true;
         juce::String resourceName;   // BinaryData resource name (factory)
         juce::String userFileName;   // filename without extension (user)
@@ -61,6 +64,7 @@ public:
 
     const std::vector<PresetEntry>& getPresetRegistry() const { return presetRegistry; }
     void buildPresetRegistry();
+    juce::StringArray getAvailablePacks() const;
     void loadPresetAt(int index);
     int getCurrentPresetIndex() const { return currentPreset; }
     int getPresetCount() const { return static_cast<int>(presetRegistry.size()); }
@@ -72,6 +76,12 @@ public:
     bool deleteUserPreset(const juce::String& name);
     bool isUserPreset() const { return isUserPresetLoaded; }
     const juce::String& getUserPresetName() const { return currentUserPresetName; }
+
+    // Favorites
+    bool isFavorite(const juce::String& presetName) const;
+    void toggleFavorite(const juce::String& presetName);
+    void saveFavorites();
+    void loadFavorites();
 
     // Display name override (e.g. "Random", "Custom") — empty = use preset name
     void setDisplayName(const juce::String& name)
@@ -108,6 +118,7 @@ private:
     juce::String displayName; // override for preset display (e.g. "Random")
     mutable juce::SpinLock displayNameLock;
     std::vector<PresetEntry> presetRegistry;
+    juce::StringArray favorites;
 
     // Shared logic for loading preset XML
     void loadPresetFromXml(const juce::String& xmlStr);
@@ -182,6 +193,8 @@ private:
     bb::HarmonicTable mod1Harmonics, mod2Harmonics, carHarmonics;
 
 public:
+    bb::LicenseManager& getLicenseManager() { return licenseManager; }
+
     bb::HarmonicTable& getHarmonicTable(int idx)
     {
         if (idx == 0) return mod1Harmonics;
@@ -201,6 +214,16 @@ private:
     // Visual buffers for GUI oscilloscope/FFT (L + R)
     bb::AudioVisualBuffer visualBuffer;
     bb::AudioVisualBuffer visualBufferR;
+
+    // License
+    bb::LicenseManager licenseManager;
+
+    // LicenseManager::Listener
+    void licenseStateChanged(bool licensed) override;
+
+    // Audio-thread gate (magic token, not a simple bool — harder to find/patch)
+    std::atomic<uint32_t> dspGainToken { 0 };
+    static constexpr uint32_t kDspActive = 0x8A3C5F21;
 
     // Migration des anciens presets (MOD_PITCH → COARSE+FINE ou FIXED_FREQ)
     static void migrateOldPitchParams(juce::ValueTree& tree);
