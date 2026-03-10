@@ -23,6 +23,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
       licenseOverlay(processor.getLicenseManager())
 {
     setLookAndFeel(&lookAndFeel);
+    juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
 
     // Give ModSlider access to live LFO modulation values
     ModSlider::voiceParamsPtr = &processor.getVoiceParams();
@@ -180,47 +181,10 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // KB toggle removed — computer keyboard replaces it on standalone
 #endif
 
-    // Dark mode toggle
-    darkModeBtn.setButtonText("Dark");
-    darkModeBtn.onClick = [this] {
-        // 1. Hide viz — paint() will fill with bg color
-        flubberVisualizer.setVisible(false);
-
-        // 2. Switch colours
-        VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
-        lookAndFeel.refreshJuceColours();
-        darkModeBtn.setButtonText(VisceraLookAndFeel::darkMode ? "Light" : "Dark");
-
-        // Swap logos (advanced + main)
-        {
-            auto img = VisceraLookAndFeel::darkMode
-                ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_nodolph_png, BinaryData::viscera_logo_dark_nodolph_pngSize)
-                : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png, BinaryData::viscera_logo_light_nodolph_pngSize);
-            logoImage.setImage(img, juce::RectanglePlacement::centred);
-
-            auto mainImg = VisceraLookAndFeel::darkMode
-                ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_dark_png, BinaryData::viscera_logo_neutral_dark_pngSize)
-                : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_png, BinaryData::viscera_logo_neutral_pngSize);
-            mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
-        }
-
-        // 3. Repaint everything (viz area shows correct bg via parent)
-        std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
-            c->sendLookAndFeelChange();
-            c->repaint();
-            for (auto* ch : c->getChildren()) refreshAll(ch);
-        };
-        refreshAll(this);
-
-        // 4. Kick GL to render with new bg, then re-show after a frame
-        flubberVisualizer.triggerGLRepaint();
-        auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->flubberVisualizer.setVisible(!safeThis->showAdvanced && !safeThis->showPresetOverlay && !safeThis->showSaveOverlay);
-        });
-    };
-    addAndMakeVisible(darkModeBtn);
+    // Settings menu button
+    menuBtn.setButtonText(juce::String::charToString(0x2630)); // ☰ hamburger
+    menuBtn.onClick = [this] { showSettingsMenu(); };
+    addAndMakeVisible(menuBtn);
 
     // Macro knobs for main page
     {
@@ -327,7 +291,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     algoLeftBtn.setPaintingIsUnclipped(true);
     algoRightBtn.setPaintingIsUnclipped(true);
     algoLabel.setPaintingIsUnclipped(true);
-    darkModeBtn.setPaintingIsUnclipped(true);
+    menuBtn.setPaintingIsUnclipped(true);
     pageToggleBtn.setPaintingIsUnclipped(true);
 
     // Load first preset so sound matches displayed name
@@ -442,10 +406,63 @@ void VisceraEditor::randomizeParams()
     randBool("LIQ_ON", 0.2f);
     randBool("RUB_ON", 0.15f);
 
-    // Keep volume safe
-    randFloat("VOLUME", 0.5f, 0.8f);
+    // Pitch envelope
+    randBool("PENV_ON", 0.25f);
+    randFloat("PENV_AMT", -24.0f, 24.0f);
+    randFloat("PENV_A", 0.001f, 0.3f);
+    randFloat("PENV_D", 0.01f, 0.5f);
+    randFloat("PENV_S", 0.0f, 1.0f);
+    randFloat("PENV_R", 0.01f, 1.0f);
+
+    // Macros
     randFloat("DRIVE", 0.0f, 0.4f);
     randFloat("DISP_AMT", 0.0f, 0.3f);
+    randFloat("CORTEX", 0.0f, 0.5f);
+    randFloat("PLASMA", 0.0f, 0.5f);
+    randFloat("ICHOR", 0.0f, 0.5f);
+
+    // Estimate loudness from patch parameters and compensate volume
+    {
+        float loudness = 1.0f;
+
+        // FM modulation depth → more harmonics → louder
+        float mod1Lvl = apvts.getRawParameterValue("MOD1_LEVEL")->load();
+        float mod2Lvl = apvts.getRawParameterValue("MOD2_LEVEL")->load();
+        loudness += (mod1Lvl + mod2Lvl) * 0.35f;
+
+        // Drive adds gain
+        float drive = apvts.getRawParameterValue("DRIVE")->load();
+        loudness += drive * 0.5f;
+
+        // XOR adds harmonics
+        if (apvts.getRawParameterValue("XOR_ON")->load() > 0.5f)
+            loudness += 0.25f;
+
+        // Fold (DISP_AMT) adds harmonics
+        float fold = apvts.getRawParameterValue("DISP_AMT")->load();
+        loudness += fold * 0.35f;
+
+        // Cortex / Plasma / Ichor can add energy
+        float cortex = apvts.getRawParameterValue("CORTEX")->load();
+        float plasma = apvts.getRawParameterValue("PLASMA")->load();
+        float ichor  = apvts.getRawParameterValue("ICHOR")->load();
+        loudness += (cortex + plasma + ichor) * 0.15f;
+
+        // Effects add energy
+        if (apvts.getRawParameterValue("DLY_ON")->load() > 0.5f)
+            loudness += apvts.getRawParameterValue("DLY_MIX")->load() * 0.2f;
+        if (apvts.getRawParameterValue("REV_ON")->load() > 0.5f)
+            loudness += apvts.getRawParameterValue("REV_MIX")->load() * 0.3f;
+
+        // Filter off = full spectrum = louder
+        if (apvts.getRawParameterValue("FILT_ON")->load() < 0.5f)
+            loudness += 0.15f;
+
+        // Compensate: target consistent level
+        float targetVol = juce::jlimit(0.15f, 0.8f, 0.65f / loudness);
+        if (auto* p = apvts.getParameter("VOLUME"))
+            p->setValueNotifyingHost(p->convertTo0to1(targetVol));
+    }
 
     // Global LFOs — moderate randomization
     for (int n = 1; n <= 3; ++n)
@@ -454,11 +471,14 @@ void VisceraEditor::randomizeParams()
         randFloat(pfx + "RATE", 0.2f, 8.0f);
         randInt(pfx + "WAVE", 0, 4);
         // 30% chance of one active assignment per LFO, clear all 8 slots
+        // Never assign to Volume (index 6) — vol shaper handles that
         for (int s = 1; s <= 8; ++s)
         {
             if (s == 1 && rng.nextFloat() < 0.3f)
             {
-                randInt(pfx + "DEST" + juce::String(s), 1, 11);
+                int dest;
+                do { dest = 1 + rng.nextInt(10); } while (dest == 6);
+                randInt(pfx + "DEST" + juce::String(s), dest, dest);
                 randFloat(pfx + "AMT" + juce::String(s), -0.5f, 0.5f);
             }
             else
@@ -771,9 +791,9 @@ void VisceraEditor::resized()
     algoRightBtn.setBounds(topBar.removeFromLeft(22));
     topBar.removeFromLeft(sp);
 
-    pageToggleBtn.setBounds(topBar.removeFromRight(62));
+    menuBtn.setBounds(topBar.removeFromRight(40));
     topBar.removeFromRight(sp);
-    darkModeBtn.setBounds(topBar.removeFromRight(40));
+    pageToggleBtn.setBounds(topBar.removeFromRight(62));
     topBar.removeFromRight(sp);
 
     presetBrowser.setBounds(topBar);
@@ -1111,4 +1131,107 @@ void VisceraEditor::updateLicenseOverlay()
             flubberVisualizer.setVisible(true);
         resized();
     }
+}
+
+void VisceraEditor::showSettingsMenu()
+{
+    // Toggle: if menu is already open, dismiss it
+    if (juce::PopupMenu::dismissAllActiveMenus(); menuBtn.getToggleState())
+    {
+        menuBtn.setToggleState(false, juce::dontSendNotification);
+        return;
+    }
+    menuBtn.setToggleState(true, juce::dontSendNotification);
+
+    juce::PopupMenu menu;
+
+    // 1. Dark mode (ticked checkbox)
+    menu.addItem(1, "Dark Mode", true, VisceraLookAndFeel::darkMode);
+
+    menu.addSeparator();
+
+    // 2. License info
+    auto& lm = proc.getLicenseManager();
+    if (lm.isLicensed())
+    {
+        auto key = lm.getLicenseKey();
+        juce::String masked = key.substring(0, 5) + "****-****-****-" + key.getLastCharacters(4);
+        menu.addItem(-1, "License: " + masked, false);
+        menu.addItem(2, "Deactivate License");
+    }
+    else
+    {
+        menu.addItem(-1, "Not licensed", false);
+    }
+
+    menu.addSeparator();
+
+    // 3. Account & presets
+    menu.addItem(3, "Manage Account & Presets");
+
+    // Right-align: use the full button screen bounds as target.
+    // JUCE centers the popup on the target, so we shift the target right
+    // by half the menu width minus half the button width to right-align edges.
+    int menuW = 220;
+    auto btnScreen = menuBtn.getScreenBounds();
+    int anchorX = btnScreen.getRight() - menuW - menuW / 6 - 3;
+    int anchorY = btnScreen.getBottom();
+    menu.showMenuAsync(juce::PopupMenu::Options()
+        .withTargetScreenArea(juce::Rectangle<int>(anchorX, anchorY, 1, 1))
+        .withPreferredPopupDirection(juce::PopupMenu::Options::PopupDirection::downwards)
+        .withMinimumWidth(menuW),
+        [this](int result)
+        {
+            menuBtn.setToggleState(false, juce::dontSendNotification);
+
+            if (result == 1)
+            {
+                // 1. Hide viz — paint() will fill with new bg color
+                flubberVisualizer.setVisible(false);
+
+                // 2. Switch colours
+                VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
+                lookAndFeel.refreshJuceColours();
+
+                // Swap logos
+                auto img = VisceraLookAndFeel::darkMode
+                    ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_nodolph_png, BinaryData::viscera_logo_dark_nodolph_pngSize)
+                    : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png, BinaryData::viscera_logo_light_nodolph_pngSize);
+                logoImage.setImage(img, juce::RectanglePlacement::centred);
+
+                auto mainImg = VisceraLookAndFeel::darkMode
+                    ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_dark_png, BinaryData::viscera_logo_neutral_dark_pngSize)
+                    : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_png, BinaryData::viscera_logo_neutral_pngSize);
+                mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
+
+                // 3. Repaint everything
+                std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
+                    c->sendLookAndFeelChange();
+                    c->repaint();
+                    for (auto* ch : c->getChildren()) refreshAll(ch);
+                };
+                refreshAll(this);
+
+                // 4. Kick GL to render with new bg, then re-show after a frame
+                flubberVisualizer.triggerGLRepaint();
+                auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
+                juce::MessageManager::callAsync([safeThis] {
+                    if (safeThis != nullptr && !safeThis->showAdvanced
+                        && !safeThis->showPresetOverlay && !safeThis->showSaveOverlay)
+                        safeThis->flubberVisualizer.setVisible(true);
+                });
+            }
+            else if (result == 2)
+            {
+                // Deactivate license
+                proc.getLicenseManager().deactivate();
+                licenseOverlay.reset();
+                updateLicenseOverlay();
+                return; // overlay handles viz visibility
+            }
+            else if (result == 3)
+            {
+                juce::URL("https://thunderdolphin.studio").launchInDefaultBrowser();
+            }
+        });
 }

@@ -204,7 +204,7 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
     addAndMakeVisible(shapePresetBox);
 
     // Fixed toggle
-    fixedToggle.setButtonText("Fixed");
+    fixedToggle.setButtonText("Sync");
     fixedToggle.onClick = [this] {
         if (fixedToggle.getToggleState())
             setSyncParam(lastSyncIdx);

@@ -102,6 +102,14 @@ LicenseOverlay::~LicenseOverlay()
     manager.removeListener(this);
 }
 
+void LicenseOverlay::reset()
+{
+    keyInput.clear();
+    statusLabel.setText("", juce::dontSendNotification);
+    activateBtn.setEnabled(true);
+    activating = false;
+}
+
 void LicenseOverlay::licenseStateChanged(bool licensed)
 {
     if (licensed && onLicensed)

@@ -515,10 +515,6 @@ void VisceraLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, i
     // Clear to transparent first (window is non-opaque)
     g.fillAll(juce::Colours::transparentBlack);
 
-    // Drop shadow behind popup
-    juce::DropShadow shadow(juce::Colour(kShadowDark).withAlpha(0.45f), 14, { 0, 4 });
-    shadow.drawForRectangle(g, bounds.reduced(4).toNearestInt());
-
     // Slightly darker than panel background so the pill stands out
     auto bgCol = juce::Colour(kBgColor);
     auto pillCol = darkMode ? bgCol.brighter(0.06f) : bgCol.darker(0.03f);
@@ -550,23 +546,18 @@ void VisceraLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectan
         return;
     }
 
-    auto r = area.reduced(6, 1);
+    auto r = area.reduced(8, 2);
 
     if (isHighlighted && isActive)
     {
-        float pillCr = 6.0f;
-        g.setColour(juce::Colour(kAccentColor).withAlpha(0.18f));
+        float pillCr = r.getHeight() / 2.0f; // full pill shape
+        g.setColour(juce::Colour(kAccentColor).withAlpha(0.10f));
         g.fillRoundedRectangle(r.toFloat(), pillCr);
     }
 
-    // Destructive items (starting with cross symbol) get a red tint
-    bool isDestructive = text.startsWithChar(0x2716);
-
     auto textCol = isActive ? juce::Colour(kTextColor) : juce::Colour(kTextColor).withAlpha(0.4f);
     if (isHighlighted && isActive)
-        textCol = isDestructive ? juce::Colour(0xFFE57373) : juce::Colour(kAccentColor);
-    else if (isDestructive && isActive)
-        textCol = juce::Colour(kTextColor).withAlpha(0.7f);
+        textCol = juce::Colour(kAccentColor);
 
     g.setColour(textCol);
     g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));

@@ -20,6 +20,9 @@ public:
     // Called when activation succeeds (editor hides overlay)
     std::function<void()> onLicensed;
 
+    // Reset the overlay to its initial state (clear input, status, etc.)
+    void reset();
+
 private:
     void licenseStateChanged(bool licensed) override;
 

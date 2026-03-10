@@ -188,8 +188,11 @@ void LicenseManager::verify(Callback callback)
 
 void LicenseManager::deactivate()
 {
+    juce::String key, machine;
     {
         const juce::ScopedLock sl(stateLock);
+        key     = licenseKey_;
+        machine = machineId_;
         licensed_     = false;
         licenseKey_   = {};
         userId_       = {};
@@ -198,6 +201,36 @@ void LicenseManager::deactivate()
     }
     clearCache();
     listeners_.call(&Listener::licenseStateChanged, false);
+
+    // Tell server to deactivate this machine (fire and forget)
+    // Captures only value types — no reference to `this`, so no use-after-free
+    if (key.isNotEmpty() && machine.isNotEmpty())
+    {
+        auto secret = bb::license::decodeSecret();
+        std::thread([key, machine, secret] {
+            auto* obj = new juce::DynamicObject();
+            obj->setProperty("licenseKey", key);
+            obj->setProperty("machineId",  machine);
+            juce::var jsonVar(obj);
+            auto json = juce::JSON::toString(jsonVar, true);
+
+            // Sign the request
+            auto canon = LicenseManager::canonicalJson(juce::JSON::parse(json));
+            auto timestamp = juce::String(juce::Time::currentTimeMillis());
+            auto sig = LicenseManager::hmacSha256(secret, timestamp + ":" + canon);
+            auto sigHeader = timestamp + "." + sig;
+
+            auto extraHeaders = "Content-Type: application/json\r\nX-TD-Signature: " + sigHeader;
+
+            int statusCode = 0;
+            auto url = juce::URL(juce::String(bb::license::kApiBaseUrl) + "/auth/deactivate")
+                           .withPOSTData(json);
+            url.createInputStream(juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
+                .withExtraHeaders(extraHeaders)
+                .withConnectionTimeoutMs(bb::license::kHttpTimeoutMs)
+                .withStatusCode(&statusCode));
+        }).detach();
+    }
 }
 
 // =====================================================================
