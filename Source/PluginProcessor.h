@@ -1,4 +1,4 @@
-// PluginProcessor.h — AudioProcessor principal de Viscera
+// PluginProcessor.h — AudioProcessor principal de Parasite
 // Gère le Synthesiser, l'APVTS (AudioProcessorValueTreeState) et les presets
 // APVTS = système de JUCE qui synchronise paramètres ↔ GUI ↔ automation ↔ state
 #pragma once
@@ -16,12 +16,12 @@
 #include "dsp/AudioVisualBuffer.h"
 #include "license/LicenseManager.h"
 
-class VisceraProcessor : public juce::AudioProcessor,
+class ParasiteProcessor : public juce::AudioProcessor,
                          private bb::LicenseManager::Listener
 {
 public:
-    VisceraProcessor();
-    ~VisceraProcessor() override;
+    ParasiteProcessor();
+    ~ParasiteProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -228,5 +228,5 @@ private:
     // Migration des anciens presets (MOD_PITCH → COARSE+FINE ou FIXED_FREQ)
     static void migrateOldPitchParams(juce::ValueTree& tree);
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VisceraProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ParasiteProcessor)
 };

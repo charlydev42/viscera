@@ -1,6 +1,6 @@
 // CarrierSection.cpp — Carrier panel: wave, Coarse/Freq, Fixed, Fine, ADSR, XOR, sync
 #include "CarrierSection.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 
 // ============================================================
 // CarrierEnvDisplay — visual ADSR curve for ENV3 (no drag)
@@ -18,7 +18,7 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(b, 3.0f);
 
     auto inner = b.reduced(3.0f, 1.0f);   // horizontal padding only; vertical tight
@@ -60,7 +60,7 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
     path.lineTo(pSusE);
     path.lineTo(pRelEnd);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
     g.strokePath(path, juce::PathStrokeType(1.5f));
 
     // Fill under curve
@@ -68,7 +68,7 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
     fill.lineTo(pRelEnd.x, baseline);
     fill.lineTo(pStart.x, baseline);
     fill.closeSubPath();
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.06f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.06f));
     g.fillPath(fill);
 }
 

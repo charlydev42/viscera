@@ -1,11 +1,11 @@
-// PluginEditor.h — Editeur principal de Viscera
+// PluginEditor.h — Editeur principal de Parasite
 // Layout 3x3 sombre avec sections tabbées
 #pragma once
 #include <set>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
-#include "gui/VisceraLookAndFeel.h"
+#include "gui/ParasiteLookAndFeel.h"
 #include "gui/PresetBrowser.h"
 #include "gui/ModulatorSection.h"
 #include "gui/CarrierSection.h"
@@ -22,13 +22,13 @@
 #include "gui/SaveOverlay.h"
 #include "gui/LicenseOverlay.h"
 
-class VisceraEditor : public juce::AudioProcessorEditor,
+class ParasiteEditor : public juce::AudioProcessorEditor,
                       public juce::DragAndDropContainer,
                       private juce::Timer
 {
 public:
-    explicit VisceraEditor(VisceraProcessor& processor);
-    ~VisceraEditor() override;
+    explicit ParasiteEditor(ParasiteProcessor& processor);
+    ~ParasiteEditor() override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -36,8 +36,8 @@ public:
     void dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&) override;
 
 private:
-    VisceraProcessor& proc;
-    VisceraLookAndFeel lookAndFeel;
+    ParasiteProcessor& proc;
+    ParasiteLookAndFeel lookAndFeel;
 
     // Sous-composants
     PresetBrowser presetBrowser;
@@ -74,8 +74,9 @@ private:
     juce::TextButton pageToggleBtn;
     void setPage(bool advanced);
 
-    // Dark mode toggle
-    juce::TextButton darkModeBtn;
+    // Settings menu (hamburger button)
+    juce::TextButton menuBtn;
+    void showSettingsMenu();
 
     // Main page macro knobs (Volume, Drive, Cortex, Plasma, Fold, Ichor)
     ModSlider macroKnobs[6];
@@ -127,5 +128,5 @@ private:
     int computerKeyOctave = 4;
 #endif
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VisceraEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ParasiteEditor)
 };

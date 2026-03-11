@@ -1,6 +1,6 @@
 // PitchEnvSection.cpp — Pitch Envelope: visual display + knobs
 #include "PitchEnvSection.h"
-#include "../gui/VisceraLookAndFeel.h"
+#include "../gui/ParasiteLookAndFeel.h"
 
 // ============================================================
 // PitchEnvDisplay — visual ADSR curve (no drag)
@@ -18,7 +18,7 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat().reduced(1.0f);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(b, 3.0f);
 
     bool enabled = *state.getRawParameterValue("PENV_ON") > 0.5f;
@@ -32,12 +32,12 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
     float baseline = y0 + h * 0.5f;
 
     // Baseline
-    g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff));
     g.drawHorizontalLine(static_cast<int>(baseline), inner.getX() + 2, inner.getRight() - 2);
 
     if (!enabled)
     {
-        g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff));
+        g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff));
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
         g.drawText("OFF", b.toNearestInt(), juce::Justification::centred);
         return;
@@ -77,7 +77,7 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
     path.lineTo(pSusE);
     path.lineTo(pRelEnd);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
     g.strokePath(path, juce::PathStrokeType(1.5f));
 
     // Fill
@@ -85,7 +85,7 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
     fill.lineTo(pRelEnd.x, baseline);
     fill.lineTo(pStart.x, baseline);
     fill.closeSubPath();
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.06f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.06f));
     g.fillPath(fill);
 
 }

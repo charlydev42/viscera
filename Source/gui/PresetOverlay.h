@@ -2,13 +2,13 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 
-class VisceraProcessor;
+class ParasiteProcessor;
 
 class PresetOverlay : public juce::Component,
                       private juce::Timer
 {
 public:
-    PresetOverlay(VisceraProcessor& processor);
+    PresetOverlay(ParasiteProcessor& processor);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -28,7 +28,7 @@ public:
     int getSavedPresetIndex() const { return savedPresetIndex; }
 
 private:
-    VisceraProcessor& proc;
+    ParasiteProcessor& proc;
 
     juce::String selectedCategory { "All" };
     juce::TextButton categoryButtons[7];

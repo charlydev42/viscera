@@ -4,7 +4,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/LFO.h"
 
-class VisceraProcessor; // forward declaration for phase getter
+class ParasiteProcessor; // forward declaration for phase getter
 
 // Waveform preview + drag source (standard modes) / curve editor (Custom mode)
 class LFOWaveDisplay : public juce::Component,
@@ -54,7 +54,7 @@ class LFOSection : public juce::Component,
                    private juce::Timer
 {
 public:
-    LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcessor& proc);
+    LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProcessor& proc);
     ~LFOSection() override;
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -80,7 +80,7 @@ private:
     int learnSlotIndex = -1; // slot in learn mode, -1 = inactive
 
     juce::AudioProcessorValueTreeState& state;
-    VisceraProcessor& processor;
+    ParasiteProcessor& processor;
 
     int activeTab = 0;
 

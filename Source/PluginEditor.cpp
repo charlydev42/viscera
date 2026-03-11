@@ -3,7 +3,7 @@
 #include "gui/ModSlider.h"
 #include "BinaryData.h"
 
-VisceraEditor::VisceraEditor(VisceraProcessor& processor)
+ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     : AudioProcessorEditor(processor),
       proc(processor),
       presetBrowser(processor),
@@ -44,21 +44,21 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
     // Clavier MIDI visuel supprimé — on utilise le clavier d'ordi (Ableton-style)
 
     // Titre
-    titleLabel.setText("Viscera", juce::dontSendNotification);
+    titleLabel.setText("Parasite", juce::dontSendNotification);
     titleLabel.setJustificationType(juce::Justification::centred);
     titleLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold));
     addAndMakeVisible(titleLabel);
 
     // Logo image from BinaryData (light/dark variants for advanced page)
     {
-        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png, BinaryData::viscera_logo_light_nodolph_pngSize);
+        auto img = juce::ImageCache::getFromMemory(BinaryData::parasite_logo_light_nodolph_png, BinaryData::parasite_logo_light_nodolph_pngSize);
         logoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(logoImage);
 
     // Neutral logo for main page
     {
-        auto img = juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_png, BinaryData::viscera_logo_neutral_pngSize);
+        auto img = juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png, BinaryData::parasite_logo_neutral_pngSize);
         mainLogoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(mainLogoImage);
@@ -216,7 +216,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
             macroLabels[i].setText(defs[i].label, juce::dontSendNotification);
             macroLabels[i].setJustificationType(juce::Justification::centred);
             macroLabels[i].setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
-            macroLabels[i].setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kAccentColor));
+            macroLabels[i].setColour(juce::Label::textColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
             addChildComponent(macroLabels[i]);
         }
     }
@@ -254,7 +254,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
             fxLabel[i].setText(fxDefs[i].name, juce::dontSendNotification);
             fxLabel[i].setJustificationType(juce::Justification::centred);
             fxLabel[i].setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
-            fxLabel[i].setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kAccentColor));
+            fxLabel[i].setColour(juce::Label::textColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
             addChildComponent(fxLabel[i]);
         }
     }
@@ -300,7 +300,7 @@ VisceraEditor::VisceraEditor(VisceraProcessor& processor)
         proc.loadPresetAt(0);
 }
 
-VisceraEditor::~VisceraEditor()
+ParasiteEditor::~ParasiteEditor()
 {
     stopTimer();
     ModSlider::voiceParamsPtr = nullptr;
@@ -308,22 +308,22 @@ VisceraEditor::~VisceraEditor()
     setLookAndFeel(nullptr);
 }
 
-void VisceraEditor::timerCallback()
+void ParasiteEditor::timerCallback()
 {
     updateAlgoLabel();
     proc.getUndoManager().beginNewTransaction();
 
     // Keep macro label colors in sync with theme
-    auto labelCol = VisceraLookAndFeel::darkMode
-        ? juce::Colour(VisceraLookAndFeel::kAccentColor)
-        : juce::Colour(VisceraLookAndFeel::kAccentColor).darker(0.25f);
+    auto labelCol = ParasiteLookAndFeel::darkMode
+        ? juce::Colour(ParasiteLookAndFeel::kAccentColor)
+        : juce::Colour(ParasiteLookAndFeel::kAccentColor).darker(0.25f);
     for (int i = 0; i < 6; ++i)
         macroLabels[i].setColour(juce::Label::textColourId, labelCol);
     for (int i = 0; i < 4; ++i)
         fxLabel[i].setColour(juce::Label::textColourId, labelCol);
 }
 
-void VisceraEditor::randomizeParams()
+void ParasiteEditor::randomizeParams()
 {
     auto& rng = juce::Random::getSystemRandom();
     auto& apvts = proc.apvts;
@@ -492,20 +492,20 @@ void VisceraEditor::randomizeParams()
     updateAlgoLabel();
 }
 
-void VisceraEditor::updateAlgoLabel()
+void ParasiteEditor::updateAlgoLabel()
 {
     int idx = static_cast<int>(proc.apvts.getRawParameterValue("FM_ALGO")->load());
     if (idx >= 0 && idx < algoNames.size())
         algoLabel.setText(algoNames[idx], juce::dontSendNotification);
 }
 
-void VisceraEditor::dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&)
+void ParasiteEditor::dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&)
 {
     // Clean up drop-target glow when any drag finishes (success or cancel)
     ModSlider::showDropTargets = false;
 }
 
-void VisceraEditor::setPresetOverlayVisible(bool visible)
+void ParasiteEditor::setPresetOverlayVisible(bool visible)
 {
     // Close save overlay if opening preset overlay
     if (visible && showSaveOverlay)
@@ -574,7 +574,7 @@ void VisceraEditor::setPresetOverlayVisible(bool visible)
     repaint();
 }
 
-void VisceraEditor::setSaveOverlayVisible(bool visible)
+void ParasiteEditor::setSaveOverlayVisible(bool visible)
 {
     // Close preset overlay if opening save overlay
     if (visible && showPresetOverlay)
@@ -649,7 +649,7 @@ void VisceraEditor::setSaveOverlayVisible(bool visible)
     repaint();
 }
 
-void VisceraEditor::setPage(bool advanced)
+void ParasiteEditor::setPage(bool advanced)
 {
     showAdvanced = advanced;
     pageToggleBtn.setButtonText(advanced ? "Home" : "Advanced");
@@ -711,7 +711,7 @@ void VisceraEditor::setPage(bool advanced)
 }
 
 // Section header: neumorphic raised panel with darker header bar
-void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bounds,
+void ParasiteEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bounds,
                                        const juce::String& title)
 {
     float cr = 8.0f;
@@ -720,13 +720,13 @@ void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bo
     auto bf = bounds.toFloat();
     juce::Path panelPath;
     panelPath.addRoundedRectangle(bf, cr);
-    juce::DropShadow lightSh(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.7f), 4, { -2, -2 });
+    juce::DropShadow lightSh(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.7f), 4, { -2, -2 });
     lightSh.drawForPath(g, panelPath);
-    juce::DropShadow darkSh(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.5f), 6, { 3, 3 });
+    juce::DropShadow darkSh(juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.5f), 6, { 3, 3 });
     darkSh.drawForPath(g, panelPath);
 
     // Fill whole panel
-    g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor));
     g.fillRoundedRectangle(bf, cr);
 
     int headerH = 16;
@@ -737,21 +737,21 @@ void VisceraEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> bo
     headerPath.addRoundedRectangle(headerBar.getX(), headerBar.getY(),
                                     headerBar.getWidth(), headerBar.getHeight(),
                                     cr, cr, true, true, false, false);
-    g.setColour(juce::Colour(VisceraLookAndFeel::kHeaderBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kHeaderBg));
     g.fillPath(headerPath);
 
     // Title text centered in header bar
     if (title.isNotEmpty())
     {
-        g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
+        g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor));
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::plain));
         g.drawText(title, headerBar, juce::Justification::centred);
     }
 }
 
-void VisceraEditor::paint(juce::Graphics& g)
+void ParasiteEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
 
     if (!showAdvanced)
     {
@@ -770,7 +770,7 @@ void VisceraEditor::paint(juce::Graphics& g)
     }
 }
 
-void VisceraEditor::resized()
+void ParasiteEditor::resized()
 {
     // License overlay covers entire window
     if (licenseOverlay.isVisible())
@@ -889,10 +889,10 @@ void VisceraEditor::resized()
         }
 
         // Neutral logo at bottom of main page
-        int logoW = 180;
-        int logoH = static_cast<int>(logoW * (1080.0f / 1920.0f)); // keep aspect ratio
-        int logoX = area.getRight() - logoW - 8;
-        int logoY = area.getBottom() - logoH + 4;
+        int logoH = 50;
+        int logoW = static_cast<int>(logoH * (1204.0f / 429.0f)); // keep aspect ratio
+        int logoX = area.getRight() - logoW - 40;
+        int logoY = area.getBottom() - logoH - 20;
         mainLogoImage.setBounds(logoX, logoY, logoW, logoH);
 
         // Overlays cover the entire main panel area
@@ -1016,7 +1016,7 @@ static const NoteMap kNoteMapping[] = {
 };
 #endif
 
-void VisceraEditor::parentHierarchyChanged()
+void ParasiteEditor::parentHierarchyChanged()
 {
 #if JUCE_STANDALONE_APPLICATION
     if (auto* docWindow = findParentComponentOfClass<juce::DocumentWindow>())
@@ -1025,7 +1025,7 @@ void VisceraEditor::parentHierarchyChanged()
         {
             docWindow->setUsingNativeTitleBar(true);
             // Re-set editor size so the window adapts
-            auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
+            auto safeThis = juce::Component::SafePointer<ParasiteEditor>(this);
             juce::MessageManager::callAsync([safeThis] {
                 if (safeThis != nullptr)
                     safeThis->setSize(920, 615);
@@ -1035,7 +1035,7 @@ void VisceraEditor::parentHierarchyChanged()
 #endif
 }
 
-bool VisceraEditor::keyPressed(const juce::KeyPress& key)
+bool ParasiteEditor::keyPressed(const juce::KeyPress& key)
 {
     // Redo: Cmd+Shift+Z (Mac) / Ctrl+Shift+Z (PC) — check before undo
     if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier
@@ -1071,7 +1071,7 @@ bool VisceraEditor::keyPressed(const juce::KeyPress& key)
 
 #if JUCE_STANDALONE_APPLICATION
 
-bool VisceraEditor::keyStateChanged(bool /*isKeyDown*/)
+bool ParasiteEditor::keyStateChanged(bool /*isKeyDown*/)
 {
     bool handled = false;
 
@@ -1110,7 +1110,7 @@ bool VisceraEditor::keyStateChanged(bool /*isKeyDown*/)
 // License overlay — shown when plugin is not licensed
 // =====================================================================
 
-void VisceraEditor::updateLicenseOverlay()
+void ParasiteEditor::updateLicenseOverlay()
 {
     bool licensed = proc.getLicenseManager().isLicensed();
     licenseOverlay.setVisible(!licensed);
@@ -1133,7 +1133,7 @@ void VisceraEditor::updateLicenseOverlay()
     }
 }
 
-void VisceraEditor::showSettingsMenu()
+void ParasiteEditor::showSettingsMenu()
 {
     // Toggle: if menu is already open, dismiss it
     if (juce::PopupMenu::dismissAllActiveMenus(); menuBtn.getToggleState())
@@ -1146,7 +1146,7 @@ void VisceraEditor::showSettingsMenu()
     juce::PopupMenu menu;
 
     // 1. Dark mode (ticked checkbox)
-    menu.addItem(1, "Dark Mode", true, VisceraLookAndFeel::darkMode);
+    menu.addItem(1, "Dark Mode", true, ParasiteLookAndFeel::darkMode);
 
     menu.addSeparator();
 
@@ -1190,18 +1190,18 @@ void VisceraEditor::showSettingsMenu()
                 flubberVisualizer.setVisible(false);
 
                 // 2. Switch colours
-                VisceraLookAndFeel::setDarkMode(!VisceraLookAndFeel::darkMode);
+                ParasiteLookAndFeel::setDarkMode(!ParasiteLookAndFeel::darkMode);
                 lookAndFeel.refreshJuceColours();
 
                 // Swap logos
-                auto img = VisceraLookAndFeel::darkMode
-                    ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_nodolph_png, BinaryData::viscera_logo_dark_nodolph_pngSize)
-                    : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png, BinaryData::viscera_logo_light_nodolph_pngSize);
+                auto img = ParasiteLookAndFeel::darkMode
+                    ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_dark_nodolph_png, BinaryData::parasite_logo_dark_nodolph_pngSize)
+                    : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_light_nodolph_png, BinaryData::parasite_logo_light_nodolph_pngSize);
                 logoImage.setImage(img, juce::RectanglePlacement::centred);
 
-                auto mainImg = VisceraLookAndFeel::darkMode
-                    ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_dark_png, BinaryData::viscera_logo_neutral_dark_pngSize)
-                    : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_neutral_png, BinaryData::viscera_logo_neutral_pngSize);
+                auto mainImg = ParasiteLookAndFeel::darkMode
+                    ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_dark_png, BinaryData::parasite_logo_neutral_dark_pngSize)
+                    : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png, BinaryData::parasite_logo_neutral_pngSize);
                 mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
 
                 // 3. Repaint everything
@@ -1214,7 +1214,7 @@ void VisceraEditor::showSettingsMenu()
 
                 // 4. Kick GL to render with new bg, then re-show after a frame
                 flubberVisualizer.triggerGLRepaint();
-                auto safeThis = juce::Component::SafePointer<VisceraEditor>(this);
+                auto safeThis = juce::Component::SafePointer<ParasiteEditor>(this);
                 juce::MessageManager::callAsync([safeThis] {
                     if (safeThis != nullptr && !safeThis->showAdvanced
                         && !safeThis->showPresetOverlay && !safeThis->showSaveOverlay)

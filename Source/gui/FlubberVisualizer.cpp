@@ -1,6 +1,6 @@
 // FlubberVisualizer.cpp — OpenGL raymarched audio-reactive blob
 #include "FlubberVisualizer.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include <cmath>
 
 
@@ -239,7 +239,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float ang=iTime*0.15;float camDist=3.5-loud*0.35;
     vec3 ro=vec3(sin(ang)*camDist,0.7+sin(iTime*0.12)*0.3,cos(ang)*camDist);
-    float sh=0.01+loud*0.03;
+    float sh=0.004+loud*0.015;
     ro.x+=noise3D(vec3(iTime*2.0))*sh;ro.y+=noise3D(vec3(iTime*2.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*2.0+200.0))*sh*0.5;
     mat3 cam=camera(ro,vec3(0));vec3 rd=cam*normalize(vec3(uv,1.3));
     vec2 rm=rayMarch(ro,rd);float d=rm.x;
@@ -512,7 +512,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     float nrg=energy();float loud=clamp(nrg*4.0,0.0,1.0);
     float ang=iTime*0.15;float camDist=3.5-loud*0.35;
     vec3 ro=vec3(sin(ang)*camDist,0.7+sin(iTime*0.12)*0.3,cos(ang)*camDist);
-    float sh=0.01+loud*0.03;
+    float sh=0.004+loud*0.015;
     ro.x+=noise3D(vec3(iTime*2.0))*sh;ro.y+=noise3D(vec3(iTime*2.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*2.0+200.0))*sh*0.5;
     mat3 cam=camera(ro,vec3(0));
 
@@ -545,6 +545,7 @@ FlubberVisualizer::FlubberVisualizer(bb::AudioVisualBuffer& bufL,
     glContext.setSwapInterval(1); // vsync — cap at 60fps to avoid CPU hog
     glContext.setComponentPaintingEnabled(false);
     glContext.attachTo(*this);
+    setInterceptsMouseClicks(false, false);
 }
 
 FlubberVisualizer::~FlubberVisualizer()
@@ -556,7 +557,7 @@ void FlubberVisualizer::paint(juce::Graphics& g)
 {
     // Fill with current bg colour so mode switches look instant
     // (the GL thread overwrites this on its next frame)
-    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
 }
 
 bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
@@ -677,7 +678,7 @@ void FlubberVisualizer::renderOpenGL()
     if (!isVisible()) return;
 
     // Pick shader based on current dark mode
-    auto& ss = VisceraLookAndFeel::darkMode ? darkShader : lightShader;
+    auto& ss = ParasiteLookAndFeel::darkMode ? darkShader : lightShader;
     if (!ss.program) return;
 
     updateAudioTexture();
@@ -689,7 +690,7 @@ void FlubberVisualizer::renderOpenGL()
     glViewport(0, 0, w, h);
 
     // Extract bg color once — used for clear AND uniform
-    uint32_t bg = VisceraLookAndFeel::kBgColor;
+    uint32_t bg = ParasiteLookAndFeel::kBgColor;
     float bgR = static_cast<float>((bg >> 16) & 0xFF) / 255.0f;
     float bgG = static_cast<float>((bg >> 8)  & 0xFF) / 255.0f;
     float bgB = static_cast<float>((bg)       & 0xFF) / 255.0f;

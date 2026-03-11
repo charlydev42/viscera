@@ -1,4 +1,4 @@
-// TestHelpers.h — Utility functions for Viscera DSP tests
+// TestHelpers.h — Utility functions for Parasite DSP tests
 #pragma once
 #include <cmath>
 #include <cstdint>

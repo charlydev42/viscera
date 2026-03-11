@@ -3,12 +3,12 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <vector>
 
-class VisceraProcessor;
+class ParasiteProcessor;
 
 class PresetBrowser : public juce::Component
 {
 public:
-    PresetBrowser(VisceraProcessor& processor);
+    PresetBrowser(ParasiteProcessor& processor);
     ~PresetBrowser() override = default;
     void resized() override;
 
@@ -31,7 +31,7 @@ public:
     void showMenu() { showPresetMenu(); }
 
 private:
-    VisceraProcessor& proc;
+    ParasiteProcessor& proc;
 
     juce::TextButton presetNameBtn;
     juce::TextButton prevButton  { "<" };

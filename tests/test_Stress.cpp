@@ -7,7 +7,7 @@ static constexpr double kSR = 44100.0;
 
 TEST_CASE("Stress - Various buffer sizes", "[stress]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, 512);
 
     for (int blockSize : { 1, 16, 64, 128, 256, 512, 1024, 2048, 4096 })
@@ -29,7 +29,7 @@ TEST_CASE("Stress - Various sample rates", "[stress]")
     for (double sr : { 22050.0, 44100.0, 48000.0, 88200.0, 96000.0 })
     {
         INFO("Sample rate: " << sr);
-        VisceraProcessor proc;
+        ParasiteProcessor proc;
         proc.prepareToPlay(sr, 512);
 
         juce::AudioBuffer<float> buffer(2, 512);
@@ -44,7 +44,7 @@ TEST_CASE("Stress - Various sample rates", "[stress]")
 
 TEST_CASE("Stress - Note spam (rapid note-on/off)", "[stress]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, 256);
 
     for (int round = 0; round < 50; ++round)
@@ -69,7 +69,7 @@ TEST_CASE("Stress - Note spam (rapid note-on/off)", "[stress]")
 
 TEST_CASE("Stress - Rapid preset changes", "[stress]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, 512);
 
     const auto& registry = proc.getPresetRegistry();
@@ -90,7 +90,7 @@ TEST_CASE("Stress - Rapid preset changes", "[stress]")
 
 TEST_CASE("Stress - Extreme parameter values", "[stress]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, 512);
 
     // Set everything to max
@@ -117,7 +117,7 @@ TEST_CASE("Stress - Extreme parameter values", "[stress]")
 
 TEST_CASE("Stress - All effects enabled simultaneously", "[stress]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, 512);
 
     // Enable all FX

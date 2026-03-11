@@ -1,6 +1,6 @@
 // PresetOverlay.cpp — Inline neumorphic grid preset browser
 #include "PresetOverlay.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include "../PluginProcessor.h"
 #include <algorithm>
 #include <vector>
@@ -31,7 +31,7 @@ static void drawHeart(juce::Graphics& g, juce::Rectangle<float> area, bool fille
         g.strokePath(heart, juce::PathStrokeType(1.2f));
 }
 
-PresetOverlay::PresetOverlay(VisceraProcessor& processor)
+PresetOverlay::PresetOverlay(ParasiteProcessor& processor)
     : proc(processor)
 {
     setWantsKeyboardFocus(true);
@@ -514,7 +514,7 @@ void PresetOverlay::resized()
 void PresetOverlay::paint(juce::Graphics& g)
 {
     // Fill background
-    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
 
     auto& registry = proc.getPresetRegistry();
     int currentIdx = proc.getCurrentPresetIndex();
@@ -522,15 +522,15 @@ void PresetOverlay::paint(juce::Graphics& g)
     auto monoFont = juce::Font(juce::Font::getDefaultMonospacedFontName(), 11.0f, juce::Font::plain);
     auto smallFont = juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain);
 
-    auto accentCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto accentCol = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
     for (int i = 0; i < 7; ++i)
     {
         bool sel = (kCategories[i] == selectedCategory);
         categoryButtons[i].setColour(juce::TextButton::textColourOnId,
-            sel ? accentCol : juce::Colour(VisceraLookAndFeel::kTextColor));
+            sel ? accentCol : juce::Colour(ParasiteLookAndFeel::kTextColor));
         categoryButtons[i].setColour(juce::TextButton::textColourOffId,
-            sel ? accentCol : juce::Colour(VisceraLookAndFeel::kTextColor));
+            sel ? accentCol : juce::Colour(ParasiteLookAndFeel::kTextColor));
     }
 
     // Draw heart toggle button (pill style, matching category tabs)
@@ -541,15 +541,15 @@ void PresetOverlay::paint(juce::Graphics& g)
         if (favFilterOn)
         {
             // Pressed inset style (subtle for small button)
-            g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor).darker(0.03f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor).darker(0.03f));
             g.fillRoundedRectangle(hb, cr);
             g.saveState();
             juce::Path clip;
             clip.addRoundedRectangle(hb, cr);
             g.reduceClipRegion(clip);
-            juce::DropShadow darkIn(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.25f), 2, { 1, 1 });
+            juce::DropShadow darkIn(juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.25f), 2, { 1, 1 });
             darkIn.drawForRectangle(g, hb.toNearestInt());
-            juce::DropShadow lightIn(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.25f), 2, { -1, -1 });
+            juce::DropShadow lightIn(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.25f), 2, { -1, -1 });
             lightIn.drawForRectangle(g, hb.toNearestInt());
             g.restoreState();
         }
@@ -558,11 +558,11 @@ void PresetOverlay::paint(juce::Graphics& g)
             // Raised pill style
             juce::Path pillPath;
             pillPath.addRoundedRectangle(hb, cr);
-            juce::DropShadow lightSh(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.5f), 2, { -1, -1 });
+            juce::DropShadow lightSh(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.5f), 2, { -1, -1 });
             lightSh.drawForPath(g, pillPath);
-            juce::DropShadow darkSh(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.4f), 2, { 1, 1 });
+            juce::DropShadow darkSh(juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.4f), 2, { 1, 1 });
             darkSh.drawForPath(g, pillPath);
-            g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor));
             g.fillRoundedRectangle(hb, cr);
         }
 
@@ -570,7 +570,7 @@ void PresetOverlay::paint(juce::Graphics& g)
         if (favFilterOn)
             g.setColour(accentCol);
         else
-            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.4f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.4f));
         drawHeart(g, heartRect, favFilterOn);
     }
 
@@ -579,7 +579,7 @@ void PresetOverlay::paint(juce::Graphics& g)
     g.saveState();
     g.reduceClipRegion(clipRect);
 
-    auto accent = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto accent = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
     // Draw cards and separators
     for (int i = 0; i < static_cast<int>(cards.size()); ++i)
@@ -594,7 +594,7 @@ void PresetOverlay::paint(juce::Graphics& g)
         {
             auto sepBounds = card.bounds.toFloat();
             float lineY = sepBounds.getCentreY();
-            auto lineCol = juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(VisceraLookAndFeel::darkMode ? 0.4f : 0.18f);
+            auto lineCol = juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(ParasiteLookAndFeel::darkMode ? 0.4f : 0.18f);
 
             // Measure label
             auto labelFont = juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::bold);
@@ -609,7 +609,7 @@ void PresetOverlay::paint(juce::Graphics& g)
             g.fillRect(labelX + labelW + 4.0f, lineY, sepBounds.getRight() - labelX - labelW - 12.0f, 1.0f);
 
             // Label text
-            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.45f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.45f));
             g.setFont(labelFont);
             g.drawText(label, juce::Rectangle<float>(labelX, sepBounds.getY(), labelW, sepBounds.getHeight()),
                        juce::Justification::centred);
@@ -622,12 +622,12 @@ void PresetOverlay::paint(juce::Graphics& g)
         bool isFocused = (i == focusedCard);
 
         // Neumorphic card (always raised)
-        VisceraLookAndFeel::drawNeumorphicRect(g, bf, 8.0f, false);
+        ParasiteLookAndFeel::drawNeumorphicRect(g, bf, 8.0f, false);
 
         // Hover: subtle brighten
         if (isHovered && !isActive)
         {
-            g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.25f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.25f));
             g.fillRoundedRectangle(bf, 8.0f);
         }
 
@@ -656,10 +656,10 @@ void PresetOverlay::paint(juce::Graphics& g)
         if (i == confirmDeleteCard)
         {
             // Opaque background over the neumorphic card
-            g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor));
             g.fillRoundedRectangle(bf, 8.0f);
 
-            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor));
             g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
             auto topHalf = card.bounds.withTrimmedBottom(card.bounds.getHeight() / 2);
             g.drawText("Delete this preset?", topHalf, juce::Justification::centred);
@@ -673,17 +673,17 @@ void PresetOverlay::paint(juce::Graphics& g)
 
             g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::bold));
 
-            g.setColour(hoverYes ? accent : juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.7f));
+            g.setColour(hoverYes ? accent : juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.7f));
             g.drawText("Yes", yesArea, juce::Justification::centred);
 
-            g.setColour(hoverNo ? accent : juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.7f));
+            g.setColour(hoverNo ? accent : juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.7f));
             g.drawText("No", noArea, juce::Justification::centred);
             continue; // skip normal card content
         }
 
         // Preset name
         g.setColour(isActive ? accentCol.darker(0.15f)
-                             : juce::Colour(VisceraLookAndFeel::kTextColor));
+                             : juce::Colour(ParasiteLookAndFeel::kTextColor));
         g.setFont(monoFont);
 
         // Show category subtitle in All, User, and for user presets in category tabs
@@ -696,7 +696,7 @@ void PresetOverlay::paint(juce::Graphics& g)
             auto catArea = card.bounds.withTrimmedTop(card.bounds.getHeight() - 14);
             g.drawText(entry.name, nameArea, juce::Justification::centred);
             g.setFont(smallFont);
-            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.5f));
             g.drawText(entry.category, catArea, juce::Justification::centred);
         }
         else
@@ -709,7 +709,7 @@ void PresetOverlay::paint(juce::Graphics& g)
         {
             auto xr = deleteXBounds(i);
             bool hoverX = (i == hoveredCard) && xr.contains(getMouseXYRelative());
-            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(hoverX ? 0.8f : 0.3f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(hoverX ? 0.8f : 0.3f));
             g.setFont(juce::Font(10.0f));
             g.drawText(juce::String::charToString(0x2715), xr, juce::Justification::centred);
         }
@@ -722,7 +722,7 @@ void PresetOverlay::paint(juce::Graphics& g)
             if (isFav)
                 g.setColour(accentCol.withAlpha(hoverH ? 1.0f : 0.8f));
             else
-                g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(hoverH ? 0.5f : 0.15f));
+                g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(hoverH ? 0.5f : 0.15f));
             drawHeart(g, hr.toFloat(), isFav);
         }
     }

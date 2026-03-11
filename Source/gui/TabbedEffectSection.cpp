@@ -1,6 +1,6 @@
 // TabbedEffectSection.cpp — Tabbed, stacked, or grid container for Delay/Reverb/Liquid/Rubber
 #include "TabbedEffectSection.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 
 TabbedEffectSection::TabbedEffectSection(juce::AudioProcessorValueTreeState& apvts)
     : delaySection(apvts),
@@ -54,14 +54,14 @@ void TabbedEffectSection::setLayout(Layout layout)
 void TabbedEffectSection::switchTab(int tab)
 {
     activeTab = juce::jlimit(0, 3, tab);
-    auto accentCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto accentCol = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
     for (int i = 0; i < 4; ++i)
     {
         bool active = (i == activeTab);
         tabButtons[i].setColour(juce::TextButton::buttonColourId,
             active ? accentCol.withAlpha(0.6f)
-                   : juce::Colour(VisceraLookAndFeel::kPanelColor));
+                   : juce::Colour(ParasiteLookAndFeel::kPanelColor));
     }
 
     delaySection.setVisible(activeTab == 0);
@@ -82,7 +82,7 @@ void TabbedEffectSection::paint(juce::Graphics& g)
         auto pb = panelBounds[i];
 
         // Section label
-        g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
+        g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor));
         g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
         g.drawText(names[i], pb.getX(), pb.getY(), pb.getWidth(), headerH,
                    juce::Justification::centred);
@@ -91,7 +91,7 @@ void TabbedEffectSection::paint(juce::Graphics& g)
         if (i > 0)
         {
             float y = (float) pb.getY() - 1.0f;
-            g.setColour(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.25f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.25f));
             g.drawHorizontalLine((int) y, (float) pb.getX() + 6, (float) pb.getRight() - 6);
         }
     }

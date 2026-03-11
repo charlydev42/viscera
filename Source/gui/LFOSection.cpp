@@ -2,7 +2,7 @@
 #include "LFOSection.h"
 #include "ModSlider.h"
 #include "../PluginProcessor.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 
 // Safe parameter read helper — returns 0 if parameter doesn't exist
 static float safeParamLoad(juce::AudioProcessorValueTreeState& s, const juce::String& id)
@@ -193,10 +193,10 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
     float midY = bounds.getCentreY();
 
     // Background
-    g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(bounds, 3.0f);
 
-    auto lfoColor = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto lfoColor = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
     bool isCustom = (waveType == static_cast<int>(bb::LFOWaveType::Custom));
 
@@ -206,7 +206,7 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
         auto inner = bounds.reduced(2.0f);
 
         // Midline (bipolar zero at y=0.5)
-        g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.15f));
+        g.setColour(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.15f));
         float midLineY = inner.getY() + inner.getHeight() * 0.5f;
         g.drawHorizontalLine(static_cast<int>(midLineY), inner.getX(), inner.getRight());
 
@@ -303,11 +303,11 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
 
     // Phase cursor
     float cursorX = bounds.getX() + phase * w;
-    g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.6f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.6f));
     g.drawLine(cursorX, bounds.getY(), cursorX, bounds.getBottom(), 1.0f);
 
     // Border
-    g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff));
     g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
 }
 
@@ -345,7 +345,7 @@ void LFOSection::RefreshButton::paint(juce::Graphics& g)
     g.addTransform(juce::AffineTransform::rotation(
         juce::MathConstants<float>::halfPi,
         getWidth() * 0.5f, getHeight() * 0.5f));
-    g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor));
     g.setFont(juce::Font(18.0f));
     g.drawText(juce::String::charToString(0x21BB), getLocalBounds(),
                juce::Justification::centred);
@@ -358,7 +358,7 @@ void LFOSection::RefreshButton::mouseUp(const juce::MouseEvent& e)
 }
 
 // --- LFOSection ---
-LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcessor& proc)
+LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProcessor& proc)
     : state(apvts), processor(proc), waveDisplay(0)
 {
     syncNames = { "8 bar", "4 bar", "2 bar", "1 bar", "1/2", "1/4", "1/8", "1/16", "1/32",
@@ -498,14 +498,14 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, VisceraProcess
     // Count label
     countLabel.setJustificationType(juce::Justification::centred);
     countLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
-    countLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
+    countLabel.setColour(juce::Label::textColourId, juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.5f));
     addAndMakeVisible(countLabel);
 
     // Learn mode hint
     learnHintLabel.setText("Click a knob", juce::dontSendNotification);
     learnHintLabel.setJustificationType(juce::Justification::centredLeft);
     learnHintLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
-    learnHintLabel.setColour(juce::Label::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.35f));
+    learnHintLabel.setColour(juce::Label::textColourId, juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.35f));
     learnHintLabel.setVisible(false);
     addAndMakeVisible(learnHintLabel);
 
@@ -544,16 +544,16 @@ void LFOSection::switchTab(int tab)
     cancelLearnMode();
     activeTab = juce::jlimit(0, 2, tab);
 
-    auto accentCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto accentCol = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
     for (int i = 0; i < 3; ++i)
     {
         bool active = (i == activeTab);
         tabButtons[i].setColour(juce::TextButton::buttonColourId,
-            juce::Colour(VisceraLookAndFeel::kPanelColor));
+            juce::Colour(ParasiteLookAndFeel::kPanelColor));
         tabButtons[i].setColour(juce::TextButton::textColourOffId,
             active ? accentCol
-                   : juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
+                   : juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.5f));
     }
 
     // Detach old, reattach to new LFO params
@@ -605,24 +605,24 @@ void LFOSection::timerCallback()
 
     // Keep label colors in sync with current theme
     learnHintLabel.setColour(juce::Label::textColourId,
-        juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.45f));
+        juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.45f));
     countLabel.setColour(juce::Label::textColourId,
-        juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.5f));
+        juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.5f));
 
     // Highlight "+" button when in assignment mode (learn or drag)
     if (ModSlider::showDropTargets || learnSlotIndex >= 0)
     {
         addSlotBtn.setColour(juce::TextButton::buttonColourId,
-            juce::Colour(VisceraLookAndFeel::kPanelColor));
+            juce::Colour(ParasiteLookAndFeel::kPanelColor));
         addSlotBtn.setColour(juce::TextButton::textColourOffId,
-            juce::Colour(VisceraLookAndFeel::kAccentColor));
+            juce::Colour(ParasiteLookAndFeel::kAccentColor));
     }
     else
     {
         addSlotBtn.setColour(juce::TextButton::buttonColourId,
-            juce::Colour(VisceraLookAndFeel::kPanelColor));
+            juce::Colour(ParasiteLookAndFeel::kPanelColor));
         addSlotBtn.setColour(juce::TextButton::textColourOffId,
-            juce::Colour(VisceraLookAndFeel::kTextColor));
+            juce::Colour(ParasiteLookAndFeel::kTextColor));
     }
 
     // Auto-cancel learn mode if we lost focus
@@ -866,7 +866,7 @@ void LFOSection::paint(juce::Graphics& g)
     // Green circle around active tab number
     auto tb = tabButtons[activeTab].getBounds().toFloat();
     auto circle = tb.reduced(2.0f).withSizeKeepingCentre(tb.getHeight() - 4.0f, tb.getHeight() - 4.0f);
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.9f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.9f));
     g.drawEllipse(circle, 1.5f);
 }
 

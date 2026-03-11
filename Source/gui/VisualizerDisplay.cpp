@@ -1,6 +1,6 @@
 // VisualizerDisplay.cpp — Oscilloscope + FFT spectrum + Stereo Lissajous
 #include "VisualizerDisplay.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include <cmath>
 
 VisualizerDisplay::VisualizerDisplay(bb::AudioVisualBuffer& bufferL,
@@ -13,7 +13,7 @@ VisualizerDisplay::VisualizerDisplay(bb::AudioVisualBuffer& bufferL,
     {
         btn.setClickingTogglesState(false);
         btn.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
-        btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(VisceraLookAndFeel::kAccentColor).withAlpha(0.3f));
+        btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.3f));
         // text colours inherited from LookAndFeel (supports dark mode)
     };
     setupButton(scopeButton);
@@ -72,7 +72,7 @@ void VisualizerDisplay::paint(juce::Graphics& g)
     // 1) Base — neumorphic grey lit side, cool-grey shadow side
     {
         juce::Colour baseLight, baseDark, baseMid1, baseMid2, baseMid3;
-        if (VisceraLookAndFeel::darkMode)
+        if (ParasiteLookAndFeel::darkMode)
         {
             baseLight = juce::Colour(0xFF353C4A);
             baseDark  = juce::Colour(0xFF2A3038);
@@ -230,7 +230,7 @@ void VisualizerDisplay::drawScope(juce::Graphics& g, juce::Rectangle<int> area)
     float midY = y + h * 0.5f;
 
     // Draw center line
-    g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff));
     g.drawHorizontalLine(static_cast<int>(midY), x, x + w);
 
     // Draw waveform
@@ -247,7 +247,7 @@ void VisualizerDisplay::drawScope(juce::Graphics& g, juce::Rectangle<int> area)
             path.lineTo(px, py);
     }
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
     g.strokePath(path, juce::PathStrokeType(1.5f));
 }
 
@@ -281,7 +281,7 @@ void VisualizerDisplay::drawSpectrum(juce::Graphics& g, juce::Rectangle<int> are
     float logMaxFreq = std::log10(maxFreq);
 
     // Draw frequency grid lines
-    g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff).darker(0.2f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff).darker(0.2f));
     for (float freq : { 100.0f, 1000.0f, 10000.0f })
     {
         float normX = (std::log10(freq) - logMinFreq) / (logMaxFreq - logMinFreq);
@@ -335,7 +335,7 @@ void VisualizerDisplay::drawSpectrum(juce::Graphics& g, juce::Rectangle<int> are
         }
     }
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
     g.strokePath(path, juce::PathStrokeType(1.5f));
 }
 
@@ -382,11 +382,11 @@ void VisualizerDisplay::drawStereo(juce::Graphics& g, juce::Rectangle<int> area)
 
     // Always draw crosshair guides (visible even without signal)
     // Subtle crosshair at front center
-    g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff).withAlpha(0.15f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff).withAlpha(0.15f));
     g.drawVerticalLine(static_cast<int>(frontX), frontY - frontScale * 0.6f, frontY + frontScale * 0.6f);
     g.drawHorizontalLine(static_cast<int>(frontY), frontX - frontScale * 0.6f, frontX + frontScale * 0.6f);
 
-    auto accentCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+    auto accentCol = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
     // --- Draw trail frames: oldest (back) to newest (front) ---
     for (int f = 0; f < kTrailFrames; ++f)
@@ -430,7 +430,7 @@ void VisualizerDisplay::drawStereo(juce::Graphics& g, juce::Rectangle<int> area)
         return;
 
     // --- Subtle labels ---
-    g.setColour(juce::Colour(VisceraLookAndFeel::kToggleOff).withAlpha(0.3f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kToggleOff).withAlpha(0.3f));
     g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 9.0f, juce::Font::plain));
     g.drawText("M", static_cast<int>(frontX) - 6, static_cast<int>(frontY - frontScale * 0.6f) - 12, 12, 10, juce::Justification::centred);
     g.drawText("L", static_cast<int>(frontX - frontScale * 0.6f) - 14, static_cast<int>(frontY) - 5, 12, 10, juce::Justification::centredLeft);

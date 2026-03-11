@@ -1,4 +1,4 @@
-// test_Processor.cpp — Tests for VisceraProcessor (full APVTS integration)
+// test_Processor.cpp — Tests for ParasiteProcessor (full APVTS integration)
 #include <catch2/catch_test_macros.hpp>
 #include "PluginProcessor.h"
 #include "TestHelpers.h"
@@ -8,15 +8,15 @@ static constexpr int kBlock = 512;
 
 TEST_CASE("Processor - Construction succeeds", "[processor]")
 {
-    VisceraProcessor proc;
-    REQUIRE(proc.getName() == "Viscera");
+    ParasiteProcessor proc;
+    REQUIRE(proc.getName() == "Parasite");
     REQUIRE(proc.acceptsMidi());
     REQUIRE_FALSE(proc.producesMidi());
 }
 
 TEST_CASE("Processor - prepareToPlay and processBlock with silence", "[processor]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, kBlock);
 
     juce::AudioBuffer<float> buffer(2, kBlock);
@@ -32,7 +32,7 @@ TEST_CASE("Processor - prepareToPlay and processBlock with silence", "[processor
 
 TEST_CASE("Processor - processBlock with note produces audio", "[processor]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, kBlock);
 
     juce::AudioBuffer<float> buffer(2, kBlock);
@@ -47,7 +47,7 @@ TEST_CASE("Processor - processBlock with note produces audio", "[processor]")
 
 TEST_CASE("Processor - Parameter layout is complete", "[processor]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
 
     // Spot-check critical parameters exist
     REQUIRE(proc.apvts.getParameter("MOD1_ON") != nullptr);

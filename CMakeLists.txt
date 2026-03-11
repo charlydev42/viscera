@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(Viscera VERSION 1.0.0 LANGUAGES CXX)
+project(Parasite VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,8 +15,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(JUCE)
 
 # --- Définir le plugin ---
-juce_add_plugin(Viscera
-    COMPANY_NAME            "Viscera"
+juce_add_plugin(Parasite
+    COMPANY_NAME            "Thunderdolphin"
     PLUGIN_MANUFACTURER_CODE BbSy
     PLUGIN_CODE              BlBk
     IS_SYNTH                 TRUE
@@ -26,12 +26,12 @@ juce_add_plugin(Viscera
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD  TRUE
     FORMATS                  VST3 AU Standalone
-    PRODUCT_NAME             "Viscera"
+    PRODUCT_NAME             "Parasite"
     AU_MAIN_TYPE             kAudioUnitType_MusicDevice
 )
 
 # --- Sources ---
-target_sources(Viscera PRIVATE
+target_sources(Parasite PRIVATE
     # Processor & Editor
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
@@ -58,122 +58,122 @@ target_sources(Viscera PRIVATE
     Source/gui/PresetBrowser.cpp
     Source/gui/PresetOverlay.cpp
     Source/gui/SaveOverlay.cpp
-    Source/gui/VisceraLookAndFeel.cpp
+    Source/gui/ParasiteLookAndFeel.cpp
     Source/gui/TabbedEffectSection.cpp
     Source/gui/HarmonicEditor.cpp
 )
 
-juce_add_binary_data(VisceraData SOURCES
-    graphics/viscera_logo_light.png
-    graphics/viscera_logo_dark.png
-    graphics/viscera_logo_light_nodolph.png
-    graphics/viscera_logo_dark_nodolph.png
-    graphics/viscera_logo_neutral.png
-    graphics/viscera_logo_neutral_dark.png
-    # Factory presets (.visc)
-    presets/Init.visc
-    presets/Bass_808_Sub.visc
-    presets/Bass_Acid_Squelch.visc
-    presets/Drums_FM_Kick.visc
-    presets/Drums_Glide_Kick.visc
-    presets/Drums_Microwave_Kick.visc
-    presets/Bass_Pluck_Bass.visc
-    presets/Bass_Reese.visc
-    presets/Bass_Sub_Growl.visc
-    presets/Bass_Tape_Wobble.visc
-    presets/Bass_Wobble_Bass.visc
-    presets/Lead_Acid_Lead.visc
-    presets/Lead_Bright_Pluck.visc
-    presets/Lead_Drift.visc
-    presets/Lead_FM_Brass.visc
-    presets/Lead_Glass.visc
-    presets/Lead_Saw_Lead.visc
-    presets/Lead_Screamer.visc
-    presets/Lead_Sync_Lead.visc
-    presets/Lead_Sync_Sweep.visc
-    presets/Lead_Whistle.visc
-    presets/Pad_Analog_Strings.visc
-    presets/Pad_Choir.visc
-    presets/Pad_Crystal.visc
-    presets/Pad_Deep_Space.visc
-    presets/Pad_Ethereal_Pad.visc
-    presets/Pad_FM_Organ.visc
-    presets/Pad_Ice_Glass.visc
-    presets/Pad_Shimmer.visc
-    presets/Pad_Soft_Pulse.visc
-    presets/Pad_Warm_Cloud.visc
-    presets/FX_Alien_FX.visc
-    presets/FX_Chaos_Engine.visc
-    presets/Drums_Glitch_Perc.visc
-    presets/FX_Impact.visc
-    presets/FX_Laser.visc
-    presets/FX_Metal_Bell.visc
-    presets/FX_Robot_Voice.visc
-    presets/FX_Siren.visc
-    presets/FX_Stutter.visc
-    presets/FX_Wind.visc
-    presets/Texture_Dark_Drone.visc
-    presets/Texture_Digital_Harsh.visc
-    presets/Texture_Fog.visc
-    presets/Texture_Grain.visc
-    presets/Texture_Hive.visc
-    presets/Texture_Nasal_Drone.visc
-    presets/Texture_Rust.visc
-    presets/Texture_Soft_Texture.visc
-    presets/Texture_Wire.visc
+juce_add_binary_data(ParasiteData SOURCES
+    graphics/parasite_logo_light.png
+    graphics/parasite_logo_dark.png
+    graphics/parasite_logo_light_nodolph.png
+    graphics/parasite_logo_dark_nodolph.png
+    graphics/parasite_logo_neutral.png
+    graphics/parasite_logo_neutral_dark.png
+    # Factory presets (.prst)
+    presets/Init.prst
+    presets/Bass_808_Sub.prst
+    presets/Bass_Acid_Squelch.prst
+    presets/Drums_FM_Kick.prst
+    presets/Drums_Glide_Kick.prst
+    presets/Drums_Microwave_Kick.prst
+    presets/Bass_Pluck_Bass.prst
+    presets/Bass_Reese.prst
+    presets/Bass_Sub_Growl.prst
+    presets/Bass_Tape_Wobble.prst
+    presets/Bass_Wobble_Bass.prst
+    presets/Lead_Acid_Lead.prst
+    presets/Lead_Bright_Pluck.prst
+    presets/Lead_Drift.prst
+    presets/Lead_FM_Brass.prst
+    presets/Lead_Glass.prst
+    presets/Lead_Saw_Lead.prst
+    presets/Lead_Screamer.prst
+    presets/Lead_Sync_Lead.prst
+    presets/Lead_Sync_Sweep.prst
+    presets/Lead_Whistle.prst
+    presets/Pad_Analog_Strings.prst
+    presets/Pad_Choir.prst
+    presets/Pad_Crystal.prst
+    presets/Pad_Deep_Space.prst
+    presets/Pad_Ethereal_Pad.prst
+    presets/Pad_FM_Organ.prst
+    presets/Pad_Ice_Glass.prst
+    presets/Pad_Shimmer.prst
+    presets/Pad_Soft_Pulse.prst
+    presets/Pad_Warm_Cloud.prst
+    presets/FX_Alien_FX.prst
+    presets/FX_Chaos_Engine.prst
+    presets/Drums_Glitch_Perc.prst
+    presets/FX_Impact.prst
+    presets/FX_Laser.prst
+    presets/FX_Metal_Bell.prst
+    presets/FX_Robot_Voice.prst
+    presets/FX_Siren.prst
+    presets/FX_Stutter.prst
+    presets/FX_Wind.prst
+    presets/Texture_Dark_Drone.prst
+    presets/Texture_Digital_Harsh.prst
+    presets/Texture_Fog.prst
+    presets/Texture_Grain.prst
+    presets/Texture_Hive.prst
+    presets/Texture_Nasal_Drone.prst
+    presets/Texture_Rust.prst
+    presets/Texture_Soft_Texture.prst
+    presets/Texture_Wire.prst
     # New factory presets - Glitch Perc (Drums)
-    presets/Drums_Bit_Snap.visc
-    presets/Drums_Zap_Hit.visc
-    presets/Drums_Crackle.visc
-    presets/Drums_Digi_Rim.visc
-    presets/Drums_Glitch_Pop.visc
-    presets/Drums_Tin_Can.visc
-    presets/Drums_Static_Burst.visc
-    presets/Drums_Micro_Blip.visc
-    presets/Drums_Hex_Drum.visc
-    presets/Drums_Click_Dust.visc
+    presets/Drums_Bit_Snap.prst
+    presets/Drums_Zap_Hit.prst
+    presets/Drums_Crackle.prst
+    presets/Drums_Digi_Rim.prst
+    presets/Drums_Glitch_Pop.prst
+    presets/Drums_Tin_Can.prst
+    presets/Drums_Static_Burst.prst
+    presets/Drums_Micro_Blip.prst
+    presets/Drums_Hex_Drum.prst
+    presets/Drums_Click_Dust.prst
     # New factory presets - Hyperpop Plucks (Lead)
-    presets/Lead_Bubble_Pop.visc
-    presets/Lead_Crystal_Tap.visc
-    presets/Lead_Sugar_Pluck.visc
-    presets/Lead_Neon_Stab.visc
-    presets/Lead_Pixel_Chime.visc
+    presets/Lead_Bubble_Pop.prst
+    presets/Lead_Crystal_Tap.prst
+    presets/Lead_Sugar_Pluck.prst
+    presets/Lead_Neon_Stab.prst
+    presets/Lead_Pixel_Chime.prst
     # New factory presets - Dubstep Bass
-    presets/Bass_Saw_Tear.visc
-    presets/Bass_Gutter_Growl.visc
-    presets/Bass_Razor_Sub.visc
-    presets/Bass_Neuro_Bite.visc
-    presets/Bass_XOR_Stomp.visc
-    presets/Bass_Wub_Cannon.visc
-    presets/Bass_Filth_Stab.visc
-    presets/Bass_Steel_Jaw.visc
-    presets/Bass_Acid_Scream.visc
-    presets/Bass_Crunch_Drop.visc
-    presets/Bass_Void_Punch.visc
+    presets/Bass_Saw_Tear.prst
+    presets/Bass_Gutter_Growl.prst
+    presets/Bass_Razor_Sub.prst
+    presets/Bass_Neuro_Bite.prst
+    presets/Bass_XOR_Stomp.prst
+    presets/Bass_Wub_Cannon.prst
+    presets/Bass_Filth_Stab.prst
+    presets/Bass_Steel_Jaw.prst
+    presets/Bass_Acid_Scream.prst
+    presets/Bass_Crunch_Drop.prst
+    presets/Bass_Void_Punch.prst
     # New factory presets - DnB Jump Up / Belgian DnB
-    presets/Bass_Frog_Ribbit.visc
-    presets/Bass_Jump_Razor.visc
-    presets/Bass_Foghorn_Stab.visc
+    presets/Bass_Frog_Ribbit.prst
+    presets/Bass_Jump_Razor.prst
+    presets/Bass_Foghorn_Stab.prst
     # New factory presets - Trance / Eurodance
-    presets/Lead_Fairy_Dust.visc
-    presets/Lead_Euro_Dream.visc
-    presets/Lead_Cotton_Candy.visc
+    presets/Lead_Fairy_Dust.prst
+    presets/Lead_Euro_Dream.prst
+    presets/Lead_Cotton_Candy.prst
     # New factory presets - Heaven Plucks
-    presets/Lead_Angel_Pluck.visc
-    presets/Lead_Cloud_Nine.visc
-    presets/Lead_Halo_Stab.visc
+    presets/Lead_Angel_Pluck.prst
+    presets/Lead_Cloud_Nine.prst
+    presets/Lead_Halo_Stab.prst
     # New factory presets - Psy Trance
-    presets/Bass_Psy_Squelch.visc
-    presets/Bass_Goa_Acid.visc
-    presets/Bass_Third_Eye.visc
+    presets/Bass_Psy_Squelch.prst
+    presets/Bass_Goa_Acid.prst
+    presets/Bass_Third_Eye.prst
 )
 
-target_include_directories(Viscera PRIVATE Source)
+target_include_directories(Parasite PRIVATE Source)
 
 # --- Modules JUCE nécessaires ---
-target_link_libraries(Viscera
+target_link_libraries(Parasite
     PRIVATE
-        VisceraData
+        ParasiteData
         juce::juce_audio_basics
         juce::juce_audio_processors
         juce::juce_audio_utils
@@ -188,7 +188,7 @@ target_link_libraries(Viscera
 )
 
 # --- Définitions de compilation JUCE ---
-target_compile_definitions(Viscera
+target_compile_definitions(Parasite
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
@@ -197,11 +197,11 @@ target_compile_definitions(Viscera
 )
 
 # =============================================================================
-# Test suite (opt-in: cmake -DVISCERA_BUILD_TESTS=ON)
+# Test suite (opt-in: cmake -DPARASITE_BUILD_TESTS=ON)
 # =============================================================================
-option(VISCERA_BUILD_TESTS "Build the Viscera test suite" OFF)
+option(PARASITE_BUILD_TESTS "Build the Parasite test suite" OFF)
 
-if(VISCERA_BUILD_TESTS)
+if(PARASITE_BUILD_TESTS)
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -210,7 +210,7 @@ if(VISCERA_BUILD_TESTS)
     )
     FetchContent_MakeAvailable(Catch2)
 
-    add_executable(VisceraTests
+    add_executable(ParasiteTests
         tests/TestMain.cpp
         tests/test_Oscillator.cpp
         tests/test_ADSREnvelope.cpp
@@ -233,11 +233,11 @@ if(VISCERA_BUILD_TESTS)
         Source/dsp/FMVoice.cpp
     )
 
-    target_include_directories(VisceraTests PRIVATE Source tests)
+    target_include_directories(ParasiteTests PRIVATE Source tests)
 
-    target_link_libraries(VisceraTests PRIVATE
+    target_link_libraries(ParasiteTests PRIVATE
         Catch2::Catch2
-        VisceraData
+        ParasiteData
         juce::juce_core
         juce::juce_audio_basics
         juce::juce_audio_processors
@@ -246,15 +246,15 @@ if(VISCERA_BUILD_TESTS)
         juce::juce_events
     )
 
-    target_compile_definitions(VisceraTests PRIVATE
+    target_compile_definitions(ParasiteTests PRIVATE
         JUCE_STANDALONE_APPLICATION=1
-        VISCERA_HEADLESS_TESTS=1
+        PARASITE_HEADLESS_TESTS=1
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0
         # Plugin identity macros (normally generated by juce_add_plugin)
-        JucePlugin_Name="Viscera"
+        JucePlugin_Name="Parasite"
         JucePlugin_ManufacturerCode=0x42625379
         JucePlugin_PluginCode=0x426c426b
         JucePlugin_IsSynth=1
@@ -262,7 +262,7 @@ if(VISCERA_BUILD_TESTS)
         JucePlugin_ProducesMidiOutput=0
         JucePlugin_IsMidiEffect=0
         JucePlugin_EditorRequiresKeyboardFocus=1
-        JucePlugin_Manufacturer="Viscera"
+        JucePlugin_Manufacturer="Thunderdolphin"
         JucePlugin_ManufacturerWebsite=""
         JucePlugin_ManufacturerEmail=""
         JucePlugin_Desc="FM Synth"
@@ -273,11 +273,11 @@ if(VISCERA_BUILD_TESTS)
         JucePlugin_Vst3Category="Instrument|Synth"
         JucePlugin_AUMainType=0x6175726d
         JucePlugin_AUSubType=JucePlugin_PluginCode
-        JucePlugin_AUExportPrefix=VisceraAU
-        JucePlugin_AUExportPrefixQuoted="VisceraAU"
+        JucePlugin_AUExportPrefix=ParasiteAU
+        JucePlugin_AUExportPrefixQuoted="ParasiteAU"
         JucePlugin_AUManufacturerCode=JucePlugin_ManufacturerCode
-        JucePlugin_CFBundleIdentifier=com.viscera.viscera
-        JucePlugin_AAXIdentifier=com.viscera.viscera
+        JucePlugin_CFBundleIdentifier=com.thunderdolphin.parasite
+        JucePlugin_AAXIdentifier=com.thunderdolphin.parasite
         JucePlugin_AAXManufacturerCode=JucePlugin_ManufacturerCode
         JucePlugin_AAXProductId=JucePlugin_PluginCode
         JucePlugin_AAXCategory=0
@@ -288,5 +288,5 @@ if(VISCERA_BUILD_TESTS)
         JucePlugin_PreferredChannelConfigurations={0,2}
     )
 
-    target_compile_features(VisceraTests PRIVATE cxx_std_17)
+    target_compile_features(ParasiteTests PRIVATE cxx_std_17)
 endif()

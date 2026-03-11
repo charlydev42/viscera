@@ -9,7 +9,7 @@ static constexpr int kBlock = 2048;
 
 TEST_CASE("Presets - All factory presets load and render NaN-free", "[preset]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     proc.prepareToPlay(kSR, kBlock);
 
     const auto& registry = proc.getPresetRegistry();
@@ -42,7 +42,7 @@ TEST_CASE("Presets - Factory presets are valid XML", "[preset]")
     {
         juce::String resName = BinaryData::namedResourceList[i];
         juce::String origName = BinaryData::originalFilenames[i];
-        if (!origName.endsWith(".visc")) continue;
+        if (!origName.endsWith(".prst")) continue;
 
         int size = 0;
         auto* data = BinaryData::getNamedResource(resName.toRawUTF8(), size);
@@ -59,7 +59,7 @@ TEST_CASE("Presets - Factory presets are valid XML", "[preset]")
 
 TEST_CASE("Presets - Registry contains expected count", "[preset]")
 {
-    VisceraProcessor proc;
+    ParasiteProcessor proc;
     const auto& registry = proc.getPresetRegistry();
 
     // Count factory presets

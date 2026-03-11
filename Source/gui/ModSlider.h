@@ -3,7 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/FMVoice.h" // for bb::LFODest, bb::VoiceParams
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include <functional>
 
 class ModSlider : public juce::Slider,
@@ -120,7 +120,7 @@ public:
         // Drag hover highlight
         if (dragHover)
         {
-            g.setColour(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.15f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.15f));
             g.fillEllipse(getLocalBounds().toFloat().reduced(2));
         }
 
@@ -216,7 +216,7 @@ public:
             float outerR = arcR + 2.0f;
             float cosA = std::cos(screenAngle);
             float sinA = std::sin(screenAngle);
-            auto tickCol = juce::Colour(VisceraLookAndFeel::kAccentColor);
+            auto tickCol = juce::Colour(ParasiteLookAndFeel::kAccentColor);
             // Core
             g.setColour(tickCol.withAlpha(0.7f));
             g.drawLine(centre.x + cosA * innerR, centre.y + sinA * innerR,

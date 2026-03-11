@@ -1,6 +1,6 @@
 // LicenseOverlay.cpp — License key entry overlay
 #include "LicenseOverlay.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include "BinaryData.h"
 
 LicenseOverlay::LicenseOverlay(bb::LicenseManager& mgr)
@@ -10,11 +10,11 @@ LicenseOverlay::LicenseOverlay(bb::LicenseManager& mgr)
 
     // Logo (picks light/dark variant)
     {
-        auto img = VisceraLookAndFeel::darkMode
-            ? juce::ImageCache::getFromMemory(BinaryData::viscera_logo_dark_nodolph_png,
-                                               BinaryData::viscera_logo_dark_nodolph_pngSize)
-            : juce::ImageCache::getFromMemory(BinaryData::viscera_logo_light_nodolph_png,
-                                               BinaryData::viscera_logo_light_nodolph_pngSize);
+        auto img = ParasiteLookAndFeel::darkMode
+            ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_dark_nodolph_png,
+                                               BinaryData::parasite_logo_dark_nodolph_pngSize)
+            : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_light_nodolph_png,
+                                               BinaryData::parasite_logo_light_nodolph_pngSize);
         logoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(logoImage);
@@ -42,7 +42,7 @@ LicenseOverlay::LicenseOverlay(bb::LicenseManager& mgr)
     keyInput.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(0xFFBBBBBB));
     keyInput.setColour(juce::CaretComponent::caretColourId,     juce::Colour(0xFF888888));
     keyInput.onReturnKey = [this] { activateBtn.triggerClick(); };
-    // Auto-format: uppercase + insert dashes every 4 chars (VISC-XXXX-XXXX-...)
+    // Auto-format: uppercase + insert dashes every 4 chars (PARA-XXXX-XXXX-...)
     keyInput.onTextChange = [this]
     {
         auto raw = keyInput.getText().toUpperCase()
@@ -119,7 +119,7 @@ void LicenseOverlay::licenseStateChanged(bool licensed)
 void LicenseOverlay::paint(juce::Graphics& g)
 {
     // Semi-transparent dark background
-    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
 
     // Central card
     auto card = getLocalBounds().reduced(60, 80);
@@ -128,15 +128,15 @@ void LicenseOverlay::paint(juce::Graphics& g)
     // Neumorphic shadows
     juce::Path cardPath;
     cardPath.addRoundedRectangle(card.toFloat(), cr);
-    juce::DropShadow(juce::Colour(VisceraLookAndFeel::kShadowLight).withAlpha(0.6f),
+    juce::DropShadow(juce::Colour(ParasiteLookAndFeel::kShadowLight).withAlpha(0.6f),
                      6, { -3, -3 }).drawForPath(g, cardPath);
-    juce::DropShadow(juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.5f),
+    juce::DropShadow(juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.5f),
                      8, { 4, 4 }).drawForPath(g, cardPath);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kBgColor).brighter(0.06f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor).brighter(0.06f));
     g.fillRoundedRectangle(card.toFloat(), cr);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kHeaderBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kHeaderBg));
     g.drawRoundedRectangle(card.toFloat(), cr, 1.0f);
 }
 

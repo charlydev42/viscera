@@ -2,12 +2,12 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 
-class VisceraProcessor;
+class ParasiteProcessor;
 
 class SaveOverlay : public juce::Component
 {
 public:
-    SaveOverlay(VisceraProcessor& processor);
+    SaveOverlay(ParasiteProcessor& processor);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -19,7 +19,7 @@ public:
     void refresh();
 
 private:
-    VisceraProcessor& proc;
+    ParasiteProcessor& proc;
 
     juce::TextEditor nameEditor;
     juce::TextButton categoryButtons[6];

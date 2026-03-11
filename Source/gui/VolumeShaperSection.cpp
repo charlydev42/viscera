@@ -1,6 +1,6 @@
 // VolumeShaperSection.cpp — Drawable volume shaper display + presets + Fixed/Rate/Depth
 #include "VolumeShaperSection.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include <cmath>
 
 // ============================================================
@@ -47,7 +47,7 @@ void ShaperDisplay::paint(juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat().reduced(1.0f);
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(b, 3.0f);
 
     auto inner = b.reduced(1.0f);
@@ -57,7 +57,7 @@ void ShaperDisplay::paint(juce::Graphics& g)
     float y0 = inner.getY();
     float x0 = inner.getX();
 
-    g.setColour(juce::Colour(VisceraLookAndFeel::kKnobColor).withAlpha(0.7f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kKnobColor).withAlpha(0.7f));
     for (int i = 0; i < numBars; ++i)
     {
         float val;
@@ -83,7 +83,7 @@ void ShaperDisplay::paint(juce::Graphics& g)
     if (phase > 0.001f)
     {
         float px = x0 + phase * inner.getWidth();
-        g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor));
+        g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
         g.drawVerticalLine(static_cast<int>(px), y0, y0 + h);
     }
 }

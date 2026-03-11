@@ -1,17 +1,17 @@
 // PluginProcessor.cpp — Implémentation du processeur principal
 // Contient : layout des paramètres, synthesiser, presets factory, state save/load
 #include "PluginProcessor.h"
-#ifndef VISCERA_HEADLESS_TESTS
+#ifndef PARASITE_HEADLESS_TESTS
 #include "PluginEditor.h"
 #endif
 #include "dsp/FMSound.h"
 #include <BinaryData.h>
 
 // --- Constructeur ---
-VisceraProcessor::VisceraProcessor()
+ParasiteProcessor::ParasiteProcessor()
     : AudioProcessor(BusesProperties()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, &undoManager, "VisceraState", createParameterLayout())
+      apvts(*this, &undoManager, "ParasiteState", createParameterLayout())
 {
     cacheParameterPointers();
 
@@ -33,18 +33,18 @@ VisceraProcessor::VisceraProcessor()
     licenseManager.addListener(this);
 }
 
-VisceraProcessor::~VisceraProcessor()
+ParasiteProcessor::~ParasiteProcessor()
 {
     licenseManager.removeListener(this);
 }
 
-void VisceraProcessor::licenseStateChanged(bool licensed)
+void ParasiteProcessor::licenseStateChanged(bool licensed)
 {
     dspGainToken.store(licensed ? kDspActive : 0, std::memory_order_relaxed);
 }
 
 // --- Cacher les pointeurs atomiques vers les paramètres ---
-void VisceraProcessor::cacheParameterPointers()
+void ParasiteProcessor::cacheParameterPointers()
 {
     voiceParams.mod1On        = apvts.getRawParameterValue("MOD1_ON");
     voiceParams.mod1Wave      = apvts.getRawParameterValue("MOD1_WAVE");
@@ -177,7 +177,7 @@ void VisceraProcessor::cacheParameterPointers()
 
 // --- Layout des paramètres ---
 juce::AudioProcessorValueTreeState::ParameterLayout
-VisceraProcessor::createParameterLayout()
+ParasiteProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::AudioProcessorParameterGroup>> groups;
 
@@ -476,7 +476,7 @@ VisceraProcessor::createParameterLayout()
 }
 
 // --- Préparation audio ---
-void VisceraProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void ParasiteProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     synth.setCurrentPlaybackSampleRate(sampleRate);
 
@@ -499,7 +499,7 @@ void VisceraProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 }
 
 // --- Process audio ---
-void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
+void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                          juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -850,26 +850,26 @@ void VisceraProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 }
 
 // --- Programmes (presets) ---
-int VisceraProcessor::getNumPrograms() { return juce::jmax(1, getPresetCount()); }
-int VisceraProcessor::getCurrentProgram() { return currentPreset; }
+int ParasiteProcessor::getNumPrograms() { return juce::jmax(1, getPresetCount()); }
+int ParasiteProcessor::getCurrentProgram() { return currentPreset; }
 
-void VisceraProcessor::setCurrentProgram(int index)
+void ParasiteProcessor::setCurrentProgram(int index)
 {
     if (index >= 0 && index < getPresetCount())
         loadPresetAt(index);
 }
 
-const juce::String VisceraProcessor::getProgramName(int index)
+const juce::String ParasiteProcessor::getProgramName(int index)
 {
     if (index >= 0 && index < static_cast<int>(presetRegistry.size()))
         return presetRegistry[static_cast<size_t>(index)].name;
     return {};
 }
 
-void VisceraProcessor::changeProgramName(int, const juce::String&) {}
+void ParasiteProcessor::changeProgramName(int, const juce::String&) {}
 
 // --- Shared serialization helpers (DRY) ---
-void VisceraProcessor::serializeCustomData(juce::ValueTree& state) const
+void ParasiteProcessor::serializeCustomData(juce::ValueTree& state) const
 {
     state.setProperty("shaperTable", volumeShaper.serializeTable(), nullptr);
     for (int n = 0; n < 3; ++n)
@@ -883,7 +883,7 @@ void VisceraProcessor::serializeCustomData(juce::ValueTree& state) const
     state.setProperty("carHarmonics", carHarmonics.serializeHarmonics(), nullptr);
 }
 
-void VisceraProcessor::deserializeCustomData(const juce::ValueTree& tree)
+void ParasiteProcessor::deserializeCustomData(const juce::ValueTree& tree)
 {
     if (tree.hasProperty("shaperTable"))
         volumeShaper.deserializeTable(tree.getProperty("shaperTable").toString());
@@ -914,7 +914,7 @@ void VisceraProcessor::deserializeCustomData(const juce::ValueTree& tree)
 }
 
 // --- State save/restore ---
-void VisceraProcessor::getStateInformation(juce::MemoryBlock& destData)
+void ParasiteProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty("_presetIndex", currentPreset, nullptr);
@@ -926,10 +926,11 @@ void VisceraProcessor::getStateInformation(juce::MemoryBlock& destData)
     copyXmlToBinary(*xml, destData);
 }
 
-void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
+void ParasiteProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
-    if (xml && xml->hasTagName(apvts.state.getType()))
+    if (!xml) return;
+    if (!xml->hasTagName(apvts.state.getType())) return;
     {
         auto tree = juce::ValueTree::fromXml(*xml);
         deserializeCustomData(tree);
@@ -991,15 +992,15 @@ void VisceraProcessor::setStateInformation(const void* data, int sizeInBytes)
 }
 
 // --- User presets ---
-juce::File VisceraProcessor::getUserPresetsDir()
+juce::File ParasiteProcessor::getUserPresetsDir()
 {
     auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                   .getChildFile("Viscera").getChildFile("Presets");
+                   .getChildFile("Thunderdolphin").getChildFile("Parasite").getChildFile("Presets");
     dir.createDirectory();
     return dir;
 }
 
-void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::String& category)
+void ParasiteProcessor::saveUserPreset(const juce::String& name, const juce::String& category)
 {
     // Sanitize filename to prevent path traversal
     auto safeName = juce::File::createLegalFileName(name);
@@ -1014,18 +1015,15 @@ void VisceraProcessor::saveUserPreset(const juce::String& name, const juce::Stri
         xml->setAttribute("name", name);
         xml->setAttribute("category", category);
         xml->setAttribute("pack", "User");
-        auto file = getUserPresetsDir().getChildFile(safeName + ".visc");
+        auto file = getUserPresetsDir().getChildFile(safeName + ".prst");
         if (!xml->writeTo(file))
             DBG("Failed to save preset: " + file.getFullPathName());
     }
 }
 
-bool VisceraProcessor::deleteUserPreset(const juce::String& name)
+bool ParasiteProcessor::deleteUserPreset(const juce::String& name)
 {
-    auto dir = getUserPresetsDir();
-    auto file = dir.getChildFile(name + ".visc");
-    if (!file.existsAsFile())
-        file = dir.getChildFile(name + ".xml");
+    auto file = getUserPresetsDir().getChildFile(name + ".prst");
     if (file.existsAsFile())
         return file.deleteFile();
     return false;
@@ -1033,12 +1031,12 @@ bool VisceraProcessor::deleteUserPreset(const juce::String& name)
 
 // --- Favorites ---
 
-bool VisceraProcessor::isFavorite(const juce::String& presetName) const
+bool ParasiteProcessor::isFavorite(const juce::String& presetName) const
 {
     return favorites.contains(presetName);
 }
 
-void VisceraProcessor::toggleFavorite(const juce::String& presetName)
+void ParasiteProcessor::toggleFavorite(const juce::String& presetName)
 {
     if (favorites.contains(presetName))
         favorites.removeString(presetName);
@@ -1047,19 +1045,19 @@ void VisceraProcessor::toggleFavorite(const juce::String& presetName)
     saveFavorites();
 }
 
-void VisceraProcessor::saveFavorites()
+void ParasiteProcessor::saveFavorites()
 {
     auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                   .getChildFile("Viscera");
+                   .getChildFile("Thunderdolphin").getChildFile("Parasite");
     dir.createDirectory();
     auto file = dir.getChildFile("favorites.txt");
     file.replaceWithText(favorites.joinIntoString("\n"));
 }
 
-void VisceraProcessor::loadFavorites()
+void ParasiteProcessor::loadFavorites()
 {
     auto file = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                    .getChildFile("Viscera").getChildFile("favorites.txt");
+                    .getChildFile("Thunderdolphin").getChildFile("Parasite").getChildFile("favorites.txt");
     if (file.existsAsFile())
     {
         juce::StringArray lines;
@@ -1071,30 +1069,33 @@ void VisceraProcessor::loadFavorites()
     }
 }
 
-void VisceraProcessor::loadUserPreset(const juce::String& name)
+void ParasiteProcessor::loadUserPreset(const juce::String& name)
 {
-    // Try .visc first, fallback to .xml
-    auto dir = getUserPresetsDir();
-    auto file = dir.getChildFile(name + ".visc");
-    if (!file.existsAsFile())
-        file = dir.getChildFile(name + ".xml");
+    auto file = getUserPresetsDir().getChildFile(name + ".prst");
     if (!file.existsAsFile()) return;
 
     auto xml = juce::parseXML(file);
-    if (xml && xml->hasTagName(apvts.state.getType()))
+    if (!xml)
     {
-        auto tree = juce::ValueTree::fromXml(*xml);
-        deserializeCustomData(tree);
-        migrateOldPitchParams(tree);
-        apvts.replaceState(tree);
-        undoManager.clearUndoHistory();
-        isUserPresetLoaded = true;
-        currentUserPresetName = name;
+        DBG("Failed to parse preset file: " + file.getFullPathName());
+        return;
     }
+    if (!xml->hasTagName(apvts.state.getType()))
+    {
+        DBG("Invalid preset tag <" + xml->getTagName() + "> in: " + file.getFullPathName());
+        return;
+    }
+    auto tree = juce::ValueTree::fromXml(*xml);
+    deserializeCustomData(tree);
+    migrateOldPitchParams(tree);
+    apvts.replaceState(tree);
+    undoManager.clearUndoHistory();
+    isUserPresetLoaded = true;
+    currentUserPresetName = name;
 }
 
 // --- Shared preset loading from XML string ---
-void VisceraProcessor::loadPresetFromXml(const juce::String& xmlStr)
+void ParasiteProcessor::loadPresetFromXml(const juce::String& xmlStr)
 {
     auto xml = juce::parseXML(xmlStr);
     if (!xml) return;
@@ -1107,7 +1108,7 @@ void VisceraProcessor::loadPresetFromXml(const juce::String& xmlStr)
     undoManager.clearUndoHistory();
 }
 
-void VisceraProcessor::loadFactoryPreset(const juce::String& resName)
+void ParasiteProcessor::loadFactoryPreset(const juce::String& resName)
 {
     int size = 0;
     auto* data = BinaryData::getNamedResource(resName.toRawUTF8(), size);
@@ -1116,16 +1117,16 @@ void VisceraProcessor::loadFactoryPreset(const juce::String& resName)
 }
 
 // --- Build preset registry from BinaryData + user dir ---
-void VisceraProcessor::buildPresetRegistry()
+void ParasiteProcessor::buildPresetRegistry()
 {
     presetRegistry.clear();
 
-    // Scan BinaryData for .visc resources
+    // Scan BinaryData for .prst resources
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         juce::String resName = BinaryData::namedResourceList[i];
         juce::String origName = BinaryData::originalFilenames[i];
-        if (!origName.endsWith(".visc")) continue;
+        if (!origName.endsWith(".prst")) continue;
 
         int size = 0;
         auto* data = BinaryData::getNamedResource(resName.toRawUTF8(), size);
@@ -1155,13 +1156,11 @@ void VisceraProcessor::buildPresetRegistry()
             return a.name.compareIgnoreCase(b.name) < 0;
         });
 
-    // Scan user presets dir (.visc + .xml fallback)
+    // Scan user presets dir
     auto dir = getUserPresetsDir();
     juce::Array<juce::File> userFiles;
-    userFiles.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.visc"));
-    userFiles.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.xml"));
+    userFiles.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.prst"));
 
-    // Deduplicate: if both .visc and .xml exist, prefer .visc
     juce::StringArray seenNames;
     for (auto& f : userFiles)
     {
@@ -1190,7 +1189,7 @@ void VisceraProcessor::buildPresetRegistry()
     }
 }
 
-juce::StringArray VisceraProcessor::getAvailablePacks() const
+juce::StringArray ParasiteProcessor::getAvailablePacks() const
 {
     juce::StringArray packs;
     packs.add("All");
@@ -1203,7 +1202,7 @@ juce::StringArray VisceraProcessor::getAvailablePacks() const
 }
 
 // --- Load preset by registry index ---
-void VisceraProcessor::loadPresetAt(int index)
+void ParasiteProcessor::loadPresetAt(int index)
 {
     if (index < 0 || index >= static_cast<int>(presetRegistry.size())) return;
 
@@ -1223,7 +1222,7 @@ void VisceraProcessor::loadPresetAt(int index)
 }
 
 // --- Migration anciens presets : MOD_PITCH → COARSE+FINE ou FIXED_FREQ ---
-void VisceraProcessor::migrateOldPitchParams(juce::ValueTree& tree)
+void ParasiteProcessor::migrateOldPitchParams(juce::ValueTree& tree)
 {
     // If MOD1_COARSE already exists, no migration needed
     bool hasCoarse = false;
@@ -1331,17 +1330,17 @@ void VisceraProcessor::migrateOldPitchParams(juce::ValueTree& tree)
 
 
 // --- Création de l'éditeur ---
-#ifdef VISCERA_HEADLESS_TESTS
-juce::AudioProcessorEditor* VisceraProcessor::createEditor() { return nullptr; }
+#ifdef PARASITE_HEADLESS_TESTS
+juce::AudioProcessorEditor* ParasiteProcessor::createEditor() { return nullptr; }
 #else
-juce::AudioProcessorEditor* VisceraProcessor::createEditor()
+juce::AudioProcessorEditor* ParasiteProcessor::createEditor()
 {
-    return new VisceraEditor(*this);
+    return new ParasiteEditor(*this);
 }
 #endif
 
 // --- Point d'entrée JUCE ---
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new VisceraProcessor();
+    return new ParasiteProcessor();
 }

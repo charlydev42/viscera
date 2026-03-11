@@ -446,7 +446,7 @@ juce::File LicenseManager::getCacheFile()
 {
     return juce::File::getSpecialLocation(
                juce::File::userApplicationDataDirectory)
-           .getChildFile("Viscera")
+           .getChildFile("Thunderdolphin").getChildFile("Parasite")
            .getChildFile("license.dat");
 }
 

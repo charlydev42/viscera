@@ -1,6 +1,6 @@
 // HarmonicEditor.cpp — 32-bar harmonic editor with shape presets
 #include "HarmonicEditor.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 
 HarmonicEditor::HarmonicEditor(bb::HarmonicTable& table)
     : harmonicTable(table)
@@ -23,7 +23,7 @@ void HarmonicEditor::paint(juce::Graphics& g)
     auto area = barArea.toFloat();
 
     // Background
-    g.setColour(juce::Colour(VisceraLookAndFeel::kDisplayBg));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(area, 3.0f);
 
     if (area.getWidth() < 1 || area.getHeight() < 1) return;
@@ -44,7 +44,7 @@ void HarmonicEditor::paint(juce::Graphics& g)
                                                    barW - 2.0f, bh);
             // Color gradient: fundamental = accent, higher = dimmer
             float brightness = 1.0f - static_cast<float>(h) * 0.015f;
-            g.setColour(juce::Colour(VisceraLookAndFeel::kAccentColor)
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor)
                             .withMultipliedBrightness(brightness)
                             .withAlpha(0.85f));
             g.fillRect(barRect);
@@ -53,13 +53,13 @@ void HarmonicEditor::paint(juce::Graphics& g)
         // Thin separator line
         if (h > 0)
         {
-            g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.08f));
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.08f));
             g.drawVerticalLine(static_cast<int>(x), area.getY(), area.getBottom());
         }
     }
 
     // Outline
-    g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor).withAlpha(0.15f));
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.15f));
     g.drawRoundedRectangle(area, 3.0f, 1.0f);
 }
 

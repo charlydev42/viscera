@@ -1,9 +1,9 @@
 // SaveOverlay.cpp — Inline save-preset overlay
 #include "SaveOverlay.h"
-#include "VisceraLookAndFeel.h"
+#include "ParasiteLookAndFeel.h"
 #include "../PluginProcessor.h"
 
-SaveOverlay::SaveOverlay(VisceraProcessor& processor)
+SaveOverlay::SaveOverlay(ParasiteProcessor& processor)
     : proc(processor)
 {
     setWantsKeyboardFocus(true);
@@ -13,11 +13,11 @@ SaveOverlay::SaveOverlay(VisceraProcessor& processor)
     nameEditor.setIndents(12, 0);  // left padding for pill shape + vertical centering
     nameEditor.setBorder(juce::BorderSize<int>(0));
     nameEditor.setTextToShowWhenEmpty("Preset name...", juce::Colours::grey);
-    nameEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(VisceraLookAndFeel::kDisplayBg));
-    nameEditor.setColour(juce::TextEditor::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).interpolatedWith(juce::Colour(VisceraLookAndFeel::kBgColor), 0.3f));
-    nameEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.3f));
-    nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(VisceraLookAndFeel::kAccentColor));
-    nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(VisceraLookAndFeel::kTextColor));
+    nameEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(ParasiteLookAndFeel::kDisplayBg));
+    nameEditor.setColour(juce::TextEditor::textColourId, juce::Colour(ParasiteLookAndFeel::kTextColor).interpolatedWith(juce::Colour(ParasiteLookAndFeel::kBgColor), 0.3f));
+    nameEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.3f));
+    nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
+    nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(ParasiteLookAndFeel::kTextColor));
     nameEditor.onReturnKey = [this] { doSave(); };
     nameEditor.onEscapeKey = [this] { doCancel(); };
     nameEditor.onTextChange = [this] {
@@ -26,7 +26,7 @@ SaveOverlay::SaveOverlay(VisceraProcessor& processor)
             awaitingOverwrite = false;
             saveBtn.setButtonText("Save");
             nameEditor.setColour(juce::TextEditor::focusedOutlineColourId,
-                juce::Colour(VisceraLookAndFeel::kAccentColor));
+                juce::Colour(ParasiteLookAndFeel::kAccentColor));
             nameEditor.repaint();
             repaint();
         }
@@ -104,11 +104,11 @@ void SaveOverlay::refresh()
     }
 
     // Refresh theme colours
-    nameEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(VisceraLookAndFeel::kDisplayBg));
-    nameEditor.setColour(juce::TextEditor::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).interpolatedWith(juce::Colour(VisceraLookAndFeel::kBgColor), 0.3f));
-    nameEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.3f));
-    nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(VisceraLookAndFeel::kAccentColor));
-    nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(VisceraLookAndFeel::kTextColor));
+    nameEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(ParasiteLookAndFeel::kDisplayBg));
+    nameEditor.setColour(juce::TextEditor::textColourId, juce::Colour(ParasiteLookAndFeel::kTextColor).interpolatedWith(juce::Colour(ParasiteLookAndFeel::kBgColor), 0.3f));
+    nameEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.3f));
+    nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
+    nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(ParasiteLookAndFeel::kTextColor));
 
     nameEditor.grabKeyboardFocus();
     nameEditor.selectAll();
@@ -117,11 +117,11 @@ void SaveOverlay::refresh()
 
 void SaveOverlay::lookAndFeelChanged()
 {
-    nameEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(VisceraLookAndFeel::kDisplayBg));
-    nameEditor.setColour(juce::TextEditor::textColourId, juce::Colour(VisceraLookAndFeel::kTextColor).interpolatedWith(juce::Colour(VisceraLookAndFeel::kBgColor), 0.3f));
-    nameEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour(VisceraLookAndFeel::kShadowDark).withAlpha(0.3f));
-    nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(VisceraLookAndFeel::kAccentColor));
-    nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(VisceraLookAndFeel::kTextColor));
+    nameEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(ParasiteLookAndFeel::kDisplayBg));
+    nameEditor.setColour(juce::TextEditor::textColourId, juce::Colour(ParasiteLookAndFeel::kTextColor).interpolatedWith(juce::Colour(ParasiteLookAndFeel::kBgColor), 0.3f));
+    nameEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.3f));
+    nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
+    nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(ParasiteLookAndFeel::kTextColor));
     nameEditor.applyFontToAllText(nameEditor.getFont(), true);
     repaint();
 }
@@ -149,7 +149,7 @@ void SaveOverlay::doSave()
                     if (safeThis != nullptr)
                     {
                         safeThis->nameEditor.setColour(juce::TextEditor::focusedOutlineColourId,
-                            juce::Colour(VisceraLookAndFeel::kAccentColor));
+                            juce::Colour(ParasiteLookAndFeel::kAccentColor));
                         safeThis->nameEditor.repaint();
                     }
                 });
@@ -244,7 +244,7 @@ void SaveOverlay::resized()
 
 void SaveOverlay::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(VisceraLookAndFeel::kBgColor));
+    g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
 
     // Title
     auto area = getLocalBounds();
@@ -260,7 +260,7 @@ void SaveOverlay::paint(juce::Graphics& g)
     }
     else
     {
-        g.setColour(juce::Colour(VisceraLookAndFeel::kTextColor));
+        g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor));
         g.drawText("Save Preset", titleArea, juce::Justification::centred);
     }
 
@@ -269,10 +269,10 @@ void SaveOverlay::paint(juce::Graphics& g)
     {
         bool sel = (juce::String(kCategories[i]) == selectedCategory);
         categoryButtons[i].setColour(juce::TextButton::textColourOnId,
-            sel ? juce::Colour(VisceraLookAndFeel::kAccentColor)
-                : juce::Colour(VisceraLookAndFeel::kTextColor));
+            sel ? juce::Colour(ParasiteLookAndFeel::kAccentColor)
+                : juce::Colour(ParasiteLookAndFeel::kTextColor));
         categoryButtons[i].setColour(juce::TextButton::textColourOffId,
-            sel ? juce::Colour(VisceraLookAndFeel::kAccentColor)
-                : juce::Colour(VisceraLookAndFeel::kTextColor));
+            sel ? juce::Colour(ParasiteLookAndFeel::kAccentColor)
+                : juce::Colour(ParasiteLookAndFeel::kTextColor));
     }
 }

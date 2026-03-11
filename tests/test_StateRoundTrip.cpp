@@ -7,7 +7,7 @@ using Catch::Matchers::WithinAbs;
 
 TEST_CASE("StateRoundTrip - APVTS params survive save/load", "[state]")
 {
-    VisceraProcessor proc1;
+    ParasiteProcessor proc1;
     proc1.prepareToPlay(44100.0, 512);
 
     // Tweak some params
@@ -26,12 +26,12 @@ TEST_CASE("StateRoundTrip - APVTS params survive save/load", "[state]")
     REQUIRE(stateData.getSize() > 0);
 
     // Load into new processor
-    VisceraProcessor proc2;
+    ParasiteProcessor proc2;
     proc2.prepareToPlay(44100.0, 512);
     proc2.setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
 
     // Check params match
-    auto getVal = [](VisceraProcessor& p, const juce::String& id) {
+    auto getVal = [](ParasiteProcessor& p, const juce::String& id) {
         auto* param = p.apvts.getParameter(id);
         return param ? param->convertFrom0to1(param->getValue()) : -999.0f;
     };
@@ -46,7 +46,7 @@ TEST_CASE("StateRoundTrip - APVTS params survive save/load", "[state]")
 
 TEST_CASE("StateRoundTrip - Custom data survives save/load", "[state]")
 {
-    VisceraProcessor proc1;
+    ParasiteProcessor proc1;
     proc1.prepareToPlay(44100.0, 512);
 
     // Set custom shaper table
@@ -69,7 +69,7 @@ TEST_CASE("StateRoundTrip - Custom data survives save/load", "[state]")
     proc1.getStateInformation(stateData);
 
     // Load into new processor
-    VisceraProcessor proc2;
+    ParasiteProcessor proc2;
     proc2.prepareToPlay(44100.0, 512);
     proc2.setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
 

@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <vector>
 
-PresetBrowser::PresetBrowser(VisceraProcessor& processor)
+PresetBrowser::PresetBrowser(ParasiteProcessor& processor)
     : proc(processor)
 {
     presetNameBtn.setName("presetDisplay");
