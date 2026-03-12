@@ -166,6 +166,8 @@ juce_add_binary_data(ParasiteData SOURCES
     presets/Bass_Psy_Squelch.prst
     presets/Bass_Goa_Acid.prst
     presets/Bass_Third_Eye.prst
+    # Vocal / Trance
+    presets/Lead_Binary_Voice.prst
 )
 
 target_include_directories(Parasite PRIVATE Source)
