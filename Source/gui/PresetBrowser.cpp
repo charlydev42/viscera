@@ -84,6 +84,7 @@ void PresetBrowser::updatePresetName()
 
 void PresetBrowser::showPresetMenu()
 {
+    proc.buildPresetRegistry();
     auto& registry = proc.getPresetRegistry();
     juce::PopupMenu menu;
 

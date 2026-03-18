@@ -11,7 +11,8 @@
 ParasiteProcessor::ParasiteProcessor()
     : AudioProcessor(BusesProperties()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, &undoManager, "ParasiteState", createParameterLayout())
+      apvts(*this, &undoManager, "ParasiteState", createParameterLayout()),
+      cloudPresetManager(*this, licenseManager)
 {
     cacheParameterPointers();
 
@@ -31,6 +32,10 @@ ParasiteProcessor::ParasiteProcessor()
     // Sync audio-thread license flag
     dspGainToken.store(licenseManager.isLicensed() ? kDspActive : 0, std::memory_order_relaxed);
     licenseManager.addListener(this);
+
+    // Initial cloud sync if licensed
+    if (licenseManager.isLicensed())
+        cloudPresetManager.syncAll();
 }
 
 ParasiteProcessor::~ParasiteProcessor()
@@ -41,6 +46,8 @@ ParasiteProcessor::~ParasiteProcessor()
 void ParasiteProcessor::licenseStateChanged(bool licensed)
 {
     dspGainToken.store(licensed ? kDspActive : 0, std::memory_order_relaxed);
+    if (licensed)
+        cloudPresetManager.syncAll();
 }
 
 // --- Cacher les pointeurs atomiques vers les paramètres ---
@@ -1015,17 +1022,54 @@ void ParasiteProcessor::saveUserPreset(const juce::String& name, const juce::Str
         xml->setAttribute("name", name);
         xml->setAttribute("category", category);
         xml->setAttribute("pack", "User");
+
+        // Cloud sync metadata
         auto file = getUserPresetsDir().getChildFile(safeName + ".prst");
+        juce::String uuid;
+        int version = 1;
+
+        // Preserve existing UUID if overwriting
+        if (file.existsAsFile())
+        {
+            auto existing = juce::parseXML(file);
+            if (existing)
+            {
+                uuid = existing->getStringAttribute("uuid", "");
+                version = existing->getIntAttribute("version", 0) + 1;
+            }
+        }
+        if (uuid.isEmpty())
+            uuid = juce::Uuid().toString();
+
+        xml->setAttribute("uuid", uuid);
+        xml->setAttribute("version", version);
+        xml->setAttribute("updatedAt", juce::Time::getCurrentTime().toISO8601(true));
+
         if (!xml->writeTo(file))
             DBG("Failed to save preset: " + file.getFullPathName());
+
+        // Fire-and-forget cloud upload
+        cloudPresetManager.uploadPreset(uuid);
     }
 }
 
 bool ParasiteProcessor::deleteUserPreset(const juce::String& name)
 {
     auto file = getUserPresetsDir().getChildFile(name + ".prst");
-    if (file.existsAsFile())
-        return file.deleteFile();
+    if (!file.existsAsFile()) return false;
+
+    // Read UUID before deleting for cloud sync
+    juce::String uuid;
+    auto xml = juce::parseXML(file);
+    if (xml)
+        uuid = xml->getStringAttribute("uuid", "");
+
+    if (file.deleteFile())
+    {
+        if (uuid.isNotEmpty())
+            cloudPresetManager.deletePreset(uuid);
+        return true;
+    }
     return false;
 }
 
@@ -1175,7 +1219,7 @@ void ParasiteProcessor::buildPresetRegistry()
         entry.isFactory = false;
         entry.userFileName = baseName;
 
-        // Try to read category and pack from file
+        // Try to read category, pack, and uuid from file
         auto xml = juce::parseXML(f);
         if (xml)
         {
@@ -1183,6 +1227,8 @@ void ParasiteProcessor::buildPresetRegistry()
             if (cat.isNotEmpty()) entry.category = cat;
             auto p = xml->getStringAttribute("pack", "User");
             if (p.isNotEmpty()) entry.pack = p;
+            auto u = xml->getStringAttribute("uuid", "");
+            if (u.isNotEmpty()) entry.uuid = u;
         }
 
         presetRegistry.push_back(std::move(entry));

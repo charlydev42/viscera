@@ -77,29 +77,16 @@ void SaveOverlay::refresh()
     }
     nameEditor.setText(prefill, false);
 
-    // Pre-select category from current preset
-    if (proc.isUserPreset())
-    {
-        // User presets don't store category in processor, default to Bass
-        selectedCategory = "Bass";
-    }
-    else
+    // Pre-select category from current preset (factory or user)
+    selectedCategory = "Bass";
     {
         auto& registry = proc.getPresetRegistry();
         int idx = proc.getCurrentPresetIndex();
         if (idx >= 0 && idx < static_cast<int>(registry.size()))
         {
             auto& entry = registry[static_cast<size_t>(idx)];
-            // Use preset's category if it's one of the save categories
-            bool matched = false;
             for (auto& cat : kCategories)
-                if (entry.category == cat) { selectedCategory = cat; matched = true; break; }
-            if (!matched)
-                selectedCategory = "Bass";
-        }
-        else
-        {
-            selectedCategory = "Bass";
+                if (entry.category == cat) { selectedCategory = cat; break; }
         }
     }
 

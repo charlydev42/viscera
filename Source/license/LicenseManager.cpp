@@ -55,6 +55,12 @@ juce::String LicenseManager::getLicenseKey() const
     return licenseKey_;
 }
 
+juce::String LicenseManager::getActivationToken() const
+{
+    const juce::ScopedLock sl(stateLock);
+    return activationToken_;
+}
+
 // =====================================================================
 // Activate — first launch license entry
 // =====================================================================
@@ -80,13 +86,16 @@ void LicenseManager::activate(const juce::String& key, Callback callback)
             auto json = juce::JSON::parse(resp.body);
             juce::String uid = json.getProperty("userId", "").toString();
 
+            juce::String token = json.getProperty("token", "").toString();
+
             {
                 const juce::ScopedLock sl(stateLock);
-                licensed_     = true;
-                licenseKey_   = key;
-                userId_       = uid;
-                activatedAt_  = juce::Time::currentTimeMillis();
-                lastVerified_ = activatedAt_;
+                licensed_          = true;
+                licenseKey_        = key;
+                userId_            = uid;
+                activationToken_   = token;
+                activatedAt_       = juce::Time::currentTimeMillis();
+                lastVerified_      = activatedAt_;
             }
             saveCache();
             ok  = true;
@@ -477,6 +486,7 @@ void LicenseManager::saveCache() const
     obj->setProperty("userId",       userId_);
     obj->setProperty("activatedAt",  activatedAt_);
     obj->setProperty("lastVerified", lastVerified_);
+    obj->setProperty("token",        activationToken_);
 
     juce::var jsonVar(obj); // keeps ownership alive
     auto json = juce::JSON::toString(jsonVar, true);
@@ -525,6 +535,7 @@ void LicenseManager::loadCache()
         verify->setProperty("userId",       parsed.getProperty("userId", ""));
         verify->setProperty("activatedAt",  parsed.getProperty("activatedAt", 0));
         verify->setProperty("lastVerified", parsed.getProperty("lastVerified", 0));
+        verify->setProperty("token",        parsed.getProperty("token", ""));
         auto verifyJson = juce::JSON::toString(juce::var(verify), true);
         auto expectedSeal = hmacSha256(decodeSecret(), verifyJson + machineId_);
 
@@ -542,6 +553,7 @@ void LicenseManager::loadCache()
         activatedAt_  = static_cast<int64_t>(parsed.getProperty("activatedAt", 0));
         lastVerified_ = static_cast<int64_t>(parsed.getProperty("lastVerified", 0));
 
+        activationToken_ = parsed.getProperty("token", "").toString();
         licensed_ = licenseKey_.isNotEmpty();
     }
 }

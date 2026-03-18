@@ -38,6 +38,14 @@ public:
     void addListener(Listener* l)    { listeners_.add(l); }
     void removeListener(Listener* l) { listeners_.remove(l); }
 
+    // ── JWT token from last activation ─────────────────────────────
+    juce::String getActivationToken() const;
+
+    // ── Public static helpers (shared with CloudPresetManager) ─────
+    static juce::String canonicalJson(const juce::var& value);
+    static juce::String hmacSha256(const juce::String& key, const juce::String& data);
+    static juce::String getMachineId();
+
 private:
     void timerCallback() override;
 
@@ -47,11 +55,8 @@ private:
 
     // Request signing (X-TD-Signature)
     juce::String buildSignature(const juce::String& canonicalBody) const;
-    static juce::String canonicalJson(const juce::var& value);
-    static juce::String hmacSha256(const juce::String& key, const juce::String& data);
 
     // Machine fingerprint
-    static juce::String getMachineId();
     static juce::String getMachineName();
 
     // Encrypted cache
@@ -68,6 +73,7 @@ private:
     juce::String licenseKey_;
     juce::String machineId_;
     juce::String userId_;
+    juce::String activationToken_;  // JWT from last activation
     int64_t     activatedAt_  = 0;
     int64_t     lastVerified_ = 0;
 

@@ -37,8 +37,9 @@ target_sources(Parasite PRIVATE
     Source/PluginEditor.cpp
     # DSP
     Source/dsp/FMVoice.cpp
-    # License
+    # License + Cloud
     Source/license/LicenseManager.cpp
+    Source/cloud/CloudPresetManager.cpp
     # GUI
     Source/gui/LicenseOverlay.cpp
     Source/gui/LFOSection.cpp
@@ -233,6 +234,8 @@ if(PARASITE_BUILD_TESTS)
         # Source files needed (DSP + Processor, no GUI)
         Source/PluginProcessor.cpp
         Source/dsp/FMVoice.cpp
+        Source/license/LicenseManager.cpp
+        Source/cloud/CloudPresetManager.cpp
     )
 
     target_include_directories(ParasiteTests PRIVATE Source tests)

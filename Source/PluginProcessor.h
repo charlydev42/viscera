@@ -15,6 +15,7 @@
 #include "dsp/VolumeShaper.h"
 #include "dsp/AudioVisualBuffer.h"
 #include "license/LicenseManager.h"
+#include "cloud/CloudPresetManager.h"
 
 class ParasiteProcessor : public juce::AudioProcessor,
                          private bb::LicenseManager::Listener
@@ -57,6 +58,7 @@ public:
         juce::String name;
         juce::String category;
         juce::String pack;           // "Factory", "User", or pack name (e.g. "Dua Lipa")
+        juce::String uuid;           // Cloud sync UUID (empty for factory presets)
         bool isFactory = true;
         juce::String resourceName;   // BinaryData resource name (factory)
         juce::String userFileName;   // filename without extension (user)
@@ -194,6 +196,7 @@ private:
 
 public:
     bb::LicenseManager& getLicenseManager() { return licenseManager; }
+    CloudPresetManager& getCloudPresetManager() { return cloudPresetManager; }
 
     bb::HarmonicTable& getHarmonicTable(int idx)
     {
@@ -215,8 +218,9 @@ private:
     bb::AudioVisualBuffer visualBuffer;
     bb::AudioVisualBuffer visualBufferR;
 
-    // License
+    // License + cloud sync
     bb::LicenseManager licenseManager;
+    CloudPresetManager cloudPresetManager;
 
     // LicenseManager::Listener
     void licenseStateChanged(bool licensed) override;

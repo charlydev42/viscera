@@ -76,6 +76,8 @@ void PresetOverlay::stopPreviewNote()
 
 void PresetOverlay::refresh()
 {
+    proc.buildPresetRegistry();
+
     // Rebuild pack dropdown
     auto packs = proc.getAvailablePacks();
     packSelector.clear(juce::dontSendNotification);
@@ -387,7 +389,10 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
     int idx = cardAtPoint(pt);
     if (idx >= 0)
     {
-        auto& entry = proc.getPresetRegistry()[static_cast<size_t>(cards[static_cast<size_t>(idx)].registryIndex)];
+        auto& reg = proc.getPresetRegistry();
+        int ri = cards[static_cast<size_t>(idx)].registryIndex;
+        if (ri < 0 || ri >= static_cast<int>(reg.size())) return;
+        auto& entry = reg[static_cast<size_t>(ri)];
 
         // Check delete cross first
         if (!entry.isFactory && deleteXBounds(idx).contains(pt))
@@ -650,6 +655,8 @@ void PresetOverlay::paint(juce::Graphics& g)
 
         // (no visible focus ring — active dot is enough)
 
+        if (card.registryIndex < 0 || card.registryIndex >= static_cast<int>(registry.size()))
+            continue;
         auto& entry = registry[static_cast<size_t>(card.registryIndex)];
 
         // Delete confirmation: replace card content entirely

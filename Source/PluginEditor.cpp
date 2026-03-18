@@ -1166,8 +1166,11 @@ void ParasiteEditor::showSettingsMenu()
 
     menu.addSeparator();
 
-    // 3. Account & presets
-    menu.addItem(3, "Manage Account & Presets");
+    // 3. Sync presets
+    menu.addItem(3, "Sync Presets");
+
+    // 4. Account & presets
+    menu.addItem(4, "Manage Account");
 
     // Right-align: use the full button screen bounds as target.
     // JUCE centers the popup on the target, so we shift the target right
@@ -1231,7 +1234,11 @@ void ParasiteEditor::showSettingsMenu()
             }
             else if (result == 3)
             {
-                juce::URL("https://thunderdolphin.studio").launchInDefaultBrowser();
+                proc.getCloudPresetManager().syncAll();
+            }
+            else if (result == 4)
+            {
+                juce::URL("https://thunderdolphin.studio/dashboard").launchInDefaultBrowser();
             }
         });
 }

@@ -24,6 +24,8 @@ public:
     // Called after any preset change (load, navigate, init, random)
     std::function<void()> onPresetChanged;
 
+
+
     // Rebuild the preset registry and refresh display
     void refreshPresetList();
 
