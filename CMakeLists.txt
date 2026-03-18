@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.22)
-project(Parasite VERSION 1.0.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.22...3.31)
+project(Parasite VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
