@@ -207,13 +207,13 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD1_MULTI", "Mod1 Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_A", "Env1 Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_D", "Env1 Decay",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_S", "Env1 Sustain",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV1_R", "Env1 Release",
-            juce::NormalisableRange<float>(0.001f, 8.0f, 0.0f, 0.3f), 0.3f));
+            juce::NormalisableRange<float>(0.0f, 8.0f, 0.0f, 0.3f), 0.3f));
         groups.push_back(std::move(g));
     }
 
@@ -234,13 +234,13 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD2_MULTI", "Mod2 Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_A", "Env2 Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_D", "Env2 Decay",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_S", "Env2 Sustain",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV2_R", "Env2 Release",
-            juce::NormalisableRange<float>(0.001f, 8.0f, 0.0f, 0.3f), 0.3f));
+            juce::NormalisableRange<float>(0.0f, 8.0f, 0.0f, 0.3f), 0.3f));
         groups.push_back(std::move(g));
     }
 
@@ -257,13 +257,13 @@ ParasiteProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterInt>("CAR_MULTI", "Carrier Multi", 0, 5, 4));
         g->addChild(std::make_unique<juce::AudioParameterBool>("CAR_KB", "Carrier KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_A", "Env3 Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.01f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_D", "Env3 Decay",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.3f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_S", "Env3 Sustain",
             juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_R", "Env3 Release",
-            juce::NormalisableRange<float>(0.001f, 8.0f, 0.0f, 0.3f), 0.3f));
+            juce::NormalisableRange<float>(0.0f, 8.0f, 0.0f, 0.3f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("CAR_DRIFT", "Carrier Drift",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("CAR_NOISE", "Carrier Noise",
@@ -296,13 +296,13 @@ ParasiteProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_AMT", "Pitch Env Amount",
             juce::NormalisableRange<float>(-96.0f, 96.0f, 0.1f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_A", "Pitch Env Attack",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.001f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.001f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_D", "Pitch Env Decay",
-            juce::NormalisableRange<float>(0.001f, 5.0f, 0.0f, 0.3f), 0.15f));
+            juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.15f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_S", "Pitch Env Sustain",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_R", "Pitch Env Release",
-            juce::NormalisableRange<float>(0.001f, 8.0f, 0.0f, 0.3f), 0.1f));
+            juce::NormalisableRange<float>(0.0f, 8.0f, 0.0f, 0.3f), 0.1f));
         groups.push_back(std::move(g));
     }
 

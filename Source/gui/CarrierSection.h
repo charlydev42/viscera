@@ -5,7 +5,8 @@
 #include "ModSlider.h"
 #include "HarmonicEditor.h"
 
-// Visual-only ADSR display for carrier envelope (ENV3)
+// Interactive ADSR display for carrier envelope (ENV3)
+// Drag points to adjust A/D/S/R like Ableton Operator
 class CarrierEnvDisplay : public juce::Component,
                           private juce::Timer
 {
@@ -15,8 +16,24 @@ public:
     void paint(juce::Graphics& g) override;
     void timerCallback() override;
 
+    void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
+    void mouseMove(const juce::MouseEvent& e) override;
+
 private:
     juce::AudioProcessorValueTreeState& state;
+
+    // Dragging state: -1=none, 0=attack peak, 1=decay/sustain, 2=release end
+    int dragPoint = -1;
+    int hoveredPoint = -1;
+    static constexpr float kHitRadius = 8.0f;
+
+    // Cached ADSR points for hit-testing
+    juce::Point<float> ptPeak, ptSustain, ptRelEnd;
+
+    int pointAtPosition(juce::Point<float> pos) const;
+    void setParamNormalized(const juce::String& id, float newVal);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CarrierEnvDisplay)
 };

@@ -294,9 +294,9 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     menuBtn.setPaintingIsUnclipped(true);
     pageToggleBtn.setPaintingIsUnclipped(true);
 
-    // Load first preset so sound matches displayed name
-    // (done here after all attachments are created)
-    if (proc.getCurrentPresetIndex() == 0 && !proc.isUserPreset())
+    // Only load Init preset on very first editor open (fresh plugin instance).
+    // Skip if the editor is being reopened — processor state is already valid.
+    if (proc.getCurrentPresetIndex() < 0)
         proc.loadPresetAt(0);
 }
 

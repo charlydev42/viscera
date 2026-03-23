@@ -114,7 +114,7 @@ private:
     void cacheParameterPointers();
 
     juce::Synthesiser synth;
-    int currentPreset = 0;
+    int currentPreset = -1;  // -1 = uninitialised; set by loadPresetAt or setStateInformation
     bool isUserPresetLoaded = false;
     juce::String currentUserPresetName;
     juce::String displayName; // override for preset display (e.g. "Random")

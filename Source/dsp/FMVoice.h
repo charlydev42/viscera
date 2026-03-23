@@ -317,6 +317,10 @@ private:
     int stealFadeSamples = 0;
     int stealFadeLength  = 256;   // set properly in prepareToPlay
 
+    // Anti-click fade-in for new notes
+    int noteFadeInSamples = 0;
+    int noteFadeInLength  = 64;   // set properly in prepareToPlay
+
     // White noise generator (xorshift32)
     uint32_t noiseSeed = 0x12345678;
 

@@ -67,13 +67,17 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
     // Anti-click fade: ~5ms
     stealFadeLength = std::max(1, static_cast<int>(sr * 0.005));
     stealFadeSamples = 0;
+
+    // Anti-click fade-in: ~1.5ms
+    noteFadeInLength = std::max(1, static_cast<int>(sr * 0.0015));
+    noteFadeInSamples = 0;
 }
 
 void FMVoice::startNote(int midiNoteNumber, float velocity,
                          juce::SynthesiserSound*, int currentPitchWheelPosition)
 {
     currentNote = midiNoteNumber;
-    noteVelocity = std::pow(velocity, 0.65f);
+    noteVelocity = velocity;  // linear velocity curve (standard, full dynamic range)
     params.lastVelocity.store(velocity, std::memory_order_relaxed);
     stealFadeSamples = 0;  // cancel any in-progress steal fade
 
@@ -105,6 +109,12 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
         mod2Osc.resetPhase();
         carrierOsc.resetPhase();
         carrierOscR.resetPhase();
+
+        // Reset envelopes to 0 to avoid starting attack from stale level
+        env1.reset();
+        env2.reset();
+        env3.reset();
+        pitchEnv.reset();
     }
 
     // Lancer les enveloppes
@@ -124,6 +134,9 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     env2.noteOn();
     env3.noteOn();
     pitchEnv.noteOn();
+
+    // Anti-click fade-in for the first samples of the new note
+    noteFadeInSamples = noteFadeInLength;
 }
 
 void FMVoice::stopNote(float /*velocity*/, bool allowTailOff)
@@ -137,7 +150,11 @@ void FMVoice::stopNote(float /*velocity*/, bool allowTailOff)
     }
     else
     {
-        // Voice stealing: don't hard-reset, use a short fade-out to avoid clicks
+        // Voice stealing: put envelopes in release + short fade-out
+        env1.noteOff();
+        env2.noteOff();
+        env3.noteOff();
+        pitchEnv.noteOff();
         stealFadeSamples = stealFadeLength;
     }
 }
@@ -542,6 +559,15 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float drv = juce::jlimit(1.0f, 10.0f, driveParam + gLfoModDrive * 9.0f);
         outputL *= vol;  outputL *= drv;  outputL = std::tanh(outputL);
         outputR *= vol;  outputR *= drv;  outputR = std::tanh(outputR);
+
+        // --- Anti-click fade-in for new notes ---
+        if (noteFadeInSamples > 0)
+        {
+            float fadeGain = 1.0f - static_cast<float>(noteFadeInSamples) / static_cast<float>(noteFadeInLength);
+            outputL *= fadeGain;
+            outputR *= fadeGain;
+            --noteFadeInSamples;
+        }
 
         // --- Anti-click fade-out for voice stealing ---
         if (stealFadeSamples > 0)

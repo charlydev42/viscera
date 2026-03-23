@@ -3,16 +3,37 @@
 #include "ParasiteLookAndFeel.h"
 
 // ============================================================
-// CarrierEnvDisplay — visual ADSR curve for ENV3 (no drag)
+// CarrierEnvDisplay — interactive ADSR display (drag points)
 // ============================================================
 
 CarrierEnvDisplay::CarrierEnvDisplay(juce::AudioProcessorValueTreeState& apvts)
     : state(apvts)
 {
     startTimerHz(15);
+    setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 
 void CarrierEnvDisplay::timerCallback() { repaint(); }
+
+// Fixed-zone layout (like Ableton Operator): each ADSR segment has a
+// maximum pixel budget.  When a param is 0, its segment collapses to 0px
+// so adjacent points overlap naturally.
+static constexpr float kMaxA   = 5.0f;   // max attack seconds
+static constexpr float kMaxD   = 5.0f;   // max decay seconds
+static constexpr float kSusHold = 0.14f; // sustain hold as fraction of width
+static constexpr float kMaxR   = 8.0f;   // max release seconds
+
+// Skewed 0-1 mapping (sqrt for log-ish feel)
+static float paramToFrac(float val, float maxV)
+{
+    if (maxV <= 0.0f) return 0.0f;
+    return std::sqrt(juce::jlimit(0.0f, 1.0f, val / maxV));
+}
+static float fracToParam(float frac, float maxV)
+{
+    float sq = juce::jlimit(0.0f, 1.0f, frac);
+    return sq * sq * maxV;
+}
 
 void CarrierEnvDisplay::paint(juce::Graphics& g)
 {
@@ -21,7 +42,7 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
     g.setColour(juce::Colour(ParasiteLookAndFeel::kDisplayBg));
     g.fillRoundedRectangle(b, 3.0f);
 
-    auto inner = b.reduced(3.0f, 1.0f);   // horizontal padding only; vertical tight
+    auto inner = b.reduced(6.0f, 4.0f);
     float w = inner.getWidth();
     float h = inner.getHeight();
     float x0 = inner.getX();
@@ -32,44 +53,182 @@ void CarrierEnvDisplay::paint(juce::Graphics& g)
     float sustain = *state.getRawParameterValue("ENV3_S");
     float release = *state.getRawParameterValue("ENV3_R");
 
-    float sustainHold = 0.25f;
-    float totalTime = attack + decay + sustainHold + release;
-    if (totalTime < 0.01f) totalTime = 0.01f;
-    float pps = w / totalTime;
-
     float baseline = y0 + h;
     float peakY = y0;
     float sustainY = y0 + h * (1.0f - sustain);
 
-    float cx = x0;
-    juce::Point<float> pStart  = { cx, baseline };
-    cx += attack * pps;
-    juce::Point<float> pPeak   = { cx, peakY };
-    cx += decay * pps;
-    juce::Point<float> pSusS   = { cx, sustainY };
-    cx += sustainHold * pps;
-    juce::Point<float> pSusE   = { cx, sustainY };
-    cx += release * pps;
-    juce::Point<float> pRelEnd = { cx, baseline };
+    // Budget: each segment gets a max pixel allocation, but collapses when param=0
+    float maxADR = w * (1.0f - kSusHold);          // total px for A+D+R
+    float budgetA = maxADR * (kMaxA / (kMaxA + kMaxD + kMaxR));  // proportional budgets
+    float budgetD = maxADR * (kMaxD / (kMaxA + kMaxD + kMaxR));
+    float budgetR = maxADR * (kMaxR / (kMaxA + kMaxD + kMaxR));
+    float susW    = w * kSusHold;
 
-    // Curve
+    // Cumulative positions — points can overlap when params are 0
+    float peakX     = x0 + paramToFrac(attack, kMaxA) * budgetA;
+    float susStartX = peakX + paramToFrac(decay, kMaxD) * budgetD;
+    float susEndX   = susStartX + susW;
+    float relEndX   = susEndX + paramToFrac(release, kMaxR) * budgetR;
+
+    juce::Point<float> pStart = { x0, baseline };
+    ptPeak    = { peakX, peakY };
+    ptSustain = { susStartX, sustainY };     // decay→sustain corner (draggable)
+    ptRelEnd  = { relEndX, baseline };
+    juce::Point<float> pSusEnd = { susEndX, sustainY };
+
+    // Filled area
+    juce::Path fill;
+    fill.startNewSubPath(pStart);
+    fill.lineTo(ptPeak);
+    fill.lineTo(ptSustain);
+    fill.lineTo(pSusEnd);
+    fill.lineTo(ptRelEnd);
+    fill.lineTo(ptRelEnd.x, baseline);
+    fill.lineTo(pStart.x, baseline);
+    fill.closeSubPath();
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.08f));
+    g.fillPath(fill);
+
+    // Curve stroke
     juce::Path path;
     path.startNewSubPath(pStart);
-    path.lineTo(pPeak);
-    path.lineTo(pSusS);
-    path.lineTo(pSusE);
-    path.lineTo(pRelEnd);
-
+    path.lineTo(ptPeak);
+    path.lineTo(ptSustain);
+    path.lineTo(pSusEnd);
+    path.lineTo(ptRelEnd);
     g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
     g.strokePath(path, juce::PathStrokeType(1.5f));
 
-    // Fill under curve
-    juce::Path fill(path);
-    fill.lineTo(pRelEnd.x, baseline);
-    fill.lineTo(pStart.x, baseline);
-    fill.closeSubPath();
-    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.06f));
-    g.fillPath(fill);
+    // Draggable points
+    auto accent = juce::Colour(ParasiteLookAndFeel::kAccentColor);
+    auto drawPoint = [&](juce::Point<float> pt, int idx) {
+        float r = (idx == dragPoint) ? 5.0f : (idx == hoveredPoint) ? 4.5f : 3.5f;
+        if (idx == dragPoint || idx == hoveredPoint)
+        {
+            g.setColour(accent.withAlpha(0.25f));
+            g.fillEllipse(pt.x - r - 2, pt.y - r - 2, (r + 2) * 2, (r + 2) * 2);
+        }
+        g.setColour(accent);
+        g.fillEllipse(pt.x - r, pt.y - r, r * 2, r * 2);
+    };
+
+    drawPoint(ptPeak, 0);      // Attack peak (horizontal = attack time)
+    drawPoint(ptSustain, 1);   // Decay/Sustain (horizontal = decay, vertical = sustain)
+    drawPoint(ptRelEnd, 2);    // Release end (horizontal = release time)
+}
+
+int CarrierEnvDisplay::pointAtPosition(juce::Point<float> pos) const
+{
+    if (ptPeak.getDistanceFrom(pos) < kHitRadius)    return 0;
+    if (ptSustain.getDistanceFrom(pos) < kHitRadius) return 1;
+    if (ptRelEnd.getDistanceFrom(pos) < kHitRadius)  return 2;
+    return -1;
+}
+
+void CarrierEnvDisplay::setParamNormalized(const juce::String& id, float newVal)
+{
+    if (auto* param = state.getParameter(id))
+    {
+        auto range = param->getNormalisableRange();
+        float clamped = juce::jlimit(range.start, range.end, newVal);
+        param->setValueNotifyingHost(range.convertTo0to1(clamped));
+    }
+}
+
+void CarrierEnvDisplay::mouseDown(const juce::MouseEvent& e)
+{
+    dragPoint = pointAtPosition(e.position);
+    if (dragPoint >= 0)
+    {
+        // Begin gesture for undo
+        if (dragPoint == 0)
+            state.getParameter("ENV3_A")->beginChangeGesture();
+        else if (dragPoint == 1)
+        {
+            state.getParameter("ENV3_D")->beginChangeGesture();
+            state.getParameter("ENV3_S")->beginChangeGesture();
+        }
+        else if (dragPoint == 2)
+            state.getParameter("ENV3_R")->beginChangeGesture();
+    }
+}
+
+void CarrierEnvDisplay::mouseDrag(const juce::MouseEvent& e)
+{
+    if (dragPoint < 0) return;
+
+    auto inner = getLocalBounds().toFloat().reduced(6.0f, 4.0f);
+    float w = inner.getWidth();
+    float h = inner.getHeight();
+    float x0 = inner.getX();
+    float relX = e.position.x - x0;
+    float relY = e.position.y - inner.getY();
+
+    float maxADR = w * (1.0f - kSusHold);
+    float budgetA = maxADR * (kMaxA / (kMaxA + kMaxD + kMaxR));
+    float budgetD = maxADR * (kMaxD / (kMaxA + kMaxD + kMaxR));
+    float budgetR = maxADR * (kMaxR / (kMaxA + kMaxD + kMaxR));
+
+    if (dragPoint == 0)
+    {
+        // Attack: pixel offset from x0 → param
+        float frac = juce::jlimit(0.0f, 1.0f, relX / budgetA);
+        setParamNormalized("ENV3_A", fracToParam(frac, kMaxA));
+    }
+    else if (dragPoint == 1)
+    {
+        // Decay: pixel offset from current peak position → param
+        float curAttack = *state.getRawParameterValue("ENV3_A");
+        float peakPx = paramToFrac(curAttack, kMaxA) * budgetA;
+        float dRelX = relX - peakPx;
+        float frac = juce::jlimit(0.0f, 1.0f, dRelX / budgetD);
+        setParamNormalized("ENV3_D", fracToParam(frac, kMaxD));
+
+        // Sustain: vertical position
+        float newSustain = juce::jlimit(0.0f, 1.0f, 1.0f - relY / h);
+        setParamNormalized("ENV3_S", newSustain);
+    }
+    else if (dragPoint == 2)
+    {
+        // Release: pixel offset from sustain end → param
+        float curAttack = *state.getRawParameterValue("ENV3_A");
+        float curDecay  = *state.getRawParameterValue("ENV3_D");
+        float susEndPx = paramToFrac(curAttack, kMaxA) * budgetA
+                       + paramToFrac(curDecay, kMaxD) * budgetD
+                       + w * kSusHold;
+        float rRelX = relX - susEndPx;
+        float frac = juce::jlimit(0.0f, 1.0f, rRelX / budgetR);
+        setParamNormalized("ENV3_R", fracToParam(frac, kMaxR));
+    }
+
+    repaint();
+}
+
+void CarrierEnvDisplay::mouseUp(const juce::MouseEvent&)
+{
+    if (dragPoint == 0)
+        state.getParameter("ENV3_A")->endChangeGesture();
+    else if (dragPoint == 1)
+    {
+        state.getParameter("ENV3_D")->endChangeGesture();
+        state.getParameter("ENV3_S")->endChangeGesture();
+    }
+    else if (dragPoint == 2)
+        state.getParameter("ENV3_R")->endChangeGesture();
+
+    dragPoint = -1;
+}
+
+void CarrierEnvDisplay::mouseMove(const juce::MouseEvent& e)
+{
+    int newHover = pointAtPosition(e.position);
+    if (newHover != hoveredPoint)
+    {
+        hoveredPoint = newHover;
+        setMouseCursor(hoveredPoint >= 0 ? juce::MouseCursor::DraggingHandCursor
+                                         : juce::MouseCursor::NormalCursor);
+        repaint();
+    }
 }
 
 // ============================================================

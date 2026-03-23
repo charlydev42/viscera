@@ -14,6 +14,18 @@ PitchEnvDisplay::PitchEnvDisplay(juce::AudioProcessorValueTreeState& apvts)
 
 void PitchEnvDisplay::timerCallback() { repaint(); }
 
+// Same cumulative layout as CarrierEnvDisplay
+static constexpr float kPMaxA   = 5.0f;
+static constexpr float kPMaxD   = 5.0f;
+static constexpr float kPSusHold = 0.14f;
+static constexpr float kPMaxR   = 8.0f;
+
+static float penvParamToFrac(float val, float maxV)
+{
+    if (maxV <= 0.0f) return 0.0f;
+    return std::sqrt(juce::jlimit(0.0f, 1.0f, val / maxV));
+}
+
 void PitchEnvDisplay::paint(juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat().reduced(1.0f);
@@ -23,7 +35,7 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
 
     bool enabled = *state.getRawParameterValue("PENV_ON") > 0.5f;
 
-    auto inner = b.reduced(3.0f);
+    auto inner = b.reduced(6.0f, 4.0f);
     float w = inner.getWidth();
     float h = inner.getHeight();
     float x0 = inner.getX();
@@ -49,25 +61,40 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
     float release = *state.getRawParameterValue("PENV_R");
     float amount  = *state.getRawParameterValue("PENV_AMT");
 
-    float sustainHold = 0.3f;
-    float totalTime = attack + decay + sustainHold + release;
-    if (totalTime < 0.01f) totalTime = 0.01f;
-    float pps = w / totalTime;
     float ampScale = (h * 0.45f) / 96.0f;
-
     float peakY = baseline - amount * ampScale;
     float sustainY = baseline - amount * sustain * ampScale;
 
-    float cx = x0;
-    juce::Point<float> pStart  = { cx, baseline };
-    cx += attack * pps;
-    juce::Point<float> pPeak   = { cx, peakY };
-    cx += decay * pps;
-    juce::Point<float> pSusS   = { cx, sustainY };
-    cx += sustainHold * pps;
-    juce::Point<float> pSusE   = { cx, sustainY };
-    cx += release * pps;
-    juce::Point<float> pRelEnd = { cx, baseline };
+    // Cumulative positions — points overlap when params are 0
+    float maxADR  = w * (1.0f - kPSusHold);
+    float budgetA = maxADR * (kPMaxA / (kPMaxA + kPMaxD + kPMaxR));
+    float budgetD = maxADR * (kPMaxD / (kPMaxA + kPMaxD + kPMaxR));
+    float budgetR = maxADR * (kPMaxR / (kPMaxA + kPMaxD + kPMaxR));
+    float susW    = w * kPSusHold;
+
+    float peakX     = x0 + penvParamToFrac(attack, kPMaxA) * budgetA;
+    float susStartX = peakX + penvParamToFrac(decay, kPMaxD) * budgetD;
+    float susEndX   = susStartX + susW;
+    float relEndX   = susEndX + penvParamToFrac(release, kPMaxR) * budgetR;
+
+    juce::Point<float> pStart  = { x0, baseline };
+    juce::Point<float> pPeak   = { peakX, peakY };
+    juce::Point<float> pSusS   = { susStartX, sustainY };
+    juce::Point<float> pSusE   = { susEndX, sustainY };
+    juce::Point<float> pRelEnd = { relEndX, baseline };
+
+    // Fill
+    juce::Path fill;
+    fill.startNewSubPath(pStart);
+    fill.lineTo(pPeak);
+    fill.lineTo(pSusS);
+    fill.lineTo(pSusE);
+    fill.lineTo(pRelEnd);
+    fill.lineTo(pRelEnd.x, baseline);
+    fill.lineTo(pStart.x, baseline);
+    fill.closeSubPath();
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.06f));
+    g.fillPath(fill);
 
     // Curve
     juce::Path path;
@@ -76,18 +103,8 @@ void PitchEnvDisplay::paint(juce::Graphics& g)
     path.lineTo(pSusS);
     path.lineTo(pSusE);
     path.lineTo(pRelEnd);
-
     g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor));
     g.strokePath(path, juce::PathStrokeType(1.5f));
-
-    // Fill
-    juce::Path fill(path);
-    fill.lineTo(pRelEnd.x, baseline);
-    fill.lineTo(pStart.x, baseline);
-    fill.closeSubPath();
-    g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.06f));
-    g.fillPath(fill);
-
 }
 
 // ============================================================
