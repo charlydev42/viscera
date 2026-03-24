@@ -123,6 +123,7 @@ void ParasiteProcessor::cacheParameterPointers()
     voiceParams.ichor      = apvts.getRawParameterValue("ICHOR");
     voiceParams.plasma     = apvts.getRawParameterValue("PLASMA");
     voiceParams.macroTime  = apvts.getRawParameterValue("MACRO_TIME");
+    voiceParams.octave     = apvts.getRawParameterValue("OCTAVE");
 
     // FX on/off pointers
     dlyOnParam   = apvts.getRawParameterValue("DLY_ON");
@@ -476,6 +477,7 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("MACRO_TIME", "Time",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+        g->addChild(std::make_unique<juce::AudioParameterInt>("OCTAVE", "Octave", -4, 4, 0));
         groups.push_back(std::move(g));
     }
 

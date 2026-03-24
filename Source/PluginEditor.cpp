@@ -93,6 +93,34 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     addAndMakeVisible(algoLabel);
     updateAlgoLabel();
 
+    // Global octave selector (< Oct 0 >)
+    octLeftBtn.setButtonText("<");
+    octLeftBtn.onClick = [this] {
+        auto* p = proc.apvts.getParameter("OCTAVE");
+        int cur = static_cast<int>(p->convertFrom0to1(p->getValue()));
+        if (cur > -4) {
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(cur - 1)));
+            updateOctaveLabel();
+        }
+    };
+    addAndMakeVisible(octLeftBtn);
+
+    octRightBtn.setButtonText(">");
+    octRightBtn.onClick = [this] {
+        auto* p = proc.apvts.getParameter("OCTAVE");
+        int cur = static_cast<int>(p->convertFrom0to1(p->getValue()));
+        if (cur < 4) {
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(cur + 1)));
+            updateOctaveLabel();
+        }
+    };
+    addAndMakeVisible(octRightBtn);
+
+    octLabel.setJustificationType(juce::Justification::centred);
+    octLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::plain));
+    addAndMakeVisible(octLabel);
+    updateOctaveLabel();
+
     // Wire randomize to PresetBrowser's ? button
     presetBrowser.onRandomize = [this] { randomizeParams(); };
 
@@ -297,6 +325,9 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     algoLeftBtn.setPaintingIsUnclipped(true);
     algoRightBtn.setPaintingIsUnclipped(true);
     algoLabel.setPaintingIsUnclipped(true);
+    octLeftBtn.setPaintingIsUnclipped(true);
+    octRightBtn.setPaintingIsUnclipped(true);
+    octLabel.setPaintingIsUnclipped(true);
     menuBtn.setPaintingIsUnclipped(true);
     pageToggleBtn.setPaintingIsUnclipped(true);
 
@@ -317,6 +348,7 @@ ParasiteEditor::~ParasiteEditor()
 void ParasiteEditor::timerCallback()
 {
     updateAlgoLabel();
+    updateOctaveLabel();
     proc.getUndoManager().beginNewTransaction();
 
     // Keep macro label colors in sync with theme
@@ -503,6 +535,13 @@ void ParasiteEditor::updateAlgoLabel()
     int idx = static_cast<int>(proc.apvts.getRawParameterValue("FM_ALGO")->load());
     if (idx >= 0 && idx < algoNames.size())
         algoLabel.setText(algoNames[idx], juce::dontSendNotification);
+}
+
+void ParasiteEditor::updateOctaveLabel()
+{
+    int oct = static_cast<int>(proc.apvts.getRawParameterValue("OCTAVE")->load());
+    juce::String text = "Oct " + juce::String(oct);
+    octLabel.setText(text, juce::dontSendNotification);
 }
 
 void ParasiteEditor::dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&)
@@ -795,6 +834,11 @@ void ParasiteEditor::resized()
     algoLeftBtn.setBounds(topBar.removeFromLeft(22));
     algoLabel.setBounds(topBar.removeFromLeft(58));
     algoRightBtn.setBounds(topBar.removeFromLeft(22));
+    topBar.removeFromLeft(sp);
+
+    octLeftBtn.setBounds(topBar.removeFromLeft(18));
+    octLabel.setBounds(topBar.removeFromLeft(42));
+    octRightBtn.setBounds(topBar.removeFromLeft(18));
     topBar.removeFromLeft(sp);
 
     menuBtn.setBounds(topBar.removeFromRight(40));

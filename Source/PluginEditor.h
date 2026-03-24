@@ -66,6 +66,11 @@ private:
     juce::StringArray algoNames;
     void updateAlgoLabel();
 
+    // Global octave selector (top bar, next to algo)
+    juce::TextButton octLeftBtn, octRightBtn;
+    juce::Label octLabel;
+    void updateOctaveLabel();
+
     // Randomize logic (wired to PresetBrowser's ? button)
     void randomizeParams();
 

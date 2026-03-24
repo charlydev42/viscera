@@ -82,7 +82,9 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     stealFadeSamples = 0;  // cancel any in-progress steal fade
 
     // Convertir note MIDI → fréquence : f = 440 × 2^((note-69)/12)
-    noteFreqHz = 440.0 * std::pow(2.0, (midiNoteNumber - 69) / 12.0);
+    // Global octave shift applied here (saved per preset, like Serum)
+    int octaveShift = static_cast<int>(params.octave ? params.octave->load() : 0.0f);
+    noteFreqHz = 440.0 * std::pow(2.0, (midiNoteNumber - 69 + octaveShift * 12) / 12.0);
     targetNoteFreq = noteFreqHz;
 
     // Portamento : glide en mono si porta > 0

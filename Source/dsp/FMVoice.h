@@ -173,6 +173,7 @@ struct VoiceParams
     std::atomic<float>* ichor     = nullptr; // Inharmonicity offset (0=harmonic, 1=metallic)
     std::atomic<float>* plasma    = nullptr; // FM depth multiplier (0=pure, 1=full FM)
     std::atomic<float>* macroTime = nullptr; // Envelope time scale (0.5=1x, 0=0.25x, 1=4x)
+    std::atomic<float>* octave    = nullptr; // Global octave shift (−4 to +4)
 
     // Global LFO modulation sums (written by processor, read by voice)
     std::atomic<float> lfoModPitch   { 0.0f };
