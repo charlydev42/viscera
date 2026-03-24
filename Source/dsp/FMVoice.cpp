@@ -95,9 +95,18 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     if (portaTime < 0.001f || currentFreq <= 0.0)
         currentFreq = noteFreqHz;
 
-    // portamentoRate: 0 = instant, ~1 = slow glide. Map porta 0-1 to rate.
-    portamentoRate = (portaTime > 0.001f)
-        ? std::pow(0.999, 1.0 / (1.0 + portaTime * 200.0)) : 0.0;
+    // Portamento: exponential smoothing with time in seconds.
+    // portaTime 0-1 maps to 0-2 seconds glide time.
+    // Coefficient = exp(-1 / (glideTimeSec * sampleRate)) for proper time constant.
+    if (portaTime > 0.001f)
+    {
+        double glideTimeSec = static_cast<double>(portaTime) * 2.0; // 0-1 → 0-2s
+        portamentoRate = std::exp(-1.0 / (glideTimeSec * sampleRate));
+    }
+    else
+    {
+        portamentoRate = 0.0;
+    }
 
     // Pitch wheel
     pitchWheelMoved(currentPitchWheelPosition);
@@ -141,20 +150,22 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
 
 void FMVoice::stopNote(float /*velocity*/, bool allowTailOff)
 {
-    if (allowTailOff)
+    // Operator-style noteOff: if sustain ≈ 0, skip noteOff and let the
+    // decay run its natural course.  This prevents clicks when releasing
+    // during the decay phase (kicks, plucks, percussion).
+    // When sustain > 0, noteOff triggers the normal release phase.
+    float env1Sus = params.env1S->load();
+    float env2Sus = params.env2S->load();
+    float env3Sus = params.env3S->load();
+
+    if (env1Sus > 0.01f) env1.noteOff();
+    if (env2Sus > 0.01f) env2.noteOff();
+    if (env3Sus > 0.01f) env3.noteOff();
+    // pitchEnv never responds to noteOff (always completes A→D→S)
+
+    if (!allowTailOff)
     {
-        env1.noteOff();
-        env2.noteOff();
-        env3.noteOff();
-        pitchEnv.noteOff();
-    }
-    else
-    {
-        // Voice stealing: put envelopes in release + short fade-out
-        env1.noteOff();
-        env2.noteOff();
-        env3.noteOff();
-        pitchEnv.noteOff();
+        // Voice stealing: short fade-out
         stealFadeSamples = stealFadeLength;
     }
 }
@@ -297,25 +308,25 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
     // Mettre à jour les paramètres d'enveloppe (+ LFO modulation + time macro)
     env1.setParameters(
-        std::max(0.001f, (params.env1A->load() + params.lfoModEnv1A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
-        std::max(0.001f, (params.env1D->load() + params.lfoModEnv1D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.env1A->load() + params.lfoModEnv1A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.env1D->load() + params.lfoModEnv1D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env1S->load() + params.lfoModEnv1S.load(std::memory_order_relaxed)),
-        std::max(0.001f, (params.env1R->load() + params.lfoModEnv1R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
+        std::max(0.0f, (params.env1R->load() + params.lfoModEnv1R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
     env2.setParameters(
-        std::max(0.001f, (params.env2A->load() + params.lfoModEnv2A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
-        std::max(0.001f, (params.env2D->load() + params.lfoModEnv2D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.env2A->load() + params.lfoModEnv2A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.env2D->load() + params.lfoModEnv2D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env2S->load() + params.lfoModEnv2S.load(std::memory_order_relaxed)),
-        std::max(0.001f, (params.env2R->load() + params.lfoModEnv2R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
+        std::max(0.0f, (params.env2R->load() + params.lfoModEnv2R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
     env3.setParameters(
-        std::max(0.001f, (params.env3A->load() + params.lfoModEnv3A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
-        std::max(0.001f, (params.env3D->load() + params.lfoModEnv3D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.env3A->load() + params.lfoModEnv3A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.env3D->load() + params.lfoModEnv3D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env3S->load() + params.lfoModEnv3S.load(std::memory_order_relaxed)),
-        std::max(0.001f, (params.env3R->load() + params.lfoModEnv3R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
+        std::max(0.0f, (params.env3R->load() + params.lfoModEnv3R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
     pitchEnv.setParameters(
-        std::max(0.001f, (params.pitchEnvA->load() + params.lfoModPEnvA.load(std::memory_order_relaxed) * 5.0f) * timeMul),
-        std::max(0.001f, (params.pitchEnvD->load() + params.lfoModPEnvD.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.pitchEnvA->load() + params.lfoModPEnvA.load(std::memory_order_relaxed) * 5.0f) * timeMul),
+        std::max(0.0f, (params.pitchEnvD->load() + params.lfoModPEnvD.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.pitchEnvS->load() + params.lfoModPEnvS.load(std::memory_order_relaxed)),
-        std::max(0.001f, (params.pitchEnvR->load() + params.lfoModPEnvR.load(std::memory_order_relaxed) * 8.0f) * timeMul));
+        std::max(0.0f, (params.pitchEnvR->load() + params.lfoModPEnvR.load(std::memory_order_relaxed) * 8.0f) * timeMul));
 
     // HemoFold (wavefolder) + global LFO fold mod
     float foldAmt = juce::jlimit(0.0f, 1.0f, dispAmount + gLfoModFold);
@@ -489,16 +500,16 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float velGain = params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity;
         if (noiseMix > 0.0001f)
         {
-            // xorshift32 white noise: stereo (independent L/R samples)
-            noiseSeed ^= noiseSeed << 13;
-            noiseSeed ^= noiseSeed >> 17;
-            noiseSeed ^= noiseSeed << 5;
-            float noiseL = static_cast<float>(static_cast<int32_t>(noiseSeed))
+            // xorshift32 white noise: decorrelated L/R (independent seeds)
+            noiseSeedL ^= noiseSeedL << 13;
+            noiseSeedL ^= noiseSeedL >> 17;
+            noiseSeedL ^= noiseSeedL << 5;
+            float noiseL = static_cast<float>(static_cast<int32_t>(noiseSeedL))
                            / 2147483648.0f;
-            noiseSeed ^= noiseSeed << 13;
-            noiseSeed ^= noiseSeed >> 17;
-            noiseSeed ^= noiseSeed << 5;
-            float noiseR = static_cast<float>(static_cast<int32_t>(noiseSeed))
+            noiseSeedR ^= noiseSeedR << 13;
+            noiseSeedR ^= noiseSeedR >> 17;
+            noiseSeedR ^= noiseSeedR << 5;
+            float noiseR = static_cast<float>(static_cast<int32_t>(noiseSeedR))
                            / 2147483648.0f;
             outputL = (carrierOutL * (1.0f - noiseMix) + noiseL * noiseMix)
                       * env3Val * velGain;

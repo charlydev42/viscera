@@ -82,30 +82,23 @@ bool CloudPresetManager::hasValidToken() const
 
 bool CloudPresetManager::ensureToken()
 {
-    if (!isTokenExpired()) { fprintf(stderr, "[CloudSync] token still valid\n"); return true; }
+    if (!isTokenExpired()) return true;
 
-    fprintf(stderr, "[CloudSync] token expired, trying activation token...\n");
     // Try activation token first
     auto seed = license_.getActivationToken();
-    fprintf(stderr, "[CloudSync] activation token: %s\n", seed.isEmpty() ? "EMPTY" : "present");
     if (seed.isNotEmpty())
     {
         storeToken(seed);
         if (!isTokenExpired())
         {
-            fprintf(stderr, "[CloudSync] activation token is valid\n");
             saveTokenToCache();
             return true;
         }
-        fprintf(stderr, "[CloudSync] activation token also expired\n");
     }
 
     // Refresh via /auth/token-from-license
-    fprintf(stderr, "[CloudSync] refreshing via /auth/token-from-license...\n");
     refreshTokenSync();
-    auto ok = !isTokenExpired();
-    fprintf(stderr, "[CloudSync] refresh result: %s\n", ok ? "OK" : "FAILED");
-    return ok;
+    return !isTokenExpired();
 }
 
 void CloudPresetManager::refreshTokenSync()
@@ -137,7 +130,6 @@ void CloudPresetManager::refreshTokenSync()
             .withConnectionTimeoutMs(kHttpTimeoutMs)
             .withStatusCode(&statusCode));
 
-    fprintf(stderr, "[CloudSync] token-from-license response: HTTP %d\n", statusCode);
     if (statusCode == 200 && stream)
     {
         auto respBody = stream->readEntireStreamAsString();
@@ -147,13 +139,7 @@ void CloudPresetManager::refreshTokenSync()
         {
             storeToken(token);
             saveTokenToCache();
-            fprintf(stderr, "[CloudSync] got fresh token\n");
         }
-    }
-    else if (stream)
-    {
-        fprintf(stderr, "[CloudSync] token refresh error: %s\n",
-                stream->readEntireStreamAsString().toRawUTF8());
     }
 }
 
@@ -344,35 +330,28 @@ void CloudPresetManager::deletePreset(const juce::String& uuid)
 
 void CloudPresetManager::syncAll()
 {
-    fprintf(stderr, "[CloudSync] syncAll() called, licensed=%d\n", license_.isLicensed());
     if (!license_.isLicensed()) return;
-    if (syncing_.exchange(true)) { fprintf(stderr, "[CloudSync] already syncing, skip\n"); return; }
+    if (syncing_.exchange(true)) return; // already syncing
 
     juce::Thread::launch([this]
     {
-        fprintf(stderr, "[CloudSync] worker thread started\n");
         performSync();
         syncing_.store(false);
-        fprintf(stderr, "[CloudSync] worker thread done\n");
     });
 }
 
 void CloudPresetManager::performSync()
 {
-    fprintf(stderr, "[CloudSync] performSync() — ensureToken...\n");
     if (!ensureToken())
     {
-        fprintf(stderr, "[CloudSync] ensureToken FAILED\n");
         juce::MessageManager::callAsync([this] {
             listeners_.call(&Listener::cloudSyncCompleted, false);
         });
         return;
     }
-    fprintf(stderr, "[CloudSync] token OK\n");
 
     // Build local preset array
     auto localPresets = buildLocalPresetArray();
-    fprintf(stderr, "[CloudSync] %d local presets\n", localPresets.isArray() ? localPresets.getArray()->size() : 0);
 
     // Include deletion log
     auto deletions = loadDeletionLog();
@@ -399,21 +378,17 @@ void CloudPresetManager::performSync()
     reqBody->setProperty("presets", localPresets);
     auto json = juce::JSON::toString(juce::var(reqBody), true);
 
-    fprintf(stderr, "[CloudSync] POSTing to /presets/sync (%d bytes)\n", json.length());
     auto resp = httpRequest("POST", "/presets/sync", json);
-    fprintf(stderr, "[CloudSync] sync response: HTTP %d\n", resp.statusCode);
 
     if (resp.statusCode == 401)
     {
-        fprintf(stderr, "[CloudSync] 401 — refreshing token and retrying\n");
         refreshTokenSync();
         resp = httpRequest("POST", "/presets/sync", json);
-        fprintf(stderr, "[CloudSync] retry response: HTTP %d\n", resp.statusCode);
     }
 
     if (resp.statusCode != 200)
     {
-        fprintf(stderr, "[CloudSync] FAILED — body: %s\n", resp.body.toRawUTF8());
+        DBG("Cloud sync failed (HTTP " + juce::String(resp.statusCode) + ")");
         juce::MessageManager::callAsync([this] {
             listeners_.call(&Listener::cloudSyncCompleted, false);
         });
@@ -425,15 +400,11 @@ void CloudPresetManager::performSync()
 
     if (!serverPresets.isArray())
     {
-        fprintf(stderr, "[CloudSync] response has no presets array\n");
         juce::MessageManager::callAsync([this] {
             listeners_.call(&Listener::cloudSyncCompleted, false);
         });
         return;
     }
-
-    fprintf(stderr, "[CloudSync] SUCCESS — %d presets from server\n",
-            serverPresets.getArray()->size());
 
     // Apply on message thread
     juce::MessageManager::callAsync([this, serverPresets] {

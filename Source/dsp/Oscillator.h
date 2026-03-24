@@ -71,8 +71,8 @@ public:
         double driftOffset = 0.0;
         if (driftAmount > 0.0f)
         {
-            // Drift LFO frequency wanders (0.05–5 Hz) — more aggressive random walk
-            driftLFOFreq += (driftRNG() * 2.0 - 1.0) / sr; // random walk on freq
+            // Drift LFO frequency wanders (0.05–5 Hz) — sample-rate independent random walk
+            driftLFOFreq += (driftRNG() * 2.0 - 1.0) * (44100.0 / sr) / sr;
             driftLFOFreq = std::max(0.05, std::min(driftLFOFreq, 5.0));
 
             driftLFOPhase += driftLFOFreq / sr;

@@ -17,6 +17,12 @@ public:
     // Force GL context to re-render (call after dark mode switch)
     void triggerGLRepaint() { glContext.triggerRepaint(); }
 
+    // Suspend/resume GL rendering when not visible (saves GPU/CPU)
+    void visibilityChanged() override
+    {
+        glContext.setContinuousRepainting(isVisible());
+    }
+
     // OpenGLRenderer callbacks (called on GL thread)
     void newOpenGLContextCreated() override;
     void renderOpenGL() override;

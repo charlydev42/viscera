@@ -261,7 +261,13 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
 
     startTimerHz(5);
 
+    // Only grab keyboard focus in standalone (computer keyboard → MIDI).
+    // In VST/AU, let the DAW handle keyboard input (Ableton's computer MIDI, shortcuts, etc.)
+#if JUCE_STANDALONE_APPLICATION
     setWantsKeyboardFocus(true);
+#else
+    setWantsKeyboardFocus(false);
+#endif
     setSize(920, 615);
 
     // Start on main (perform) page

@@ -16,7 +16,7 @@ public:
     {
         setSliderSnapsToMousePosition(false);
         setMouseDragSensitivity(200);
-        setWantsKeyboardFocus(true);
+        setWantsKeyboardFocus(false);
     }
     ~ModSlider() override { stopTimer(); }
 

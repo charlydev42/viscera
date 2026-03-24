@@ -24,7 +24,9 @@ public:
     }
 
     void noteOn() noexcept  { adsr.noteOn(); }
+
     void noteOff() noexcept { adsr.noteOff(); }
+
     void reset() noexcept   { adsr.reset(); }
 
     float tick() noexcept

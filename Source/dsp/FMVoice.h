@@ -321,8 +321,11 @@ private:
     int noteFadeInSamples = 0;
     int noteFadeInLength  = 64;   // set properly in prepareToPlay
 
+
     // White noise generator (xorshift32)
-    uint32_t noiseSeed = 0x12345678;
+    // Decorrelated L/R noise (independent seeds for true stereo)
+    uint32_t noiseSeedL = 0x12345678;
+    uint32_t noiseSeedR = 0x9ABCDEF0;
 
     double sampleRate = 44100.0;
 };

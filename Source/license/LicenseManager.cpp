@@ -318,6 +318,21 @@ juce::String LicenseManager::canonicalJson(const juce::var& value)
     if (value.isVoid() || value.isUndefined())
         return {};
 
+    // Check array BEFORE object — juce::var arrays can satisfy isObject() in some cases
+    if (value.isArray())
+    {
+        auto* arr = value.getArray();
+        if (!arr) return "[]";
+        juce::String result = "[";
+        for (int i = 0; i < arr->size(); ++i)
+        {
+            if (i > 0) result += ",";
+            result += canonicalJson((*arr)[i]);
+        }
+        result += "]";
+        return result;
+    }
+
     if (value.isObject())
     {
         auto* obj = value.getDynamicObject();
@@ -333,7 +348,6 @@ juce::String LicenseManager::canonicalJson(const juce::var& value)
         for (int i = 0; i < keys.size(); ++i)
         {
             if (i > 0) result += ",";
-            // Key (always a string)
             result += "\"" + keys[i] + "\":" + canonicalJson(obj->getProperty(keys[i]));
         }
         result += "}";
@@ -350,19 +364,6 @@ juce::String LicenseManager::canonicalJson(const juce::var& value)
              .replace("\r", "\\r")
              .replace("\t", "\\t");
         return "\"" + s + "\"";
-    }
-
-    if (value.isArray())
-    {
-        auto* arr = value.getArray();
-        juce::String result = "[";
-        for (int i = 0; i < arr->size(); ++i)
-        {
-            if (i > 0) result += ",";
-            result += canonicalJson((*arr)[i]);
-        }
-        result += "]";
-        return result;
     }
 
     if (value.isBool())
