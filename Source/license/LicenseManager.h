@@ -10,6 +10,8 @@
 #pragma once
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
+#include <atomic>
+#include <memory>
 
 namespace bb {
 
@@ -78,6 +80,11 @@ private:
     int64_t     lastVerified_ = 0;
 
     juce::ListenerList<Listener> listeners_;
+
+    // Thread safety — prevent use-after-free from detached threads
+    std::atomic<bool> shuttingDown_{false};
+    std::atomic<int> pendingThreads_{0};
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LicenseManager)
 };

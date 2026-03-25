@@ -173,7 +173,8 @@ void CloudPresetManager::saveTokenToCache() const
 
     auto file = getTokenCacheFile();
     file.getParentDirectory().createDirectory();
-    file.replaceWithData(encrypted.getData(), encrypted.getSize());
+    if (!file.replaceWithData(encrypted.getData(), encrypted.getSize()))
+        DBG("CloudPresetManager: failed to save token cache to " + file.getFullPathName());
 }
 
 void CloudPresetManager::loadTokenFromCache()
@@ -245,9 +246,13 @@ void CloudPresetManager::uploadPreset(const juce::String& uuid)
 {
     if (uuid.isEmpty() || !license_.isLicensed()) return;
 
-    juce::Thread::launch([this, uuid]
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, uuid, alive]
     {
-        if (!ensureToken()) return;
+        if (!ensureToken()) { --pendingThreads_; return; }
+        if (shuttingDown_.load()) { --pendingThreads_; return; }
 
         // Read the preset file to get its current data
         auto dir = ParasiteProcessor::getUserPresetsDir();
@@ -266,11 +271,10 @@ void CloudPresetManager::uploadPreset(const juce::String& uuid)
             body->setProperty("category", xml->getStringAttribute("category", "User"));
             body->setProperty("pack",     xml->getStringAttribute("pack", "User"));
             body->setProperty("data",     xml->toString());
-            body->setProperty("version",  xml->getIntAttribute("version", 1));
-            body->setProperty("updatedAt", xml->getStringAttribute("updatedAt",
-                juce::Time::getCurrentTime().toISO8601(true)));
 
             auto json = juce::JSON::toString(juce::var(body), true);
+
+            if (shuttingDown_.load()) { --pendingThreads_; return; }
 
             // Try create first
             auto resp = httpRequest("POST", "/presets", json);
@@ -282,6 +286,7 @@ void CloudPresetManager::uploadPreset(const juce::String& uuid)
 
             if (resp.statusCode == 401)
             {
+                if (shuttingDown_.load()) { --pendingThreads_; return; }
                 // Token expired — refresh and retry
                 refreshTokenSync();
                 resp = httpRequest("POST", "/presets", json);
@@ -294,6 +299,8 @@ void CloudPresetManager::uploadPreset(const juce::String& uuid)
 
             break;
         }
+
+        --pendingThreads_;
     });
 }
 
@@ -307,20 +314,27 @@ void CloudPresetManager::deletePreset(const juce::String& uuid)
 
     logDeletion(uuid);
 
-    juce::Thread::launch([this, uuid]
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, uuid, alive]
     {
-        if (!ensureToken()) return;
+        if (!ensureToken()) { --pendingThreads_; return; }
+        if (shuttingDown_.load()) { --pendingThreads_; return; }
 
         auto resp = httpRequest("DELETE", "/presets/" + uuid);
 
         if (resp.statusCode == 401)
         {
+            if (shuttingDown_.load()) { --pendingThreads_; return; }
             refreshTokenSync();
             resp = httpRequest("DELETE", "/presets/" + uuid);
         }
 
         if (resp.statusCode != 204 && resp.statusCode != 404)
             DBG("Cloud delete failed for " + uuid + " (HTTP " + juce::String(resp.statusCode) + ")");
+
+        --pendingThreads_;
     });
 }
 
@@ -333,22 +347,31 @@ void CloudPresetManager::syncAll()
     if (!license_.isLicensed()) return;
     if (syncing_.exchange(true)) return; // already syncing
 
-    juce::Thread::launch([this]
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, alive]
     {
         performSync();
         syncing_.store(false);
+        --pendingThreads_;
     });
 }
 
 void CloudPresetManager::performSync()
 {
+    auto alive = alive_;
+
     if (!ensureToken())
     {
-        juce::MessageManager::callAsync([this] {
+        juce::MessageManager::callAsync([this, alive] {
+            if (!alive->load()) return;
             listeners_.call(&Listener::cloudSyncCompleted, false);
         });
         return;
     }
+
+    if (shuttingDown_.load()) return;
 
     // Build local preset array
     auto localPresets = buildLocalPresetArray();
@@ -382,14 +405,18 @@ void CloudPresetManager::performSync()
 
     if (resp.statusCode == 401)
     {
+        if (shuttingDown_.load()) return;
         refreshTokenSync();
         resp = httpRequest("POST", "/presets/sync", json);
     }
 
+    if (shuttingDown_.load()) return;
+
     if (resp.statusCode != 200)
     {
         DBG("Cloud sync failed (HTTP " + juce::String(resp.statusCode) + ")");
-        juce::MessageManager::callAsync([this] {
+        juce::MessageManager::callAsync([this, alive] {
+            if (!alive->load()) return;
             listeners_.call(&Listener::cloudSyncCompleted, false);
         });
         return;
@@ -400,14 +427,16 @@ void CloudPresetManager::performSync()
 
     if (!serverPresets.isArray())
     {
-        juce::MessageManager::callAsync([this] {
+        juce::MessageManager::callAsync([this, alive] {
+            if (!alive->load()) return;
             listeners_.call(&Listener::cloudSyncCompleted, false);
         });
         return;
     }
 
     // Apply on message thread
-    juce::MessageManager::callAsync([this, serverPresets] {
+    juce::MessageManager::callAsync([this, alive, serverPresets] {
+        if (!alive->load()) return;
         applyServerPresets(serverPresets);
         clearDeletionLog();
         proc_.buildPresetRegistry();
@@ -569,24 +598,8 @@ void CloudPresetManager::writePresetToDisk(const juce::String& uuid,
         }
     }
 
-    xml->writeTo(file);
-}
-
-void CloudPresetManager::deletePresetFromDiskByUuid(const juce::String& uuid)
-{
-    auto dir = ParasiteProcessor::getUserPresetsDir();
-    juce::Array<juce::File> files;
-    files.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.prst"));
-
-    for (auto& f : files)
-    {
-        auto xml = juce::parseXML(f);
-        if (xml && xml->getStringAttribute("uuid") == uuid)
-        {
-            f.deleteFile();
-            return;
-        }
-    }
+    if (!xml->writeTo(file))
+        DBG("CloudPresetManager: failed to write preset to " + file.getFullPathName());
 }
 
 // ── Deletion log ────────────────────────────────────────────────────

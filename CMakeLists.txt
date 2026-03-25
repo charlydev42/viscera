@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22...3.31)
 project(Parasite VERSION 1.0.0 LANGUAGES C CXX)
 
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build architectures")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -27,6 +30,7 @@ juce_add_plugin(Parasite
     COPY_PLUGIN_AFTER_BUILD  TRUE
     FORMATS                  VST3 AU Standalone
     PRODUCT_NAME             "Parasite"
+    BUNDLE_ID                "com.thunderdolphin.parasite"
     AU_MAIN_TYPE             kAudioUnitType_MusicDevice
 )
 
@@ -199,6 +203,20 @@ target_compile_definitions(Parasite
         JUCE_DISPLAY_SPLASH_SCREEN=0
 )
 
+# --- Security compiler flags ---
+if(APPLE)
+    target_compile_options(Parasite PRIVATE
+        -fstack-protector-strong
+    )
+endif()
+
+# --- Hardened Runtime (Xcode) ---
+if(APPLE)
+    set_target_properties(Parasite PROPERTIES
+        XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES
+    )
+endif()
+
 # =============================================================================
 # Test suite (opt-in: cmake -DPARASITE_BUILD_TESTS=ON)
 # =============================================================================
@@ -249,6 +267,8 @@ if(PARASITE_BUILD_TESTS)
         juce::juce_audio_utils
         juce::juce_dsp
         juce::juce_events
+        "-framework IOKit"
+        "-framework Security"
     )
 
     target_compile_definitions(ParasiteTests PRIVATE

@@ -819,7 +819,10 @@ void ParasiteEditor::resized()
 {
     // License overlay covers entire window
     if (licenseOverlay.isVisible())
+    {
         licenseOverlay.setBounds(getLocalBounds());
+        licenseOverlay.toFront(false);
+    }
 
     auto area = getLocalBounds().reduced(4);
     titleLabel.setBounds(0, 0, 0, 0); // hidden
@@ -1087,6 +1090,8 @@ void ParasiteEditor::parentHierarchyChanged()
 
 bool ParasiteEditor::keyPressed(const juce::KeyPress& key)
 {
+    if (licenseOverlay.isVisible()) return false;
+
     // Redo: Cmd+Shift+Z (Mac) / Ctrl+Shift+Z (PC) — check before undo
     if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier
                                     | juce::ModifierKeys::shiftModifier, 0))
@@ -1123,6 +1128,8 @@ bool ParasiteEditor::keyPressed(const juce::KeyPress& key)
 
 bool ParasiteEditor::keyStateChanged(bool /*isKeyDown*/)
 {
+    if (licenseOverlay.isVisible()) return false;
+
     bool handled = false;
 
     for (auto& m : kNoteMapping)

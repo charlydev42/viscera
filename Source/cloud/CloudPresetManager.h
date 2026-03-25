@@ -8,6 +8,8 @@
 //
 #pragma once
 #include <juce_core/juce_core.h>
+#include <atomic>
+#include <memory>
 
 namespace bb { class LicenseManager; }
 class ParasiteProcessor;
@@ -16,7 +18,13 @@ class CloudPresetManager
 {
 public:
     CloudPresetManager(ParasiteProcessor& proc, bb::LicenseManager& license);
-    ~CloudPresetManager() = default;
+    ~CloudPresetManager()
+    {
+        alive_->store(false);
+        shuttingDown_.store(true);
+        for (int i = 0; i < 120 && pendingThreads_.load() > 0; ++i)
+            juce::Thread::sleep(100);
+    }
 
     // ── Sync triggers ──────────────────────────────────────────────
     void syncAll();                               // Full bidirectional sync (async)
@@ -75,8 +83,6 @@ private:
                            const juce::String& category, const juce::String& pack,
                            const juce::String& data, int version,
                            const juce::String& updatedAt);
-    void deletePresetFromDiskByUuid(const juce::String& uuid);
-
     // Deletion log (tracks locally deleted presets between syncs)
     void   logDeletion(const juce::String& uuid);
     juce::var loadDeletionLog() const;
@@ -84,6 +90,11 @@ private:
     static juce::File getDeletionLogFile();
 
     juce::ListenerList<Listener> listeners_;
+
+    // ── Thread safety ────────────────────────────────────────────────
+    std::atomic<bool> shuttingDown_{false};
+    std::atomic<int>  pendingThreads_{0};
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CloudPresetManager)
 };

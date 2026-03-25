@@ -1,11 +1,13 @@
 // LicenseManager.cpp — License activation, verification, cache, HMAC signing
 #include "LicenseManager.h"
 #include "LicenseConfig.h"
-#include <CommonCrypto/CommonHMAC.h>
-#include <CommonCrypto/CommonDigest.h>
 
 #if JUCE_MAC
+ #include <CommonCrypto/CommonHMAC.h>
+ #include <CommonCrypto/CommonDigest.h>
  #include <IOKit/IOKitLib.h>
+ #include <pwd.h>
+ #include <unistd.h>
 #endif
 
 namespace bb {
@@ -37,6 +39,12 @@ LicenseManager::LicenseManager()
 LicenseManager::~LicenseManager()
 {
     stopTimer();
+    alive_->store(false);
+    shuttingDown_.store(true);
+
+    // Wait up to 12 s for in-flight HTTP threads to finish
+    for (int i = 0; i < 120 && pendingThreads_.load() > 0; ++i)
+        juce::Thread::sleep(100);
 }
 
 // =====================================================================
@@ -70,7 +78,10 @@ void LicenseManager::activate(const juce::String& key, Callback callback)
     auto machineId   = machineId_;
     auto machineName = getMachineName();
 
-    juce::Thread::launch([this, key, machineId, machineName, callback]
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, alive, key, machineId, machineName, callback]
     {
         auto* body = new juce::DynamicObject();
         body->setProperty("licenseKey",  key);
@@ -78,6 +89,9 @@ void LicenseManager::activate(const juce::String& key, Callback callback)
         body->setProperty("machineName", machineName);
 
         auto resp = httpPost("/auth/activate", juce::var(body));
+
+        if (shuttingDown_.load()) { --pendingThreads_; return; }
+
         bool ok = false;
         juce::String msg;
 
@@ -85,7 +99,6 @@ void LicenseManager::activate(const juce::String& key, Callback callback)
         {
             auto json = juce::JSON::parse(resp.body);
             juce::String uid = json.getProperty("userId", "").toString();
-
             juce::String token = json.getProperty("token", "").toString();
 
             {
@@ -112,8 +125,11 @@ void LicenseManager::activate(const juce::String& key, Callback callback)
                         + juce::String(resp.statusCode) + ")").toString();
         }
 
-        juce::MessageManager::callAsync([this, callback, ok, msg]
+        --pendingThreads_;
+
+        juce::MessageManager::callAsync([this, alive, callback, ok, msg]
         {
+            if (!alive->load()) return;
             if (callback) callback(ok, msg);
             if (ok) listeners_.call(&Listener::licenseStateChanged, true);
         });
@@ -136,13 +152,19 @@ void LicenseManager::verify(Callback callback)
 
     if (key.isEmpty()) return;
 
-    juce::Thread::launch([this, key, mid, callback]
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, alive, key, mid, callback]
     {
         auto* body = new juce::DynamicObject();
         body->setProperty("licenseKey", key);
         body->setProperty("machineId",  mid);
 
         auto resp = httpPost("/auth/verify", juce::var(body));
+
+        if (shuttingDown_.load()) { --pendingThreads_; return; }
+
         bool ok = false;
         juce::String msg;
 
@@ -183,8 +205,11 @@ void LicenseManager::verify(Callback callback)
             msg = "Verification failed (HTTP " + juce::String(resp.statusCode) + ")";
         }
 
-        juce::MessageManager::callAsync([this, callback, ok, msg]
+        --pendingThreads_;
+
+        juce::MessageManager::callAsync([this, alive, callback, ok, msg]
         {
+            if (!alive->load()) return;
             if (callback) callback(ok, msg);
             if (!ok) listeners_.call(&Listener::licenseStateChanged, false);
         });
@@ -202,11 +227,12 @@ void LicenseManager::deactivate()
         const juce::ScopedLock sl(stateLock);
         key     = licenseKey_;
         machine = machineId_;
-        licensed_     = false;
-        licenseKey_   = {};
-        userId_       = {};
-        activatedAt_  = 0;
-        lastVerified_ = 0;
+        licensed_        = false;
+        licenseKey_      = {};
+        userId_          = {};
+        activationToken_ = {};
+        activatedAt_     = 0;
+        lastVerified_    = 0;
     }
     clearCache();
     listeners_.call(&Listener::licenseStateChanged, false);
@@ -221,10 +247,9 @@ void LicenseManager::deactivate()
             obj->setProperty("licenseKey", key);
             obj->setProperty("machineId",  machine);
             juce::var jsonVar(obj);
-            auto json = juce::JSON::toString(jsonVar, true);
+            auto canon = LicenseManager::canonicalJson(jsonVar);
 
             // Sign the request
-            auto canon = LicenseManager::canonicalJson(juce::JSON::parse(json));
             auto timestamp = juce::String(juce::Time::currentTimeMillis());
             auto sig = LicenseManager::hmacSha256(secret, timestamp + ":" + canon);
             auto sigHeader = timestamp + "." + sig;
@@ -233,7 +258,7 @@ void LicenseManager::deactivate()
 
             int statusCode = 0;
             auto url = juce::URL(juce::String(bb::license::kApiBaseUrl) + "/auth/deactivate")
-                           .withPOSTData(json);
+                           .withPOSTData(canon);
             url.createInputStream(juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
                 .withExtraHeaders(extraHeaders)
                 .withConnectionTimeoutMs(bb::license::kHttpTimeoutMs)
@@ -454,6 +479,15 @@ juce::String LicenseManager::getMachineName()
 
 juce::File LicenseManager::getCacheFile()
 {
+#if JUCE_MAC
+    // Use the real home directory (bypasses sandbox container remapping)
+    // so standalone, VST3 and AU all share the same license cache.
+    if (auto* pw = getpwuid(getuid()))
+    {
+        return juce::File(juce::String(pw->pw_dir))
+            .getChildFile("Library/Thunderdolphin/Parasite/license.dat");
+    }
+#endif
     return juce::File::getSpecialLocation(
                juce::File::userApplicationDataDirectory)
            .getChildFile("Thunderdolphin").getChildFile("Parasite")
@@ -481,6 +515,7 @@ void LicenseManager::saveCache() const
 {
     const juce::ScopedLock sl(stateLock);
 
+    // Build object WITHOUT seal first
     auto* obj = new juce::DynamicObject();
     obj->setProperty("key",          licenseKey_);
     obj->setProperty("machineId",    machineId_);
@@ -489,13 +524,15 @@ void LicenseManager::saveCache() const
     obj->setProperty("lastVerified", lastVerified_);
     obj->setProperty("token",        activationToken_);
 
-    juce::var jsonVar(obj); // keeps ownership alive
-    auto json = juce::JSON::toString(jsonVar, true);
+    juce::var jsonVar(obj);
+    auto canonical = canonicalJson(jsonVar);
 
     // HMAC integrity seal — prevents forging a cache without the secret
-    auto seal = hmacSha256(decodeSecret(), json + machineId_);
+    auto seal = hmacSha256(decodeSecret(), canonical + machineId_);
     obj->setProperty("seal", seal);
-    json = juce::JSON::toString(jsonVar, true);
+
+    // Serialize for storage (pretty-print is fine for the encrypted file)
+    auto json = juce::JSON::toString(jsonVar, true);
 
     auto encrypted = xorCipher(json.toRawUTF8(),
                                static_cast<size_t>(json.getNumBytesAsUTF8()),
@@ -529,7 +566,7 @@ void LicenseManager::loadCache()
     auto storedSeal = parsed.getProperty("seal", "").toString();
     if (storedSeal.isNotEmpty())
     {
-        // Rebuild the JSON without the seal to verify
+        // Rebuild the object without the seal to verify
         auto* verify = new juce::DynamicObject();
         verify->setProperty("key",          parsed.getProperty("key", ""));
         verify->setProperty("machineId",    parsed.getProperty("machineId", ""));
@@ -537,10 +574,22 @@ void LicenseManager::loadCache()
         verify->setProperty("activatedAt",  parsed.getProperty("activatedAt", 0));
         verify->setProperty("lastVerified", parsed.getProperty("lastVerified", 0));
         verify->setProperty("token",        parsed.getProperty("token", ""));
-        auto verifyJson = juce::JSON::toString(juce::var(verify), true);
-        auto expectedSeal = hmacSha256(decodeSecret(), verifyJson + machineId_);
+        auto expectedSeal = hmacSha256(decodeSecret(), canonicalJson(juce::var(verify)) + machineId_);
 
-        if (storedSeal != expectedSeal) return; // tampered
+        if (storedSeal != expectedSeal)
+        {
+            // Fallback: try legacy seal format (JSON::toString)
+            auto* legacyObj = new juce::DynamicObject();
+            legacyObj->setProperty("key",          parsed.getProperty("key", ""));
+            legacyObj->setProperty("machineId",    parsed.getProperty("machineId", ""));
+            legacyObj->setProperty("userId",       parsed.getProperty("userId", ""));
+            legacyObj->setProperty("activatedAt",  parsed.getProperty("activatedAt", 0));
+            legacyObj->setProperty("lastVerified", parsed.getProperty("lastVerified", 0));
+            legacyObj->setProperty("token",        parsed.getProperty("token", ""));
+            auto legacyJson = juce::JSON::toString(juce::var(legacyObj), true);
+            auto legacySeal = hmacSha256(decodeSecret(), legacyJson + machineId_);
+            if (storedSeal != legacySeal) return; // tampered
+        }
     }
     else
     {

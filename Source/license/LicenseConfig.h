@@ -21,7 +21,6 @@ static constexpr const char* kApiBaseUrl = "https://api.thunderdolphin.studio";
 
 // ── Timing ──────────────────────────────────────────────────────────
 static constexpr int64_t kVerifyIntervalMs  = 48LL * 60 * 60 * 1000;   // 48 h
-static constexpr int64_t kGracePeriodMs     = 7LL * 24 * 60 * 60 * 1000; // 7 days
 static constexpr int     kTimerIntervalMs   = 30 * 60 * 1000;           // 30 min
 static constexpr int     kHttpTimeoutMs     = 10000;                     // 10 s
 

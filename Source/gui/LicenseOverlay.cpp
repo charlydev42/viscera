@@ -70,23 +70,34 @@ LicenseOverlay::LicenseOverlay(bb::LicenseManager& mgr)
     {
         auto key = keyInput.getText().trim().toUpperCase();
         if (key.isEmpty()) return;
+
+        if (key.length() != 29)
+        {
+            statusLabel.setText("Please enter a complete license key.", juce::dontSendNotification);
+            statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xFFCD5C5C));
+            return;
+        }
+
         if (activating) return;
 
         activating = true;
         statusLabel.setText("Activating...", juce::dontSendNotification);
         activateBtn.setEnabled(false);
 
-        manager.activate(key, [this](bool ok, const juce::String& msg)
+        auto safeThis = juce::Component::SafePointer<LicenseOverlay>(this);
+        manager.activate(key, [safeThis](bool ok, const juce::String& msg)
         {
-            activating = false;
-            activateBtn.setEnabled(true);
+            if (safeThis == nullptr) return;
+
+            safeThis->activating = false;
+            safeThis->activateBtn.setEnabled(true);
 
             auto col = ok ? juce::Colours::lightgreen : juce::Colours::indianred;
-            statusLabel.setColour(juce::Label::textColourId, col);
-            statusLabel.setText(msg, juce::dontSendNotification);
+            safeThis->statusLabel.setColour(juce::Label::textColourId, col);
+            safeThis->statusLabel.setText(msg, juce::dontSendNotification);
 
-            if (ok && onLicensed)
-                onLicensed();
+            if (ok && safeThis->onLicensed)
+                safeThis->onLicensed();
         });
     };
     addAndMakeVisible(activateBtn);
