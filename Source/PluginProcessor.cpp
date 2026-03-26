@@ -287,7 +287,7 @@ ParasiteProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterBool>("XOR_ON", "XOR", false));
         g->addChild(std::make_unique<juce::AudioParameterBool>("SYNC", "Sync", false));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("FM_ALGO", "FM Algorithm",
-            juce::StringArray{ "Series", "Parallel", "Stack", "Ring", "Feedback" }, 0));
+            juce::StringArray{ "Series", "Parallel", "Stack", "Ring", "Feedback", "Mix" }, 0));
         groups.push_back(std::move(g));
     }
 

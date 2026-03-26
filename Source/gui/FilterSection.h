@@ -17,7 +17,7 @@ private:
     juce::ToggleButton onToggle;
     juce::ComboBox typeBox;
     ModSlider cutoffKnob, resKnob;
-    juce::Label typeLabel, cutoffLabel, resLabel;
+    juce::Label cutoffLabel, resLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> typeAttach;

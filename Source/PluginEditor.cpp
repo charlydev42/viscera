@@ -64,7 +64,7 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     addAndMakeVisible(mainLogoImage);
 
     // FM Algorithm selector
-    algoNames = { "Series", "Parallel", "Stack", "Ring", "Feedback" };
+    algoNames = { "Series", "Parallel", "Stack", "Ring", "Feedback", "Mix" };
 
     algoLeftBtn.setButtonText("<");
     algoLeftBtn.onClick = [this] {
@@ -203,11 +203,6 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
         }
     };
     addAndMakeVisible(pageToggleBtn);
-
-    // Keyboard toggle for main page (standalone only)
-#if JUCE_STANDALONE_APPLICATION
-    // KB toggle removed — computer keyboard replaces it on standalone
-#endif
 
     // Settings menu button
     menuBtn.setButtonText(juce::String::charToString(0x2630)); // ☰ hamburger
@@ -416,7 +411,7 @@ void ParasiteEditor::randomizeParams()
     randFloat("ENV3_R", 0.05f, 1.5f);
 
     // Algorithm, XOR, Sync
-    randInt("FM_ALGO", 0, 4);
+    randInt("FM_ALGO", 0, 5);
     randBool("XOR_ON", 0.2f);
     randBool("SYNC", 0.15f);
 
@@ -745,11 +740,7 @@ void ParasiteEditor::setPage(bool advanced)
     tabbedEffects.setVisible(advanced);
     tabbedEffects.setLayout(TabbedEffectSection::Stacked);
 
-    // Keyboard: standalone only
-#if JUCE_STANDALONE_APPLICATION
-#endif
-
-    // Both pages: effects, preset, keyboard, logo, algo, randomize, toggle
+    // Both pages: effects, preset, logo, algo, randomize, toggle
 
     resized();
     repaint();
@@ -827,7 +818,7 @@ void ParasiteEditor::resized()
     auto area = getLocalBounds().reduced(4);
     titleLabel.setBounds(0, 0, 0, 0); // hidden
 
-    // === Top bar: [< Algo >] [Preset Browser (< combo > ? +)] [KB] [Edit] ===
+    // === Top bar: [< Algo >] [Preset Browser (< combo > ? +)] [Edit] ===
     int barH = 26;
     int sp = 4;
     auto topBar = area.removeFromTop(barH);

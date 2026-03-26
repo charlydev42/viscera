@@ -76,8 +76,7 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
 void FMVoice::startNote(int midiNoteNumber, float velocity,
                          juce::SynthesiserSound*, int currentPitchWheelPosition)
 {
-    currentNote = midiNoteNumber;
-    noteVelocity = velocity;  // linear velocity curve (standard, full dynamic range)
+    noteVelocity = velocity;
     params.lastVelocity.store(velocity, std::memory_order_relaxed);
     stealFadeSamples = 0;  // cancel any in-progress steal fade
 
@@ -94,12 +93,16 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     portaTime = juce::jlimit(0.0f, 1.0f, portaTime
                 + params.lfoModPorta.load(std::memory_order_relaxed));
 
-    if (portaTime < 0.001f || currentFreq <= 0.0)
+    // Serum-style: portamento only in mono mode, always glides from last note
+    float lastFreq = params.lastNoteFreqHz.load(std::memory_order_relaxed);
+    if (!isMono || portaTime < 0.001f || lastFreq <= 0.0f)
         currentFreq = noteFreqHz;
+    else
+        currentFreq = static_cast<double>(lastFreq);
+    params.lastNoteFreqHz.store(static_cast<float>(noteFreqHz), std::memory_order_relaxed);
 
     // Portamento: exponential smoothing with time in seconds.
     // portaTime 0-1 maps to 0-2 seconds glide time.
-    // Coefficient = exp(-1 / (glideTimeSec * sampleRate)) for proper time constant.
     if (portaTime > 0.001f)
     {
         double glideTimeSec = static_cast<double>(portaTime) * 2.0; // 0-1 → 0-2s
@@ -120,8 +123,17 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
         mod2Osc.resetPhase();
         carrierOsc.resetPhase();
         carrierOscR.resetPhase();
-        // Don't reset envelopes — ADSR::noteOn() retriggers smoothly from
-        // the current level, avoiding pops when stealing voices.
+
+        if (!env3.isActive())
+        {
+            // Voice was idle — hard-reset envelopes (no pop, voice is silent)
+            env1.reset();
+            env2.reset();
+            env3.reset();
+            pitchEnv.reset();
+        }
+        // If env3 IS active (voice stealing), don't reset — ADSR retriggers
+        // smoothly from the current level, avoiding pops.
     }
 
     // Lancer les enveloppes
@@ -410,6 +422,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         mod2Osc.setFrequency(mod2Freq);
 
         double phaseMod = 0.0;
+        float mixMod1Audio = 0.0f, mixMod2Audio = 0.0f;
 
         switch (fmAlgo)
         {
@@ -457,6 +470,15 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 mod2FeedbackSample = mod2Out * env2Val;
                 phaseMod = static_cast<double>(mod2FeedbackSample * m2Level * fluxMod)
                            * kMaxModIndex;
+                break;
+            }
+            case 5: // Mix: all 3 oscillators output independently, summed
+            {
+                float mod2Out = mod2Osc.tick();
+                float env2Val = env2.tick();
+                mixMod1Audio = mod1Out * env1Val * m1Level;
+                mixMod2Audio = mod2Out * env2Val * m2Level;
+                phaseMod = 0.0;
                 break;
             }
             default: // fallback to series
@@ -518,6 +540,14 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         {
             outputL = carrierOutL * env3Val * velGain;
             outputR = carrierOutR * env3Val * velGain;
+        }
+
+        // Mix algo: add mod oscillators as audio (each with their own envelope)
+        if (fmAlgo == 5)
+        {
+            float modAudio = (mixMod1Audio + mixMod2Audio) * velGain;
+            outputL += modAudio;
+            outputR += modAudio;
         }
 
         // --- XOR distortion ---

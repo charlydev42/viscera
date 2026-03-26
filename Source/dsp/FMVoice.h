@@ -147,7 +147,7 @@ struct VoiceParams
 
     std::atomic<float>* xorOn      = nullptr;
     std::atomic<float>* syncOn     = nullptr;
-    std::atomic<float>* fmAlgo    = nullptr; // 0=Series, 1=Parallel, 2=Stack
+    std::atomic<float>* fmAlgo    = nullptr; // 0=Series, 1=Parallel, 2=Stack, 3=Ring, 4=Feedback
 
     // Pitch Envelope
     std::atomic<float>* pitchEnvOn  = nullptr; // on/off toggle
@@ -243,6 +243,9 @@ struct VoiceParams
     // Per-LFO unipolar peak (for arc scaling in GUI)
     std::atomic<float> lfoPeak[3]    { {1.0f}, {1.0f}, {1.0f} };
 
+    // Global last note frequency for portamento (shared across all voices)
+    std::atomic<float> lastNoteFreqHz { 0.0f };
+
     // Velocity swap: when true, voice ignores velocity for volume
     std::atomic<bool> velSwap { false };
     // Last note-on velocity (raw 0-1, written by voice, read by processor for LFO rate)
@@ -288,7 +291,6 @@ private:
     // État de la note en cours
     double noteFreqHz = 440.0;
     float noteVelocity = 0.0f;
-    int currentNote = -1;
 
     // Portamento
     double targetNoteFreq = 440.0;
