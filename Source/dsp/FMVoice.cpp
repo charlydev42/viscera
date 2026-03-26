@@ -68,8 +68,8 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
     stealFadeLength = std::max(1, static_cast<int>(sr * 0.005));
     stealFadeSamples = 0;
 
-    // Anti-click fade-in: ~1.5ms
-    noteFadeInLength = std::max(1, static_cast<int>(sr * 0.0015));
+    // Anti-click fade-in: ~3ms
+    noteFadeInLength = std::max(1, static_cast<int>(sr * 0.003));
     noteFadeInSamples = 0;
 }
 
@@ -113,19 +113,15 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     // Pitch wheel
     pitchWheelMoved(currentPitchWheelPosition);
 
-    // Reset des oscillateurs si retrigger activé
+    // Reset oscillator phases for clean attack (retrigger or poly mode)
     if (shouldRetrig || !isMono)
     {
         mod1Osc.resetPhase();
         mod2Osc.resetPhase();
         carrierOsc.resetPhase();
         carrierOscR.resetPhase();
-
-        // Reset envelopes to 0 to avoid starting attack from stale level
-        env1.reset();
-        env2.reset();
-        env3.reset();
-        pitchEnv.reset();
+        // Don't reset envelopes — ADSR::noteOn() retriggers smoothly from
+        // the current level, avoiding pops when stealing voices.
     }
 
     // Lancer les enveloppes

@@ -21,10 +21,11 @@ ParasiteProcessor::ParasiteProcessor()
     voiceParams.mod2Harmonics = &mod2Harmonics;
     voiceParams.carHarmonics  = &carHarmonics;
 
-    // Ajouter un sound et une voix (mono par défaut)
+    // 8 voices for polyphony — idle voices cost nothing (early return in renderNextBlock)
     synth.addSound(new bb::FMSound());
-    auto* voice = new bb::FMVoice(voiceParams);
-    synth.addVoice(voice);
+    for (int i = 0; i < 8; ++i)
+        synth.addVoice(new bb::FMVoice(voiceParams));
+    synth.setNoteStealingEnabled(true);
 
     buildPresetRegistry();
     loadFavorites();
@@ -189,7 +190,7 @@ ParasiteProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::AudioProcessorParameterGroup>> groups;
 
-    juce::StringArray waveNames { "Sine", "Saw", "Square", "Triangle", "Pulse", "Custom" };
+    juce::StringArray waveNames { "Sine", "Saw", "Square", "Triangle", "Pulse", "Custom", "Noise" };
 
     // --- Groupe Modulateur 1 ---
     {
@@ -521,8 +522,11 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         return;
     }
 
-    // Injecter les notes du clavier GUI dans le buffer MIDI
+#if JUCE_STANDALONE_APPLICATION
+    // Standalone only: inject computer-keyboard MIDI notes into the buffer.
+    // In VST/AU the DAW provides MIDI directly — no keyboardState needed.
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
+#endif
 
     // --- LFO retrigger on note-on (only if retrig enabled per LFO) ---
     for (const auto metadata : midiMessages)

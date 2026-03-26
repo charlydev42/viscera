@@ -12,7 +12,7 @@
 namespace bb {
 
 // --- Types de forme d'onde ---
-enum class WaveType : int { Sine = 0, Saw, Square, Triangle, Pulse, Custom, Count };
+enum class WaveType : int { Sine = 0, Saw, Square, Triangle, Pulse, Custom, Noise, Count };
 
 // --- Table de sinus précalculée (constexpr) ---
 // 4096 échantillons = bon compromis précision/cache
@@ -138,6 +138,9 @@ private:
     // Triangle via integrated PolyBLEP square
     double triIntegrator = 0.0;
 
+    // Noise RNG state (separate from drift to avoid correlation)
+    uint32_t noiseSeed = nextDriftSeed();
+
     // Analog drift state
     float driftAmount = 0.0f;
     double driftLFOPhase = 0.0;
@@ -225,6 +228,16 @@ private:
 
         case WaveType::Custom:
             return harmonicTable ? harmonicTable->lookup(p) : lookupSine(p);
+
+        case WaveType::Noise:
+        {
+            // White noise via xorshift — phase-independent, sample-rate independent
+            noiseSeed ^= noiseSeed << 13;
+            noiseSeed ^= noiseSeed >> 17;
+            noiseSeed ^= noiseSeed << 5;
+            if (noiseSeed == 0) noiseSeed = 0x12345678;
+            return static_cast<float>(noiseSeed) / static_cast<float>(0x7FFFFFFF) - 1.0f;
+        }
 
         default:
             return 0.0f;
