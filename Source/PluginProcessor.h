@@ -210,8 +210,12 @@ public:
     bb::AudioVisualBuffer& getVisualBuffer()  { return visualBuffer; }
     bb::AudioVisualBuffer& getVisualBufferR() { return visualBufferR; }
 
-    // Le MidiKeyboardState est public pour que l'éditeur puisse y connecter son clavier
-    juce::MidiKeyboardState keyboardState;
+
+    // Inject a single MIDI note for preset preview (works in all formats)
+    void sendPreviewNoteOn()  { previewNoteOn.store(true, std::memory_order_relaxed); }
+    void sendPreviewNoteOff() { previewNoteOff.store(true, std::memory_order_relaxed); }
+    std::atomic<bool> previewNoteOn  { false };
+    std::atomic<bool> previewNoteOff { false };
 private:
 
     // Visual buffers for GUI oscilloscope/FFT (L + R)

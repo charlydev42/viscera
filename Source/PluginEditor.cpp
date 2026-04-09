@@ -284,13 +284,7 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
 
     startTimerHz(5);
 
-    // Only grab keyboard focus in standalone (computer keyboard → MIDI).
-    // In VST/AU, let the DAW handle keyboard input (Ableton's computer MIDI, shortcuts, etc.)
-#if JUCE_STANDALONE_APPLICATION
-    setWantsKeyboardFocus(true);
-#else
     setWantsKeyboardFocus(false);
-#endif
     setSize(920, 615);
 
     // Start on main (perform) page
@@ -1034,125 +1028,13 @@ void ParasiteEditor::resized()
 }
 
 // =============================================================================
-// Key handling — undo/redo (all platforms) + computer MIDI keyboard (standalone)
+// Key handling — never consume, let the DAW handle everything
 // =============================================================================
 
-#if JUCE_STANDALONE_APPLICATION
-// Note mapping: supports both QWERTY and AZERTY physical layouts
-struct NoteMap { int offset; juce::juce_wchar keys[2]; int numKeys; };
-static const NoteMap kNoteMapping[] = {
-    {  0, {'a','q'}, 2 },  // C
-    {  1, {'w','z'}, 2 },  // C#
-    {  2, {'s', 0 }, 1 },  // D
-    {  3, {'e', 0 }, 1 },  // D#
-    {  4, {'d', 0 }, 1 },  // E
-    {  5, {'f', 0 }, 1 },  // F
-    {  6, {'t', 0 }, 1 },  // F#
-    {  7, {'g', 0 }, 1 },  // G
-    {  8, {'y', 0 }, 1 },  // G#
-    {  9, {'h', 0 }, 1 },  // A
-    { 10, {'u', 0 }, 1 },  // A#
-    { 11, {'j', 0 }, 1 },  // B
-    { 12, {'k', 0 }, 1 },  // C+1
-    { 13, {'o', 0 }, 1 },  // C#+1
-    { 14, {'l', 0 }, 1 },  // D+1
-    { 15, {'p', 0 }, 1 },  // D#+1
-};
-#endif
-
-void ParasiteEditor::parentHierarchyChanged()
+bool ParasiteEditor::keyPressed(const juce::KeyPress&)
 {
-#if JUCE_STANDALONE_APPLICATION
-    if (auto* docWindow = findParentComponentOfClass<juce::DocumentWindow>())
-    {
-        if (!docWindow->isUsingNativeTitleBar())
-        {
-            docWindow->setUsingNativeTitleBar(true);
-            // Re-set editor size so the window adapts
-            auto safeThis = juce::Component::SafePointer<ParasiteEditor>(this);
-            juce::MessageManager::callAsync([safeThis] {
-                if (safeThis != nullptr)
-                    safeThis->setSize(920, 615);
-            });
-        }
-    }
-#endif
-}
-
-bool ParasiteEditor::keyPressed(const juce::KeyPress& key)
-{
-    if (licenseOverlay.isVisible()) return false;
-
-    // Redo: Cmd+Shift+Z (Mac) / Ctrl+Shift+Z (PC) — check before undo
-    if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier
-                                    | juce::ModifierKeys::shiftModifier, 0))
-    {
-        proc.getUndoManager().redo();
-        return true;
-    }
-
-    // Undo: Cmd+Z (Mac) / Ctrl+Z (PC)
-    if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier, 0))
-    {
-        proc.getUndoManager().undo();
-        return true;
-    }
-
-#if JUCE_STANDALONE_APPLICATION
-    auto c = static_cast<juce::juce_wchar>(std::tolower(key.getTextCharacter()));
-
-    // Octave shift: C = down, V = up
-    if (c == 'c') { computerKeyOctave = juce::jmax(0, computerKeyOctave - 1); return true; }
-    if (c == 'v') { computerKeyOctave = juce::jmin(8, computerKeyOctave + 1); return true; }
-
-    // Consume note keys to prevent macOS system beep
-    for (auto& m : kNoteMapping)
-        for (int k = 0; k < m.numKeys; ++k)
-            if (m.keys[k] == c)
-                return true;
-#endif
-
     return false;
 }
-
-#if JUCE_STANDALONE_APPLICATION
-
-bool ParasiteEditor::keyStateChanged(bool /*isKeyDown*/)
-{
-    if (licenseOverlay.isVisible()) return false;
-
-    bool handled = false;
-
-    for (auto& m : kNoteMapping)
-    {
-        int note = computerKeyOctave * 12 + m.offset;
-        if (note < 0 || note > 127) continue;
-
-        bool anyDown = false;
-        for (int k = 0; k < m.numKeys; ++k)
-            if (juce::KeyPress::isKeyCurrentlyDown(static_cast<int>(m.keys[k])))
-                anyDown = true;
-
-        bool wasDown = computerKeysDown.count(note) > 0;
-
-        if (anyDown && !wasDown)
-        {
-            proc.keyboardState.noteOn(1, note, 0.7f);
-            computerKeysDown.insert(note);
-            handled = true;
-        }
-        else if (!anyDown && wasDown)
-        {
-            proc.keyboardState.noteOff(1, note, 0.0f);
-            computerKeysDown.erase(note);
-            handled = true;
-        }
-    }
-
-    return handled;
-}
-
-#endif
 
 // =====================================================================
 // License overlay — shown when plugin is not licensed

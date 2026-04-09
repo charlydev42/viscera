@@ -34,7 +34,7 @@ static void drawHeart(juce::Graphics& g, juce::Rectangle<float> area, bool fille
 PresetOverlay::PresetOverlay(ParasiteProcessor& processor)
     : proc(processor)
 {
-    setWantsKeyboardFocus(true);
+    setWantsKeyboardFocus(false);
 
     // Pack selector dropdown
     packSelector.setMouseClickGrabsKeyboardFocus(false);
@@ -68,7 +68,7 @@ void PresetOverlay::stopPreviewNote()
 {
     if (noteIsOn)
     {
-        proc.keyboardState.noteOff(1, 60, 0.0f);
+        proc.sendPreviewNoteOff();
         noteIsOn = false;
         stopTimer();
     }
@@ -103,7 +103,6 @@ void PresetOverlay::refresh()
         }
     }
 
-    grabKeyboardFocus();
     if (focusedCard >= 0)
         ensureCardVisible(focusedCard);
 
@@ -269,10 +268,10 @@ void PresetOverlay::triggerPreviewNote()
     // Send a short MIDI note to preview the sound
     if (noteIsOn)
     {
-        proc.keyboardState.noteOff(1, 60, 0.0f);
+        proc.sendPreviewNoteOff();
         stopTimer();
     }
-    proc.keyboardState.noteOn(1, 60, 0.7f);
+    proc.sendPreviewNoteOn();
     noteIsOn = true;
     startTimer(350); // note-off after 350ms
 }
@@ -281,7 +280,7 @@ void PresetOverlay::timerCallback()
 {
     if (noteIsOn)
     {
-        proc.keyboardState.noteOff(1, 60, 0.0f);
+        proc.sendPreviewNoteOff();
         noteIsOn = false;
     }
     stopTimer();

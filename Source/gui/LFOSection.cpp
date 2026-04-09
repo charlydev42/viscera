@@ -512,7 +512,7 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProces
     // Initial tab
     switchTab(0);
 
-    setWantsKeyboardFocus(true);
+    setWantsKeyboardFocus(false);
     startTimerHz(10);
 }
 
@@ -715,7 +715,6 @@ void LFOSection::layoutSlots()
 void LFOSection::enterLearnMode(int slotIdx)
 {
     learnSlotIndex = slotIdx;
-    grabKeyboardFocus();
 
     int capturedTab = activeTab;
     int capturedSlot = slotIdx;

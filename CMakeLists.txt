@@ -26,9 +26,9 @@ juce_add_plugin(Parasite
     NEEDS_MIDI_INPUT         TRUE
     NEEDS_MIDI_OUTPUT        FALSE
     IS_MIDI_EFFECT           FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD  TRUE
-    FORMATS                  VST3 AU Standalone
+    FORMATS                  VST3 AU
     PRODUCT_NAME             "Parasite"
     BUNDLE_ID                "com.thunderdolphin.parasite"
     AU_MAIN_TYPE             kAudioUnitType_MusicDevice

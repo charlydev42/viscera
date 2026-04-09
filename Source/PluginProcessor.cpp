@@ -522,11 +522,11 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         return;
     }
 
-#if JUCE_STANDALONE_APPLICATION
-    // Standalone only: inject computer-keyboard MIDI notes into the buffer.
-    // In VST/AU the DAW provides MIDI directly — no keyboardState needed.
-    keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
-#endif
+    // Preset preview notes (injected from GUI thread via atomic flags)
+    if (previewNoteOn.exchange(false, std::memory_order_relaxed))
+        midiMessages.addEvent(juce::MidiMessage::noteOn(1, 60, 0.7f), 0);
+    if (previewNoteOff.exchange(false, std::memory_order_relaxed))
+        midiMessages.addEvent(juce::MidiMessage::noteOff(1, 60, 0.0f), 0);
 
     // --- LFO retrigger on note-on (only if retrig enabled per LFO) ---
     for (const auto metadata : midiMessages)

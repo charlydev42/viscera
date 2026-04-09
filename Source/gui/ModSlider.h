@@ -250,7 +250,6 @@ public:
         customDragValue = getValue();
         lastDragPos = e.position;
         juce::Slider::mouseDown(e);
-        grabKeyboardFocus();
     }
 
     void mouseDrag(const juce::MouseEvent& e) override

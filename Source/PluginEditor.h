@@ -123,15 +123,5 @@ private:
     // Key handler (undo/redo on all platforms + MIDI keyboard standalone-only)
     bool keyPressed(const juce::KeyPress& key) override;
 
-    // Use native OS title bar for standalone window
-    void parentHierarchyChanged() override;
-
-    // Computer MIDI keyboard (Ableton-style, standalone only)
-#if JUCE_STANDALONE_APPLICATION
-    bool keyStateChanged(bool isKeyDown) override;
-    std::set<int> computerKeysDown;
-    int computerKeyOctave = 4;
-#endif
-
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ParasiteEditor)
 };

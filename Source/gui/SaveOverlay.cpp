@@ -6,7 +6,7 @@
 SaveOverlay::SaveOverlay(ParasiteProcessor& processor)
     : proc(processor)
 {
-    setWantsKeyboardFocus(true);
+    setWantsKeyboardFocus(false);
 
     nameEditor.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 14.0f, juce::Font::plain));
     nameEditor.setJustification(juce::Justification::centredLeft);
@@ -97,7 +97,6 @@ void SaveOverlay::refresh()
     nameEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
     nameEditor.setColour(juce::CaretComponent::caretColourId, juce::Colour(ParasiteLookAndFeel::kTextColor));
 
-    nameEditor.grabKeyboardFocus();
     nameEditor.selectAll();
     repaint();
 }
