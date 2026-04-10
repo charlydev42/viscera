@@ -380,13 +380,50 @@ void ParasiteEditor::randomizeParams()
         randFloat(prefix + "_LEVEL", 0.1f, 1.0f);
     }
 
-    // Mod envelopes
+    // Pick a random sound archetype for ADSR variety
+    enum Archetype { Pluck, Stab, Pad, Lead, Evolving };
+    float roll = rng.nextFloat();
+    Archetype arch = (roll < 0.30f) ? Pluck
+                   : (roll < 0.50f) ? Stab
+                   : (roll < 0.70f) ? Pad
+                   : (roll < 0.90f) ? Lead
+                   :                  Evolving;
+
+    // Mod envelopes — shaped by archetype
     for (auto& env : { juce::String("ENV1"), juce::String("ENV2") })
     {
-        randFloat(env + "_A", 0.001f, 0.5f);
-        randFloat(env + "_D", 0.01f, 0.8f);
-        randFloat(env + "_S", 0.0f, 1.0f);
-        randFloat(env + "_R", 0.01f, 1.0f);
+        switch (arch) {
+        case Pluck:
+            randFloat(env + "_A", 0.0f, 0.005f);
+            randFloat(env + "_D", 0.02f, 0.25f);
+            randFloat(env + "_S", 0.0f, 0.15f);
+            randFloat(env + "_R", 0.01f, 0.15f);
+            break;
+        case Stab:
+            randFloat(env + "_A", 0.0f, 0.01f);
+            randFloat(env + "_D", 0.05f, 0.4f);
+            randFloat(env + "_S", 0.0f, 0.3f);
+            randFloat(env + "_R", 0.05f, 0.3f);
+            break;
+        case Pad:
+            randFloat(env + "_A", 0.1f, 1.5f);
+            randFloat(env + "_D", 0.2f, 1.0f);
+            randFloat(env + "_S", 0.5f, 1.0f);
+            randFloat(env + "_R", 0.3f, 2.0f);
+            break;
+        case Lead:
+            randFloat(env + "_A", 0.0f, 0.02f);
+            randFloat(env + "_D", 0.05f, 0.5f);
+            randFloat(env + "_S", 0.3f, 0.9f);
+            randFloat(env + "_R", 0.05f, 0.5f);
+            break;
+        case Evolving:
+            randFloat(env + "_A", 0.3f, 2.0f);
+            randFloat(env + "_D", 0.5f, 2.0f);
+            randFloat(env + "_S", 0.2f, 0.8f);
+            randFloat(env + "_R", 0.5f, 3.0f);
+            break;
+        }
     }
 
     // Carrier
@@ -394,20 +431,52 @@ void ParasiteEditor::randomizeParams()
     randInt("CAR_COARSE", 0, 4);
     randFloat("CAR_FINE", -100.0f, 100.0f);
     randBool("CAR_KB", 0.9f);
-    randFloat("CAR_DRIFT", 0.0f, 0.3f);
+    randFloat("CAR_DRIFT", 0.0f, arch == Pad || arch == Evolving ? 0.4f : 0.15f);
     randFloat("CAR_NOISE", 0.0f, rng.nextFloat() < 0.15f ? 0.15f : 0.0f);
-    randFloat("CAR_SPREAD", 0.0f, 0.5f);
+    randFloat("CAR_SPREAD", 0.0f, arch == Pad ? 0.6f : 0.3f);
 
-    // Carrier envelope
-    randFloat("ENV3_A", 0.001f, 0.3f);
-    randFloat("ENV3_D", 0.01f, 0.6f);
-    randFloat("ENV3_S", 0.2f, 1.0f);
-    randFloat("ENV3_R", 0.05f, 1.5f);
+    // Carrier envelope — shaped by archetype
+    switch (arch) {
+    case Pluck:
+        randFloat("ENV3_A", 0.0f, 0.003f);
+        randFloat("ENV3_D", 0.05f, 0.4f);
+        randFloat("ENV3_S", 0.0f, 0.05f);
+        randFloat("ENV3_R", 0.01f, 0.1f);
+        break;
+    case Stab:
+        randFloat("ENV3_A", 0.0f, 0.005f);
+        randFloat("ENV3_D", 0.08f, 0.5f);
+        randFloat("ENV3_S", 0.0f, 0.2f);
+        randFloat("ENV3_R", 0.05f, 0.3f);
+        break;
+    case Pad:
+        randFloat("ENV3_A", 0.15f, 1.5f);
+        randFloat("ENV3_D", 0.3f, 1.5f);
+        randFloat("ENV3_S", 0.6f, 1.0f);
+        randFloat("ENV3_R", 0.5f, 3.0f);
+        break;
+    case Lead:
+        randFloat("ENV3_A", 0.0f, 0.01f);
+        randFloat("ENV3_D", 0.1f, 0.6f);
+        randFloat("ENV3_S", 0.4f, 1.0f);
+        randFloat("ENV3_R", 0.1f, 0.6f);
+        break;
+    case Evolving:
+        randFloat("ENV3_A", 0.5f, 3.0f);
+        randFloat("ENV3_D", 1.0f, 3.0f);
+        randFloat("ENV3_S", 0.3f, 0.8f);
+        randFloat("ENV3_R", 1.0f, 5.0f);
+        break;
+    }
 
     // Algorithm, XOR, Sync
     randInt("FM_ALGO", 0, 5);
     randBool("XOR_ON", 0.2f);
     randBool("SYNC", 0.15f);
+
+    // Disable volume shaper on randomize (user's custom shape persists but is bypassed)
+    if (auto* p = apvts.getParameter("SHAPER_ON"))
+        p->setValueNotifyingHost(0.0f);
 
     // LFO amounts
     randFloat("TREMOR", 0.0f, 0.3f);
@@ -433,13 +502,27 @@ void ParasiteEditor::randomizeParams()
     randBool("LIQ_ON", 0.2f);
     randBool("RUB_ON", 0.15f);
 
-    // Pitch envelope
-    randBool("PENV_ON", 0.25f);
-    randFloat("PENV_AMT", -24.0f, 24.0f);
-    randFloat("PENV_A", 0.001f, 0.3f);
-    randFloat("PENV_D", 0.01f, 0.5f);
-    randFloat("PENV_S", 0.0f, 1.0f);
-    randFloat("PENV_R", 0.01f, 1.0f);
+    // Pitch envelope — more likely on percussive archetypes
+    {
+        float penvChance = (arch == Pluck || arch == Stab) ? 0.45f : 0.15f;
+        randBool("PENV_ON", penvChance);
+        if (arch == Pluck || arch == Stab)
+        {
+            randFloat("PENV_AMT", 6.0f, 48.0f);
+            randFloat("PENV_A", 0.0f, 0.005f);
+            randFloat("PENV_D", 0.01f, 0.15f);
+            randFloat("PENV_S", 0.0f, 0.1f);
+            randFloat("PENV_R", 0.01f, 0.1f);
+        }
+        else
+        {
+            randFloat("PENV_AMT", -12.0f, 12.0f);
+            randFloat("PENV_A", 0.0f, 0.3f);
+            randFloat("PENV_D", 0.05f, 0.5f);
+            randFloat("PENV_S", 0.0f, 0.5f);
+            randFloat("PENV_R", 0.05f, 0.5f);
+        }
+    }
 
     // Macros
     randFloat("DRIVE", 0.0f, 0.4f);
@@ -485,8 +568,11 @@ void ParasiteEditor::randomizeParams()
         if (apvts.getRawParameterValue("FILT_ON")->load() < 0.5f)
             loudness += 0.15f;
 
+        // Archetype adjustment: percussive sounds are naturally quieter (short envelope)
+        float baseLevel = (arch == Pluck) ? 0.80f : (arch == Stab) ? 0.75f : 0.65f;
+
         // Compensate: target consistent level
-        float targetVol = juce::jlimit(0.15f, 0.8f, 0.65f / loudness);
+        float targetVol = juce::jlimit(0.15f, 0.85f, baseLevel / loudness);
         if (auto* p = apvts.getParameter("VOLUME"))
             p->setValueNotifyingHost(p->convertTo0to1(targetVol));
     }

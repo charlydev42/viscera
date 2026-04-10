@@ -276,9 +276,9 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
 
     addAndMakeVisible(shaperDisplay);
 
-    // Load default shape preset (Sidechain)
-    shapePresetBox.setSelectedItemIndex(0, juce::dontSendNotification);
-    loadShapePreset(0);
+    // Match preset box to current processor state (restored from DAW session)
+    int matched = matchCurrentPreset();
+    shapePresetBox.setSelectedItemIndex(matched >= 0 ? matched : 0, juce::dontSendNotification);
 
     // Init from parameter
     int syncIdx = getSyncParam();
