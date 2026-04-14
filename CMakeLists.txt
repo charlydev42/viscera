@@ -19,9 +19,9 @@ FetchContent_MakeAvailable(JUCE)
 
 # --- Définir le plugin ---
 juce_add_plugin(Parasite
-    COMPANY_NAME            "Thunderdolphin"
-    PLUGIN_MANUFACTURER_CODE BbSy
-    PLUGIN_CODE              BlBk
+    COMPANY_NAME            "Voidscan"
+    PLUGIN_MANUFACTURER_CODE VdSn
+    PLUGIN_CODE              VsPa
     IS_SYNTH                 TRUE
     NEEDS_MIDI_INPUT         TRUE
     NEEDS_MIDI_OUTPUT        FALSE
@@ -30,7 +30,7 @@ juce_add_plugin(Parasite
     COPY_PLUGIN_AFTER_BUILD  TRUE
     FORMATS                  VST3 AU
     PRODUCT_NAME             "Parasite"
-    BUNDLE_ID                "com.thunderdolphin.parasite"
+    BUNDLE_ID                "com.voidscan.parasite"
     AU_MAIN_TYPE             kAudioUnitType_MusicDevice
 )
 
@@ -75,6 +75,8 @@ juce_add_binary_data(ParasiteData SOURCES
     graphics/parasite_logo_dark_nodolph.png
     graphics/parasite_logo_neutral.png
     graphics/parasite_logo_neutral_dark.png
+    graphics/parasite_advanced_light.png
+    graphics/parasite_advanced_dark.png
     # Factory preset (Init only — user presets synced via cloud)
     presets/Init.prst
 )
@@ -191,7 +193,7 @@ if(PARASITE_BUILD_TESTS)
         JucePlugin_ProducesMidiOutput=0
         JucePlugin_IsMidiEffect=0
         JucePlugin_EditorRequiresKeyboardFocus=1
-        JucePlugin_Manufacturer="Thunderdolphin"
+        JucePlugin_Manufacturer="Voidscan"
         JucePlugin_ManufacturerWebsite=""
         JucePlugin_ManufacturerEmail=""
         JucePlugin_Desc="FM Synth"
@@ -205,8 +207,8 @@ if(PARASITE_BUILD_TESTS)
         JucePlugin_AUExportPrefix=ParasiteAU
         JucePlugin_AUExportPrefixQuoted="ParasiteAU"
         JucePlugin_AUManufacturerCode=JucePlugin_ManufacturerCode
-        JucePlugin_CFBundleIdentifier=com.thunderdolphin.parasite
-        JucePlugin_AAXIdentifier=com.thunderdolphin.parasite
+        JucePlugin_CFBundleIdentifier=com.voidscan.parasite
+        JucePlugin_AAXIdentifier=com.voidscan.parasite
         JucePlugin_AAXManufacturerCode=JucePlugin_ManufacturerCode
         JucePlugin_AAXProductId=JucePlugin_PluginCode
         JucePlugin_AAXCategory=0

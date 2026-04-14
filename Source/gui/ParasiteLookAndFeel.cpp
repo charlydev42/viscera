@@ -36,9 +36,29 @@ void ParasiteLookAndFeel::drawNeumorphicRect(juce::Graphics& g,
     }
 }
 
+// Persist dark mode choice across plugin instances and sessions
+static juce::File getDarkModePrefFile()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+           .getChildFile("Thunderdolphin").getChildFile("Parasite")
+           .getChildFile("ui_prefs.txt");
+}
+
+void ParasiteLookAndFeel::loadDarkModePreference()
+{
+    auto f = getDarkModePrefFile();
+    if (f.existsAsFile() && f.loadFileAsString().trim() == "dark")
+        setDarkMode(true);
+}
+
 void ParasiteLookAndFeel::setDarkMode(bool dark)
 {
     darkMode = dark;
+    // Save preference (global, not per-preset)
+    auto f = getDarkModePrefFile();
+    f.getParentDirectory().createDirectory();
+    f.replaceWithText(dark ? "dark" : "light");
+
     if (dark)
     {
         kBgColor     = 0xFF2E3440;
@@ -52,7 +72,7 @@ void ParasiteLookAndFeel::setDarkMode(bool dark)
         kHeaderBg    = 0xFF3B4252;
         kDisplayBg   = 0xFF353C4A;
         kShadowDark  = 0xFF1A1E26;
-        kShadowLight = 0xFF434C5E;
+        kShadowLight = 0xFF3A4252;  // less bright highlight → reduces glow halo on knobs
     }
     else
     {

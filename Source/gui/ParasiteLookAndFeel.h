@@ -77,6 +77,7 @@ public:
     // Dark mode toggle (atomic: read by GL thread, written by GUI thread)
     static inline std::atomic<bool> darkMode { false };
     static void setDarkMode(bool dark);
+    static void loadDarkModePreference();  // Load persisted choice from disk
     void refreshJuceColours();
 
     void fillTextEditorBackground(juce::Graphics& g, int width, int height,

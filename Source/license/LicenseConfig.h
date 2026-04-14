@@ -16,7 +16,7 @@
 
 namespace bb::license {
 
-// ── Thunderdolphin API ──────────────────────────────────────────────
+// ── Voidscan API (backend still hosted at thunderdolphin.studio) ────
 static constexpr const char* kApiBaseUrl = "https://api.thunderdolphin.studio";
 
 // ── Timing ──────────────────────────────────────────────────────────

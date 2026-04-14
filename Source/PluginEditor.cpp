@@ -22,8 +22,14 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
       saveOverlay(processor),
       licenseOverlay(processor.getLicenseManager())
 {
+    // Load persisted dark mode preference before any rendering
+    ParasiteLookAndFeel::loadDarkModePreference();
+
     setLookAndFeel(&lookAndFeel);
     juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
+
+    // Push the loaded dark mode colors into the JUCE look and feel
+    lookAndFeel.refreshJuceColours();
 
     // Give ModSlider access to live LFO modulation values
     ModSlider::voiceParamsPtr = &processor.getVoiceParams();
@@ -49,16 +55,20 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     titleLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold));
     addAndMakeVisible(titleLabel);
 
-    // Logo image from BinaryData (light/dark variants for advanced page)
+    // Advanced page logo (larger format, fills available space)
     {
-        auto img = juce::ImageCache::getFromMemory(BinaryData::parasite_logo_light_nodolph_png, BinaryData::parasite_logo_light_nodolph_pngSize);
+        auto img = ParasiteLookAndFeel::darkMode
+            ? juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_dark_png, BinaryData::parasite_advanced_dark_pngSize)
+            : juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_light_png, BinaryData::parasite_advanced_light_pngSize);
         logoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(logoImage);
 
     // Neutral logo for main page
     {
-        auto img = juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png, BinaryData::parasite_logo_neutral_pngSize);
+        auto img = ParasiteLookAndFeel::darkMode
+            ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_dark_png, BinaryData::parasite_logo_neutral_dark_pngSize)
+            : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png, BinaryData::parasite_logo_neutral_pngSize);
         mainLogoImage.setImage(img, juce::RectanglePlacement::centred);
     }
     addAndMakeVisible(mainLogoImage);
@@ -1056,7 +1066,7 @@ void ParasiteEditor::resized()
         int macrosH = 70;
         int filterH = 70;
         int pitchH = 160;
-        int logoH = 60;
+        int logoH = 100;  // advanced page uses larger logo
         int lfoH = totalH - macrosH - filterH - pitchH - logoH - gap * 4;
 
         // Filter top Y in centre column = macrosH + gap + lfoH + gap + logoH + gap
@@ -1082,7 +1092,7 @@ void ParasiteEditor::resized()
             centreCol.removeFromTop(gap);
             placeSection(centreCol, lfoH, lfoSection, 4);
             centreCol.removeFromTop(gap);
-            logoImage.setBounds(centreCol.removeFromTop(logoH).reduced(20, 6));
+            logoImage.setBounds(centreCol.removeFromTop(logoH).reduced(8, 4));
             centreCol.removeFromTop(gap);
             placeSection(centreCol, filterH, filterSection, 5);
             centreCol.removeFromTop(gap);
@@ -1212,10 +1222,10 @@ void ParasiteEditor::showSettingsMenu()
                 ParasiteLookAndFeel::setDarkMode(!ParasiteLookAndFeel::darkMode);
                 lookAndFeel.refreshJuceColours();
 
-                // Swap logos
+                // Swap logos (advanced page uses the larger advanced variant)
                 auto img = ParasiteLookAndFeel::darkMode
-                    ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_dark_nodolph_png, BinaryData::parasite_logo_dark_nodolph_pngSize)
-                    : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_light_nodolph_png, BinaryData::parasite_logo_light_nodolph_pngSize);
+                    ? juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_dark_png, BinaryData::parasite_advanced_dark_pngSize)
+                    : juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_light_png, BinaryData::parasite_advanced_light_pngSize);
                 logoImage.setImage(img, juce::RectanglePlacement::centred);
 
                 auto mainImg = ParasiteLookAndFeel::darkMode
