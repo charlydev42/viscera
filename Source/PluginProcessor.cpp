@@ -1008,7 +1008,7 @@ void ParasiteProcessor::setStateInformation(const void* data, int sizeInBytes)
 juce::File ParasiteProcessor::getUserPresetsDir()
 {
     auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                   .getChildFile("Thunderdolphin").getChildFile("Parasite").getChildFile("Presets");
+                   .getChildFile("Voidscan").getChildFile("Parasite").getChildFile("Presets");
     dir.createDirectory();
     return dir;
 }
@@ -1098,7 +1098,7 @@ void ParasiteProcessor::toggleFavorite(const juce::String& presetName)
 void ParasiteProcessor::saveFavorites()
 {
     auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                   .getChildFile("Thunderdolphin").getChildFile("Parasite");
+                   .getChildFile("Voidscan").getChildFile("Parasite");
     dir.createDirectory();
     auto file = dir.getChildFile("favorites.txt");
     file.replaceWithText(favorites.joinIntoString("\n"));
@@ -1107,7 +1107,7 @@ void ParasiteProcessor::saveFavorites()
 void ParasiteProcessor::loadFavorites()
 {
     auto file = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                    .getChildFile("Thunderdolphin").getChildFile("Parasite").getChildFile("favorites.txt");
+                    .getChildFile("Voidscan").getChildFile("Parasite").getChildFile("favorites.txt");
     if (file.existsAsFile())
     {
         juce::StringArray lines;

@@ -40,7 +40,7 @@ void ParasiteLookAndFeel::drawNeumorphicRect(juce::Graphics& g,
 static juce::File getDarkModePrefFile()
 {
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-           .getChildFile("Thunderdolphin").getChildFile("Parasite")
+           .getChildFile("Voidscan").getChildFile("Parasite")
            .getChildFile("ui_prefs.txt");
 }
 

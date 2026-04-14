@@ -16,8 +16,8 @@
 
 namespace bb::license {
 
-// ── Voidscan API (backend still hosted at thunderdolphin.studio) ────
-static constexpr const char* kApiBaseUrl = "https://api.thunderdolphin.studio";
+// ── Voidscan API ────────────────────────────────────────────────────
+static constexpr const char* kApiBaseUrl = "https://api.voidscan-audio.com";
 
 // ── Timing ──────────────────────────────────────────────────────────
 static constexpr int64_t kVerifyIntervalMs  = 48LL * 60 * 60 * 1000;   // 48 h

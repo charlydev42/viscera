@@ -148,7 +148,7 @@ void CloudPresetManager::refreshTokenSync()
 juce::File CloudPresetManager::getTokenCacheFile()
 {
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-           .getChildFile("Thunderdolphin").getChildFile("Parasite")
+           .getChildFile("Voidscan").getChildFile("Parasite")
            .getChildFile("cloud_token.dat");
 }
 
@@ -607,7 +607,7 @@ void CloudPresetManager::writePresetToDisk(const juce::String& uuid,
 juce::File CloudPresetManager::getDeletionLogFile()
 {
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-           .getChildFile("Thunderdolphin").getChildFile("Parasite")
+           .getChildFile("Voidscan").getChildFile("Parasite")
            .getChildFile("cloud_deletions.json");
 }
 

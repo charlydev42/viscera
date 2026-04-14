@@ -485,12 +485,12 @@ juce::File LicenseManager::getCacheFile()
     if (auto* pw = getpwuid(getuid()))
     {
         return juce::File(juce::String(pw->pw_dir))
-            .getChildFile("Library/Thunderdolphin/Parasite/license.dat");
+            .getChildFile("Library/Voidscan/Parasite/license.dat");
     }
 #endif
     return juce::File::getSpecialLocation(
                juce::File::userApplicationDataDirectory)
-           .getChildFile("Thunderdolphin").getChildFile("Parasite")
+           .getChildFile("Voidscan").getChildFile("Parasite")
            .getChildFile("license.dat");
 }
 
