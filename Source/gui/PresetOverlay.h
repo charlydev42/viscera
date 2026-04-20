@@ -31,7 +31,7 @@ private:
     ParasiteProcessor& proc;
 
     juce::String selectedCategory { "All" };
-    juce::TextButton categoryButtons[7];
+    juce::TextButton categoryButtons[9];  // "All" + 8 categories
     bool favFilterOn = false;
     juce::Rectangle<int> favToggleBounds;
 

@@ -1195,7 +1195,7 @@ void ParasiteProcessor::buildPresetRegistry()
     }
 
     // Sort factory presets by category order, then by name
-    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+    static const juce::StringArray categoryOrder { "Init", "Bass", "Lead", "Pluck", "Keys", "Pad", "Texture", "Drums", "FX" };
     std::sort(presetRegistry.begin(), presetRegistry.end(),
         [](const PresetEntry& a, const PresetEntry& b) {
             int catA = categoryOrder.indexOf(a.category);

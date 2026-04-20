@@ -89,7 +89,7 @@ void PresetBrowser::showPresetMenu()
     juce::PopupMenu menu;
 
     // Category order for factory presets
-    static const juce::StringArray categoryOrder { "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+    static const juce::StringArray categoryOrder { "Bass", "Lead", "Pluck", "Keys", "Pad", "Texture", "Drums", "FX" };
     int currentIdx = proc.getCurrentPresetIndex();
 
     // Collect indices per category, then sort alphabetically within each
@@ -156,7 +156,7 @@ std::vector<int> PresetBrowser::buildSortedOrder()
     std::vector<int> order;
 
     // Same category order as showPresetMenu
-    static const juce::StringArray categoryOrder { "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+    static const juce::StringArray categoryOrder { "Bass", "Lead", "Pluck", "Keys", "Pad", "Texture", "Drums", "FX" };
 
     for (auto& cat : categoryOrder)
     {

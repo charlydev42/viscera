@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <vector>
 
-static const juce::StringArray kCategories { "All", "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+static const juce::StringArray kCategories { "All", "Bass", "Lead", "Pluck", "Keys", "Pad", "Texture", "Drums", "FX" };
 
 // Draw a heart shape centered in a rectangle using vector paths
 static void drawHeart(juce::Graphics& g, juce::Rectangle<float> area, bool filled)
@@ -48,7 +48,7 @@ PresetOverlay::PresetOverlay(ParasiteProcessor& processor)
     };
     addAndMakeVisible(packSelector);
 
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 9; ++i)
     {
         categoryButtons[i].setButtonText(kCategories[i]);
         categoryButtons[i].setMouseClickGrabsKeyboardFocus(false);
@@ -506,7 +506,7 @@ void PresetOverlay::resized()
     pillRow.removeFromRight(4);
 
     int pillW = (pillRow.getWidth() - 6 * 4) / 7;
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 9; ++i)
     {
         categoryButtons[i].setBounds(pillRow.removeFromLeft(pillW));
         pillRow.removeFromLeft(4);
@@ -528,7 +528,7 @@ void PresetOverlay::paint(juce::Graphics& g)
 
     auto accentCol = juce::Colour(ParasiteLookAndFeel::kAccentColor);
 
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 9; ++i)
     {
         bool sel = (kCategories[i] == selectedCategory);
         categoryButtons[i].setColour(juce::TextButton::textColourOnId,

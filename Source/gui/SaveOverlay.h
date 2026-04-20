@@ -22,12 +22,15 @@ private:
     ParasiteProcessor& proc;
 
     juce::TextEditor nameEditor;
-    juce::TextButton categoryButtons[6];
+    static constexpr int kNumCategories = 8;
+    juce::TextButton categoryButtons[kNumCategories];
     juce::String selectedCategory { "Bass" };
     juce::TextButton saveBtn  { "Save" };
     juce::TextButton cancelBtn { "Cancel" };
 
-    static constexpr const char* kCategories[6] = { "Bass", "Lead", "Pad", "FX", "Drums", "Texture" };
+    static constexpr const char* kCategories[kNumCategories] = {
+        "Bass", "Lead", "Pluck", "Keys", "Pad", "Texture", "Drums", "FX"
+    };
 
     void doSave();
     void doCancel();

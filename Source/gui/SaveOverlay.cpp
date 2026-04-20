@@ -33,7 +33,7 @@ SaveOverlay::SaveOverlay(ParasiteProcessor& processor)
     };
     addAndMakeVisible(nameEditor);
 
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < kNumCategories; ++i)
     {
         categoryButtons[i].setButtonText(kCategories[i]);
         categoryButtons[i].setMouseClickGrabsKeyboardFocus(false);
@@ -208,8 +208,8 @@ void SaveOverlay::resized()
 
     // Category buttons row
     auto catRow = content.removeFromTop(28).reduced(20, 0);
-    int catW = (catRow.getWidth() - 5 * 6) / 6;
-    for (int i = 0; i < 6; ++i)
+    int catW = (catRow.getWidth() - 5 * kNumCategories) / kNumCategories;
+    for (int i = 0; i < kNumCategories; ++i)
     {
         categoryButtons[i].setBounds(catRow.removeFromLeft(catW));
         catRow.removeFromLeft(6);
@@ -251,7 +251,7 @@ void SaveOverlay::paint(juce::Graphics& g)
     }
 
     // Style category pills: highlight selected
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < kNumCategories; ++i)
     {
         bool sel = (juce::String(kCategories[i]) == selectedCategory);
         categoryButtons[i].setColour(juce::TextButton::textColourOnId,

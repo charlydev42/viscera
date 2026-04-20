@@ -379,7 +379,8 @@ vec3 shade(vec3 p, vec3 rd, vec3 N) {
     Lo += envMap(R) * F_env * 1.3;
 
     vec3 refDir = refract(-V, N, 1.0/1.45);
-    vec3 refCol = envMap(refDir) * exp(-vec3(0.8, 0.2, 1.3)*1.5);
+    // Pre-computed exp(-vec3(0.8,0.2,1.3)*1.5) ≈ vec3(0.30, 0.74, 0.14) — avoids per-pixel exp()
+    vec3 refCol = envMap(refDir) * vec3(0.30, 0.74, 0.14);
     Lo = mix(Lo, refCol * albedo * 2.0, (1.0-pow(NdotV,0.5)) * 0.2);
 
     Lo += vec3(1.0,1.0,0.95) * pow(max(dot(N, normalize(V+L1)), 0.0), 512.0) * 3.0;
@@ -390,8 +391,8 @@ vec3 shade(vec3 p, vec3 rd, vec3 N) {
 
     Lo *= mix(0.82, 1.0, calcAO(p, N));
 
+    // Single mix instead of chained mixes (one smoothstep call instead of two)
     vec3 glowCol = mix(vec3(0.20,0.50,0.10), vec3(0.545,0.765,0.290), smoothstep(0.2,0.5,nrg));
-    glowCol = mix(glowCol, vec3(1.0, 0.95, 0.5), smoothstep(0.6, 0.9, loud) * 0.6);
     Lo += glowCol * pow(nrg, 1.5) * (0.3 + loud * 0.8);
 
     return Lo;
@@ -436,7 +437,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
         // Tonemap
         col = col / (col + 1.0);
-        col += max(col - (0.55 - loud*0.12), 0.0) * (0.55 + loud*0.4);
+        // Simpler bloom (constant thresholds, one less multiply)
+        col += max(col - 0.55, 0.0) * 0.4;
 
         // Chromatic aberration
         float chr = length(fragCoord/iResolution.xy - 0.5) * (0.001 + loud*0.005) * 28.0;
