@@ -1,11 +1,11 @@
 // LicenseManager.cpp — License activation, verification, cache, HMAC signing
 #include "LicenseManager.h"
 #include "LicenseConfig.h"
+#include <juce_cryptography/juce_cryptography.h>
 
 #if JUCE_MAC
- #include <CommonCrypto/CommonHMAC.h>
- #include <CommonCrypto/CommonDigest.h>
  #include <IOKit/IOKitLib.h>
+ #include <CoreFoundation/CoreFoundation.h>
  #include <pwd.h>
  #include <unistd.h>
 #endif
@@ -399,25 +399,69 @@ juce::String LicenseManager::canonicalJson(const juce::var& value)
 }
 
 // =====================================================================
-// HMAC-SHA256 (CommonCrypto on macOS)
+// HMAC-SHA256 — cross-platform impl using JUCE's SHA256
+// Follows RFC 2104: H(K xor opad, H(K xor ipad, data))
 // =====================================================================
+
+static constexpr int kSha256BlockSize  = 64;
+static constexpr int kSha256DigestSize = 32;
+
+static juce::MemoryBlock sha256Raw(const void* data, size_t size)
+{
+    juce::MemoryBlock mb(data, size);
+    auto hash = juce::SHA256(mb.getData(), mb.getSize()).getRawData();
+    return hash;
+}
 
 juce::String LicenseManager::hmacSha256(const juce::String& key,
                                          const juce::String& data)
 {
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-    CCHmac(kCCHmacAlgSHA256,
-           key.toRawUTF8(),  static_cast<size_t>(key.getNumBytesAsUTF8()),
-           data.toRawUTF8(), static_cast<size_t>(data.getNumBytesAsUTF8()),
-           digest);
+    auto keyUtf8  = key.toRawUTF8();
+    size_t keyLen = static_cast<size_t>(key.getNumBytesAsUTF8());
 
+    // Prepare key: hash if too long, zero-pad if too short
+    juce::uint8 kBlock[kSha256BlockSize] = {};
+    if (keyLen > kSha256BlockSize)
+    {
+        auto hashed = sha256Raw(keyUtf8, keyLen);
+        std::memcpy(kBlock, hashed.getData(), kSha256DigestSize);
+    }
+    else
+    {
+        std::memcpy(kBlock, keyUtf8, keyLen);
+    }
+
+    juce::uint8 ipad[kSha256BlockSize], opad[kSha256BlockSize];
+    for (int i = 0; i < kSha256BlockSize; ++i)
+    {
+        ipad[i] = kBlock[i] ^ 0x36;
+        opad[i] = kBlock[i] ^ 0x5c;
+    }
+
+    auto dataUtf8  = data.toRawUTF8();
+    size_t dataLen = static_cast<size_t>(data.getNumBytesAsUTF8());
+
+    // Inner hash: H(ipad || data)
+    juce::MemoryBlock inner;
+    inner.append(ipad, kSha256BlockSize);
+    inner.append(dataUtf8, dataLen);
+    auto innerHash = sha256Raw(inner.getData(), inner.getSize());
+
+    // Outer hash: H(opad || innerHash)
+    juce::MemoryBlock outer;
+    outer.append(opad, kSha256BlockSize);
+    outer.append(innerHash.getData(), innerHash.getSize());
+    auto finalHash = sha256Raw(outer.getData(), outer.getSize());
+
+    // Hex encode
     static const char hex[] = "0123456789abcdef";
     juce::String result;
-    result.preallocateBytes(CC_SHA256_DIGEST_LENGTH * 2 + 1);
-    for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; ++i)
+    result.preallocateBytes(kSha256DigestSize * 2 + 1);
+    auto* bytes = static_cast<const juce::uint8*>(finalHash.getData());
+    for (int i = 0; i < kSha256DigestSize; ++i)
     {
-        result += hex[(digest[i] >> 4) & 0x0F];
-        result += hex[digest[i] & 0x0F];
+        result += hex[(bytes[i] >> 4) & 0x0F];
+        result += hex[bytes[i] & 0x0F];
     }
     return result;
 }
@@ -449,21 +493,26 @@ juce::String LicenseManager::getMachineId()
     }
 #endif
 
+    // Windows / Linux / fallback: use JUCE's unique device ID
+    if (raw.isEmpty())
+    {
+        raw = juce::SystemStats::getUniqueDeviceID();
+    }
+
     if (raw.isEmpty())
         raw = juce::SystemStats::getComputerName() + "-fallback";
 
-    // Hash for consistent length + privacy
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-    auto rawUtf8 = raw.toRawUTF8();
-    CC_SHA256(rawUtf8, static_cast<CC_LONG>(std::strlen(rawUtf8)), digest);
-
+    // Hash for consistent length + privacy (SHA256 hex — 64 chars)
+    auto hashed = sha256Raw(raw.toRawUTF8(),
+                            static_cast<size_t>(raw.getNumBytesAsUTF8()));
     static const char hexChars[] = "0123456789abcdef";
     juce::String hash;
-    hash.preallocateBytes(CC_SHA256_DIGEST_LENGTH * 2 + 1);
-    for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; ++i)
+    hash.preallocateBytes(kSha256DigestSize * 2 + 1);
+    auto* bytes = static_cast<const juce::uint8*>(hashed.getData());
+    for (int i = 0; i < kSha256DigestSize; ++i)
     {
-        hash += hexChars[(digest[i] >> 4) & 0x0F];
-        hash += hexChars[digest[i] & 0x0F];
+        hash += hexChars[(bytes[i] >> 4) & 0x0F];
+        hash += hexChars[bytes[i] & 0x0F];
     }
     return hash;
 }

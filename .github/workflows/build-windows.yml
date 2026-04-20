@@ -1,0 +1,42 @@
+name: Build Windows VST3
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target Parasite_VST3
+
+      - name: Collect artifact
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item -Recurse "build\Parasite_artefacts\Release\VST3\Parasite.vst3" dist\
+          Compress-Archive -Path dist\Parasite.vst3 -DestinationPath Parasite-Windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Parasite-Windows-VST3
+          path: Parasite-Windows.zip
+          retention-days: 30
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Parasite-Windows.zip

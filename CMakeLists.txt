@@ -90,11 +90,12 @@ target_link_libraries(Parasite
         juce::juce_audio_basics
         juce::juce_audio_processors
         juce::juce_audio_utils
+        juce::juce_cryptography
         juce::juce_dsp
         juce::juce_gui_basics
         juce::juce_opengl
-        "-framework IOKit"
-        "-framework Security"
+        "$<$<PLATFORM_ID:Darwin>:-framework IOKit>"
+        "$<$<PLATFORM_ID:Darwin>:-framework Security>"
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
@@ -171,10 +172,11 @@ if(PARASITE_BUILD_TESTS)
         juce::juce_audio_basics
         juce::juce_audio_processors
         juce::juce_audio_utils
+        juce::juce_cryptography
         juce::juce_dsp
         juce::juce_events
-        "-framework IOKit"
-        "-framework Security"
+        "$<$<PLATFORM_ID:Darwin>:-framework IOKit>"
+        "$<$<PLATFORM_ID:Darwin>:-framework Security>"
     )
 
     target_compile_definitions(ParasiteTests PRIVATE
