@@ -87,8 +87,16 @@ void HarmonicEditor::drawBar(const juce::MouseEvent& e)
     float amp = 1.0f - (static_cast<float>(e.y) - area.getY()) / area.getHeight();
     amp = juce::jlimit(0.0f, 1.0f, amp);
 
-    harmonicTable.setHarmonic(idx, amp);
-    harmonicTable.rebake();
+    if (onSetHarmonic)
+    {
+        // Route through APVTS so the edit is undoable (Cmd+Z)
+        onSetHarmonic(idx, amp);
+    }
+    else
+    {
+        harmonicTable.setHarmonic(idx, amp);
+        harmonicTable.rebake();
+    }
     if (onUserDraw) onUserDraw();
     repaint();
 }

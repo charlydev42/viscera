@@ -15,7 +15,19 @@ namespace bb {
 
 enum class LFOWaveType : int { Sine = 0, Triangle, Saw, Square, SandH, Custom, Count };
 
-struct CurvePoint { float x, y; }; // x,y in [0,1]
+struct CurvePoint
+{
+    float x, y; // x,y in [0,1]
+    bool operator==(const CurvePoint& o) const noexcept
+    {
+        // Small epsilon — setCurvePoints sorts and clamps, which can
+        // introduce sub-ulp rounding. Tight enough to still detect real
+        // moves (the curve editor steps in pixel-sized increments).
+        constexpr float eps = 1e-6f;
+        return std::fabs(x - o.x) < eps && std::fabs(y - o.y) < eps;
+    }
+    bool operator!=(const CurvePoint& o) const noexcept { return !(*this == o); }
+};
 
 class LFO
 {
@@ -26,6 +38,7 @@ public:
     {
         for (int i = 0; i < kNumSteps; ++i)
             customTable[i].store(0.5f, std::memory_order_relaxed);
+        customTablePeak.store(0.5f, std::memory_order_relaxed);
         curvePoints = { {0.0f, 0.5f}, {1.0f, 0.5f} };
     }
 
@@ -117,24 +130,28 @@ public:
 
     float getPhase() const noexcept { return static_cast<float>(phase); }
 
-    // Peak of current waveform in unipolar [0,1] space
+    // Peak of current waveform in unipolar [0,1] space. Cached by
+    // bakeToTable / setStep so the audio-thread read is a single atomic
+    // load instead of 32.
     float getUniPeak() const noexcept
     {
         if (waveType != LFOWaveType::Custom)
             return 1.0f; // standard waveforms always reach full range
-
-        // Custom curve: peak = max curve y value (which equals unipolar value)
-        float peak = 0.0f;
-        for (int i = 0; i < kNumSteps; ++i)
-            peak = std::max(peak, customTable[i].load(std::memory_order_relaxed));
-        return peak;
+        return customTablePeak.load(std::memory_order_relaxed);
     }
 
     // --- Custom table step access (lock-free via atomics) ---
     void setStep(int index, float value)
     {
         if (index >= 0 && index < kNumSteps)
+        {
             customTable[index].store(value, std::memory_order_relaxed);
+            // Keep the peak monotonically non-decreasing on single-step
+            // writes; any shrinks are re-evaluated on the next bakeToTable.
+            float cur = customTablePeak.load(std::memory_order_relaxed);
+            if (value > cur)
+                customTablePeak.store(value, std::memory_order_relaxed);
+        }
     }
 
     float getStep(int index) const
@@ -215,12 +232,15 @@ public:
     // Bake curve points into the 32-step atomic table
     void bakeToTable()
     {
+        float peak = 0.0f;
         for (int i = 0; i < kNumSteps; ++i)
         {
             float t = static_cast<float>(i) / static_cast<float>(kNumSteps - 1);
             float v = evalCatmullRom(t);
             customTable[i].store(v, std::memory_order_relaxed);
+            peak = std::max(peak, v);
         }
+        customTablePeak.store(peak, std::memory_order_relaxed);
     }
 
     // --- Serialization ---
@@ -240,11 +260,14 @@ public:
         if (s.isEmpty()) { resetCurve(); return; }
         auto tokens = juce::StringArray::fromTokens(s, ",", "");
         if (tokens.size() < kNumSteps) { resetCurve(); return; }
+        float peak = 0.0f;
         for (int i = 0; i < kNumSteps && i < tokens.size(); ++i)
         {
-            float val = tokens[i].getFloatValue();
-            customTable[i].store(std::clamp(val, 0.0f, 1.0f), std::memory_order_relaxed);
+            float val = std::clamp(tokens[i].getFloatValue(), 0.0f, 1.0f);
+            customTable[i].store(val, std::memory_order_relaxed);
+            peak = std::max(peak, val);
         }
+        customTablePeak.store(peak, std::memory_order_relaxed);
     }
 
     // Curve serialization: "x,y;x,y;x,y"
@@ -267,6 +290,7 @@ public:
         curvePoints = { {0.0f, 0.5f}, {1.0f, 0.5f} };
         for (int i = 0; i < kNumSteps; ++i)
             customTable[i].store(0.5f, std::memory_order_relaxed);
+        customTablePeak.store(0.5f, std::memory_order_relaxed);
     }
 
     void deserializeCurve(const juce::String& s)
@@ -303,6 +327,9 @@ private:
 
     // Custom drawable table (32 steps, [0,1])
     std::array<std::atomic<float>, kNumSteps> customTable;
+    // Cached peak of customTable; updated by bakeToTable / setStep /
+    // deserializeTable so getUniPeak is a single atomic load per block.
+    std::atomic<float> customTablePeak { 0.5f };
 
     // Curve control points (protected by mutex for GUI thread safety)
     mutable std::mutex curveMutex;

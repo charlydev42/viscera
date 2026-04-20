@@ -20,6 +20,10 @@ public:
     void setCoarseMode(bool coarse) { coarseMode = coarse; repaint(); }
     bool isCoarseMode() const { return coarseMode; }
 
+    // Optional: route writes through APVTS params (for undo). If set, applyMouse
+    // calls this instead of VolumeShaper::setStep directly. Takes (idx, value01).
+    std::function<void(int, float)> onSetStep;
+
 private:
     bb::VolumeShaper& volumeShaper;
     bool coarseMode = false; // false=32 steps, true=8 steps

@@ -57,8 +57,21 @@ void FMVoice::prepareToPlay(double sr, int /*samplesPerBlock*/)
     smoothMod2Level.reset(sr, 0.02);
     smoothCarNoise.reset(sr, 0.02);
     smoothCarSpread.reset(sr, 0.02);
-    smoothGLfoPitch.reset(sr, 0.005);  // 5ms smooth for global LFO pitch
-    smoothGLfoCutoff.reset(sr, 0.005); // 5ms smooth for global LFO cutoff
+    smoothDrive.reset(sr, 0.010);      // 10ms — saturation curvature zips hard
+    smoothFold.reset(sr, 0.010);       // 10ms — wavefolder amount
+
+    // Global LFO sums: 5ms ramps — short enough to feel immediate, long
+    // enough to kill block-rate steps on fast LFO rates.
+    smoothGLfoPitch.reset(sr, 0.005);
+    smoothGLfoCutoff.reset(sr, 0.005);
+    smoothGLfoRes.reset(sr, 0.005);
+    smoothGLfoVolume.reset(sr, 0.005);
+    smoothGLfoDrive.reset(sr, 0.005);
+    smoothGLfoMod1Lvl.reset(sr, 0.005);
+    smoothGLfoMod2Lvl.reset(sr, 0.005);
+    smoothGLfoNoise.reset(sr, 0.005);
+    smoothGLfoSpread.reset(sr, 0.005);
+    smoothGLfoFold.reset(sr, 0.005);
 
     // Reset filter coefficient cache
     lastFilterCutoff = -1.0f;
@@ -260,17 +273,24 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     float fluxAmount   = juce::jlimit(0.0f, 1.0f, params.flux->load()
                          + params.lfoModFlux.load(std::memory_order_relaxed));
 
-    // Global LFO modulation sums (from PluginProcessor) — smoothed for pitch + cutoff
+    // Global LFO modulation sums (from PluginProcessor) — all smoothed so
+    // their per-sample contribution is continuous. We read the atomic once
+    // per block and set the smoothing target; the per-sample loop pulls
+    // .getNextValue() to get a ramped value.
     smoothGLfoPitch.setTargetValue(params.lfoModPitch.load(std::memory_order_relaxed));
     smoothGLfoCutoff.setTargetValue(params.lfoModCutoff.load(std::memory_order_relaxed));
-    float gLfoModRes     = params.lfoModRes.load(std::memory_order_relaxed);
-    float gLfoModMod1Lvl = params.lfoModMod1Lvl.load(std::memory_order_relaxed);
-    float gLfoModMod2Lvl = params.lfoModMod2Lvl.load(std::memory_order_relaxed);
-    float gLfoModVolume  = params.lfoModVolume.load(std::memory_order_relaxed);
-    float gLfoModDrive   = params.lfoModDrive.load(std::memory_order_relaxed);
-    float gLfoModNoise   = params.lfoModNoise.load(std::memory_order_relaxed);
-    float gLfoModSpread  = params.lfoModSpread.load(std::memory_order_relaxed);
-    float gLfoModFold    = params.lfoModFold.load(std::memory_order_relaxed);
+    smoothGLfoRes.setTargetValue(params.lfoModRes.load(std::memory_order_relaxed));
+    smoothGLfoMod1Lvl.setTargetValue(params.lfoModMod1Lvl.load(std::memory_order_relaxed));
+    smoothGLfoMod2Lvl.setTargetValue(params.lfoModMod2Lvl.load(std::memory_order_relaxed));
+    smoothGLfoVolume.setTargetValue(params.lfoModVolume.load(std::memory_order_relaxed));
+    smoothGLfoDrive.setTargetValue(params.lfoModDrive.load(std::memory_order_relaxed));
+    smoothGLfoNoise.setTargetValue(params.lfoModNoise.load(std::memory_order_relaxed));
+    smoothGLfoSpread.setTargetValue(params.lfoModSpread.load(std::memory_order_relaxed));
+    smoothGLfoFold.setTargetValue(params.lfoModFold.load(std::memory_order_relaxed));
+    // HemoFold's setAmount is per-block only, so we still need a scalar for
+    // the fold amount this block. Sampling the smooth value at block start
+    // gives us a ramped value without touching the fold DSP.
+    const float gLfoModFoldBlock = smoothGLfoFold.getCurrentValue();
 
     bool xorEnabled    = params.xorOn->load() > 0.5f;
     bool syncEnabled   = params.syncOn->load() > 0.5f;
@@ -312,6 +332,8 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     smoothMod2Level.setTargetValue(mod2LevelP);
     smoothCarNoise.setTargetValue(carNoiseP);
     smoothCarSpread.setTargetValue(carSpreadP);
+    smoothDrive.setTargetValue(driveParam);
+    smoothFold.setTargetValue(dispAmount);
 
     // Envelope time macro: 0.5 = 1x, 0 = 0.25x, 1 = 4x (exponential)
     float timeMul = std::pow(4.0f, params.macroTime->load() * 2.0f - 1.0f);
@@ -339,7 +361,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         std::max(0.0f, (params.pitchEnvR->load() + params.lfoModPEnvR.load(std::memory_order_relaxed) * 8.0f) * timeMul));
 
     // HemoFold (wavefolder) + global LFO fold mod
-    float foldAmt = juce::jlimit(0.0f, 1.0f, dispAmount + gLfoModFold);
+    float foldAmt = juce::jlimit(0.0f, 1.0f, dispAmount + gLfoModFoldBlock);
     hemoFoldL.setAmount(foldAmt);
     hemoFoldR.setAmount(foldAmt);
 
@@ -404,10 +426,10 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float fluxMod = 1.0f + fluxAmount * lfo1Val;
 
         // Smooth parameters + apply global LFO modulations
-        float vol      = juce::jlimit(0.0f, 1.0f, smoothVolume.getNextValue() + gLfoModVolume);
+        float vol      = juce::jlimit(0.0f, 1.0f, smoothVolume.getNextValue() + smoothGLfoVolume.getNextValue());
         float cutoff   = smoothCutoff.getNextValue();
-        float m1Level  = std::max(0.0f, smoothMod1Level.getNextValue() + gLfoModMod1Lvl);
-        float m2Level  = std::max(0.0f, smoothMod2Level.getNextValue() + gLfoModMod2Lvl);
+        float m1Level  = std::max(0.0f, smoothMod1Level.getNextValue() + smoothGLfoMod1Lvl.getNextValue());
+        float m2Level  = std::max(0.0f, smoothMod2Level.getNextValue() + smoothGLfoMod2Lvl.getNextValue());
 
         // --- Modulateur 1 --- (use pre-computed ratio: baseFreq × ratio or absolute)
         double mod1Freq = mod1KB ? baseFreq * mod1Ratio : mod1Ratio;
@@ -498,7 +520,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // Stereo spread: detune R carrier by up to ±15 cents (+ global LFO)
         // Linear approximation of exp2(x) for small x: 1 + x * ln(2)
-        float spread = juce::jlimit(0.0f, 1.0f, smoothCarSpread.getNextValue() + gLfoModSpread);
+        float spread = juce::jlimit(0.0f, 1.0f, smoothCarSpread.getNextValue() + smoothGLfoSpread.getNextValue());
         double detuneR = 1.0 + static_cast<double>(spread) * kDetuneScale;
         carrierOscR.setFrequency(carrierFreq * detuneR);
         carrierOscR.setDrift(driftParam);
@@ -515,7 +537,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float env3Val = env3.tick();
 
         // --- Carrier noise mix (+ global LFO) ---
-        float noiseMix = juce::jlimit(0.0f, 1.0f, smoothCarNoise.getNextValue() + gLfoModNoise);
+        float noiseMix = juce::jlimit(0.0f, 1.0f, smoothCarNoise.getNextValue() + smoothGLfoNoise.getNextValue());
         float outputL, outputR;
         float velGain = params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity;
         if (noiseMix > 0.0001f)
@@ -572,7 +594,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             cutNorm = juce::jlimit(0.0f, 1.0f, cutNorm + gLfoCutSmoothed);
             float modulatedCutoff = (20.0f + 19980.0f * std::pow(cutNorm, kCutInvSkew)) * veinMod;
             modulatedCutoff = juce::jlimit(20.0f, 20000.0f, modulatedCutoff);
-            float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + gLfoModRes);
+            float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + smoothGLfoRes.getNextValue());
             // Only recalculate filter coefficients when parameters changed audibly
             if (std::abs(modulatedCutoff - lastFilterCutoff) > 0.5f
                 || std::abs(modulatedRes - lastFilterRes) > 0.001f)
@@ -595,7 +617,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         outputR = hemoFoldR.tick(outputR);
 
         // --- Volume + drive saturation + soft clipper ---
-        float drv = juce::jlimit(1.0f, 10.0f, driveParam + gLfoModDrive * 9.0f);
+        float drv = juce::jlimit(1.0f, 10.0f, smoothDrive.getNextValue() + smoothGLfoDrive.getNextValue() * 9.0f);
         outputL *= vol;  outputL *= drv;  outputL = std::tanh(outputL);
         outputR *= vol;  outputR *= drv;  outputR = std::tanh(outputR);
 

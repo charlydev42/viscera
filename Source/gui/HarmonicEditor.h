@@ -14,6 +14,10 @@ public:
     // Called when user draws bars manually
     std::function<void()> onUserDraw;
 
+    // Optional: route writes through APVTS params (for undo). If set, drawBar
+    // calls this instead of HarmonicTable::setHarmonic directly. Takes (idx, amp01).
+    std::function<void(int, float)> onSetHarmonic;
+
     void paint(juce::Graphics& g) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent& e) override;

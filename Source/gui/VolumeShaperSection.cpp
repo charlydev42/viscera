@@ -27,16 +27,21 @@ void ShaperDisplay::applyMouse(const juce::MouseEvent& e)
     float val = 1.0f - (e.position.y - b.getY()) / b.getHeight();
     val = juce::jlimit(0.0f, 1.0f, val);
 
+    auto apply = [this](int idx, float v) {
+        if (onSetStep) onSetStep(idx, v);          // undoable path via APVTS
+        else           volumeShaper.setStep(idx, v); // fallback (no undo)
+    };
+
     if (coarseMode)
     {
         // Each coarse bar covers 4 fine steps
         int startStep = barIdx * 4;
         for (int i = 0; i < 4; ++i)
-            volumeShaper.setStep(startStep + i, val);
+            apply(startStep + i, val);
     }
     else
     {
-        volumeShaper.setStep(barIdx, val);
+        apply(barIdx, val);
     }
 }
 
@@ -183,6 +188,13 @@ VolumeShaperSection::VolumeShaperSection(juce::AudioProcessorValueTreeState& apv
 {
     syncNames = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32",
                   "1/4T", "1/8T", "1/16T" };
+
+    // Route shaper step edits through APVTS params for Cmd+Z undo support
+    shaperDisplay.onSetStep = [this](int idx, float v) {
+        auto pid = "SHAPER_S" + juce::String(idx).paddedLeft('0', 2);
+        if (auto* param = state.getParameter(pid))
+            param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, v));
+    };
 
     // On toggle
     onToggle.setButtonText("On");
@@ -349,8 +361,15 @@ void VolumeShaperSection::setSyncParam(int idx)
 void VolumeShaperSection::loadShapePreset(int presetIdx)
 {
     if (presetIdx < 0 || presetIdx >= kNumShapePresets) return;
+    // Route through APVTS so the shape preset load is undoable
     for (int i = 0; i < bb::VolumeShaper::kNumSteps; ++i)
-        volumeShaper.setStep(i, kShapePresets[presetIdx][i]);
+    {
+        auto pid = "SHAPER_S" + juce::String(i).paddedLeft('0', 2);
+        if (auto* p = state.getParameter(pid))
+            p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, kShapePresets[presetIdx][i]));
+        else
+            volumeShaper.setStep(i, kShapePresets[presetIdx][i]);
+    }
 }
 
 void VolumeShaperSection::updateDisplay()

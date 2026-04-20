@@ -57,6 +57,7 @@ void LFOWaveDisplay::mouseDown(const juce::MouseEvent& e)
             {
                 dragPointIndex = i;
                 isDraggingPoint = true;
+                dragStartCurve = pts; // snapshot for undo
                 repaint();
                 return;
             }
@@ -103,6 +104,13 @@ void LFOWaveDisplay::mouseDrag(const juce::MouseEvent& e)
 
 void LFOWaveDisplay::mouseUp(const juce::MouseEvent&)
 {
+    if (isDraggingPoint && lfoPtr != nullptr)
+    {
+        auto after = lfoPtr->getCurvePoints();
+        if (onCurveCommit && !dragStartCurve.empty() && after != dragStartCurve)
+            onCurveCommit(std::move(dragStartCurve), std::move(after));
+        dragStartCurve.clear();
+    }
     isDraggingPoint = false;
     dragPointIndex = -1;
     repaint();
@@ -114,6 +122,8 @@ void LFOWaveDisplay::mouseDoubleClick(const juce::MouseEvent& e)
 
     bool isCustom = (waveType == static_cast<int>(bb::LFOWaveType::Custom));
     auto inner = getLocalBounds().toFloat().reduced(4.0f);
+
+    auto before = lfoPtr->getCurvePoints();
 
     if (!isCustom)
     {
@@ -158,6 +168,7 @@ void LFOWaveDisplay::mouseDoubleClick(const juce::MouseEvent& e)
         // Switch wave type to Custom via the combo/param
         if (onWaveChange) onWaveChange(static_cast<int>(bb::LFOWaveType::Custom));
 
+        if (onCurveCommit) onCurveCommit(std::move(before), lfoPtr->getCurvePoints());
         repaint();
         return;
     }
@@ -173,6 +184,7 @@ void LFOWaveDisplay::mouseDoubleClick(const juce::MouseEvent& e)
         {
             pts.erase(pts.begin() + i);
             lfoPtr->setCurvePoints(pts);
+            if (onCurveCommit) onCurveCommit(std::move(before), lfoPtr->getCurvePoints());
             repaint();
             return;
         }
@@ -182,6 +194,7 @@ void LFOWaveDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     auto newPt = pixelToPoint(e.position, inner);
     pts.push_back(newPt);
     lfoPtr->setCurvePoints(pts); // sorts automatically
+    if (onCurveCommit) onCurveCommit(std::move(before), lfoPtr->getCurvePoints());
     repaint();
 }
 
@@ -336,7 +349,7 @@ static const juce::StringArray kDestNames {
     "ShpRate", "ShpDep",
     "M1Coar", "M2Coar", "CCoar",
     "Tremor", "Vein", "Flux",
-    "Cortex", "Ichor", "Plasma"
+    "Vortex", "Helix", "Plasma"
 };
 
 // --- RefreshButton ---
@@ -445,10 +458,21 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProces
             p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(newWaveType)));
     };
 
+    // Any user-initiated curve change → push an UndoableAction capturing
+    // the before/after control points so Cmd+Z restores the exact curve.
+    waveDisplay.onCurveCommit = [this](std::vector<bb::CurvePoint> before,
+                                        std::vector<bb::CurvePoint> after)
+    {
+        pushCurveEdit(activeTab, before, after);
+    };
+
     // Reset custom curve button
     resetCurveBtn.onClick = [this] {
         auto& lfo = processor.getGlobalLFO(activeTab);
-        lfo.setCurvePoints({ {0.0f, 0.5f}, {1.0f, 0.5f} });
+        auto before = lfo.getCurvePoints();
+        std::vector<bb::CurvePoint> flat { {0.0f, 0.5f}, {1.0f, 0.5f} };
+        lfo.setCurvePoints(flat);
+        pushCurveEdit(activeTab, before, lfo.getCurvePoints());
         waveDisplay.repaint();
     };
     addAndMakeVisible(resetCurveBtn);
@@ -457,14 +481,14 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProces
     addSlotBtn.setButtonText("+");
     addSlotBtn.setName("lfoSlot");
     addSlotBtn.onClick = [this] {
-        if (learnSlotIndex >= 0) { cancelLearnMode(); ModSlider::showDropTargets = false; return; }
+        if (learnSlotIndex >= 0) { cancelLearnMode(); return; }
         auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
         for (int i = 0; i < kNumSlots; ++i)
         {
             int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(i + 1)));
             if (dest == 0)
             {
-                ModSlider::showDropTargets = true;
+                if (ctx) ctx->showDropTargets = true;
                 enterLearnMode(i);
                 return;
             }
@@ -473,26 +497,10 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProces
     addSlotBtn.addMouseListener(this, false);
     addAndMakeVisible(addSlotBtn);
 
-    // "-" button — remove last LFO assignment on active tab
+    // "-" button — show popup of current LFO assignments, click to remove
     removeSlotBtn.setButtonText("-");
     removeSlotBtn.setName("lfoSlot");
-    removeSlotBtn.onClick = [this] {
-        auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
-        for (int i = kNumSlots - 1; i >= 0; --i)
-        {
-            int dest = static_cast<int>(safeParamLoad(state, pfx + "DEST" + juce::String(i + 1)));
-            if (dest > 0)
-            {
-                auto destId = pfx + "DEST" + juce::String(i + 1);
-                auto amtId  = pfx + "AMT"  + juce::String(i + 1);
-                if (auto* dp = state.getParameter(destId))
-                    dp->setValueNotifyingHost(dp->convertTo0to1(0.0f));
-                if (auto* ap = state.getParameter(amtId))
-                    ap->setValueNotifyingHost(ap->convertTo0to1(0.0f));
-                break;
-            }
-        }
-    };
+    removeSlotBtn.onClick = [this] { showAssignmentsPopup(&removeSlotBtn); };
     addAndMakeVisible(removeSlotBtn);
 
     // Count label
@@ -511,6 +519,10 @@ LFOSection::LFOSection(juce::AudioProcessorValueTreeState& apvts, ParasiteProces
 
     // Initial tab
     switchTab(0);
+
+    // Seed from current generation so the first timer tick doesn't think
+    // a preset was just loaded.
+    lastSeenStateGen = processor.stateGeneration.load(std::memory_order_acquire);
 
     setWantsKeyboardFocus(false);
     startTimerHz(10);
@@ -610,7 +622,8 @@ void LFOSection::timerCallback()
         juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.5f));
 
     // Highlight "+" button when in assignment mode (learn or drag)
-    if (ModSlider::showDropTargets || learnSlotIndex >= 0)
+    const bool dropping = (ctx && ctx->showDropTargets);
+    if (dropping || learnSlotIndex >= 0)
     {
         addSlotBtn.setColour(juce::TextButton::buttonColourId,
             juce::Colour(ParasiteLookAndFeel::kPanelColor));
@@ -628,6 +641,16 @@ void LFOSection::timerCallback()
     // Auto-cancel learn mode if we lost focus
     if (learnSlotIndex >= 0 && !hasKeyboardFocus(true))
         cancelLearnMode();
+
+    // Discard an armed learn click when a preset was loaded — the captured
+    // tab/slot may no longer make sense and the user has mentally moved on.
+    uint32_t curGen = processor.stateGeneration.load(std::memory_order_acquire);
+    if (curGen != lastSeenStateGen)
+    {
+        lastSeenStateGen = curGen;
+        if (learnSlotIndex >= 0)
+            cancelLearnMode();
+    }
 }
 
 void LFOSection::updateSyncDisplay()
@@ -677,8 +700,9 @@ void LFOSection::updateAssignmentLabels()
     addSlotBtn.setButtonText(learning ? "..." : "+");
     addSlotBtn.setVisible(numMapped < kNumSlots || learning);
 
-    // "-" button: visible when at least one assignment exists
-    removeSlotBtn.setVisible(numMapped > 0);
+    // "-" button: always visible, disabled when no mapping (greyed out)
+    removeSlotBtn.setVisible(true);
+    removeSlotBtn.setEnabled(numMapped > 0);
 
     // Count + hint
     countLabel.setText(juce::String(numMapped), juce::dontSendNotification);
@@ -700,12 +724,57 @@ void LFOSection::layoutSlots()
 
     countLabel.setBounds(row.removeFromRight(14));
 
-    if (removeSlotBtn.isVisible())
-        removeSlotBtn.setBounds(row.removeFromRight(20).reduced(1, 0));
+    removeSlotBtn.setBounds(row.removeFromRight(20).reduced(1, 0));
 
     // Hint label centered in remaining space
     if (learnHintLabel.isVisible())
         learnHintLabel.setBounds(row.withTrimmedLeft(row.getWidth() / 3));
+}
+
+// UndoableAction snapshotting the full control-point vector so Cmd+Z
+// restores the exact variable-length curve (Serum-style). One drag
+// produces exactly one action — before is captured on mouseDown, after
+// on mouseUp — so we don't need createCoalescedAction.
+struct LFOCurveEdit : public juce::UndoableAction
+{
+    LFOCurveEdit(ParasiteProcessor& p, int lfoIdx,
+                 std::vector<bb::CurvePoint> before,
+                 std::vector<bb::CurvePoint> after)
+      : proc(p), idx(lfoIdx),
+        beforePts(std::move(before)), afterPts(std::move(after)) {}
+
+    bool perform() override
+    {
+        proc.getGlobalLFO(idx).setCurvePoints(afterPts);
+        return true;
+    }
+
+    bool undo() override
+    {
+        proc.getGlobalLFO(idx).setCurvePoints(beforePts);
+        return true;
+    }
+
+    int getSizeInUnits() override
+    {
+        return static_cast<int>(sizeof(*this)
+             + (beforePts.size() + afterPts.size()) * sizeof(bb::CurvePoint));
+    }
+
+    ParasiteProcessor& proc;
+    int idx;
+    std::vector<bb::CurvePoint> beforePts;
+    std::vector<bb::CurvePoint> afterPts;
+};
+
+void LFOSection::pushCurveEdit(int lfoIdx,
+                                const std::vector<bb::CurvePoint>& before,
+                                const std::vector<bb::CurvePoint>& after)
+{
+    if (before == after) return; // no-op, don't pollute the undo stack
+    auto& um = processor.getUndoManager();
+    um.beginNewTransaction("LFO curve edit");
+    um.perform(new LFOCurveEdit(processor, lfoIdx, before, after));
 }
 
 // ============================================================================
@@ -719,8 +788,10 @@ void LFOSection::enterLearnMode(int slotIdx)
     int capturedTab = activeTab;
     int capturedSlot = slotIdx;
 
+    if (ctx == nullptr) return; // no editor attached — can't arm learn mode
+
     auto safeThis = juce::Component::SafePointer<LFOSection>(this);
-    ModSlider::onLearnClick = [safeThis, capturedTab, capturedSlot](bb::LFODest dest)
+    ctx->onLearnClick = [safeThis, capturedTab, capturedSlot](bb::LFODest dest)
     {
         if (safeThis == nullptr) return;
         auto& self = *safeThis;
@@ -763,9 +834,19 @@ void LFOSection::enterLearnMode(int slotIdx)
 void LFOSection::cancelLearnMode()
 {
     learnSlotIndex = -1;
-    ModSlider::onLearnClick = nullptr;
-    ModSlider::showDropTargets = false;
+    if (ctx)
+    {
+        ctx->onLearnClick = nullptr;
+        ctx->showDropTargets = false;
+    }
     updateAssignmentLabels();
+}
+
+void LFOSection::parentHierarchyChanged()
+{
+    ctx = nullptr;
+    if (auto* provider = findParentComponentOfClass<ModSliderContextProvider>())
+        ctx = &provider->getModSliderContext();
 }
 
 bool LFOSection::keyPressed(const juce::KeyPress& key)
@@ -798,7 +879,7 @@ void LFOSection::mouseDrag(const juce::MouseEvent& e)
         {
             if (auto* container = findParentComponentOfClass<juce::DragAndDropContainer>())
             {
-                ModSlider::showDropTargets = true;
+                if (ctx) ctx->showDropTargets = true;
                 juce::String dragDesc = "LFO_" + juce::String(i);
                 container->startDragging(dragDesc, &tabButtons[i]);
             }
@@ -814,14 +895,15 @@ void LFOSection::mouseUp(const juce::MouseEvent& e)
     {
         if (e.eventComponent == &tabButtons[i])
         {
-            ModSlider::showDropTargets = false;
+            if (ctx) ctx->showDropTargets = false;
             return;
         }
     }
 }
 
-void LFOSection::showAssignmentsPopup()
+void LFOSection::showAssignmentsPopup(juce::Component* anchor)
 {
+    if (anchor == nullptr) anchor = &addSlotBtn;
     auto pfx = "LFO" + juce::String(activeTab + 1) + "_";
     juce::PopupMenu menu;
     int itemId = 1;
@@ -842,12 +924,12 @@ void LFOSection::showAssignmentsPopup()
     if (menu.getNumItems() == 0)
     {
         menu.addItem(-1, "No assignments", false, false);
-        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&addSlotBtn));
+        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(anchor));
         return;
     }
 
     auto safeThis = juce::Component::SafePointer<LFOSection>(this);
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&addSlotBtn),
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(anchor),
         [safeThis, pfx](int result) {
             if (safeThis == nullptr || result <= 0) return;
             int slot = result - 1;

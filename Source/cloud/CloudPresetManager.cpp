@@ -3,10 +3,12 @@
 #include "../license/LicenseManager.h"
 #include "../license/LicenseConfig.h"
 #include "../PluginProcessor.h"
+#include "../util/Logger.h"
 
 using namespace bb::license;
 
 static constexpr int kTokenMarginMs = 60 * 1000;  // refresh 60s before expiry
+static constexpr int kMaxRetries    = 5;          // 500ms, 1s, 2s, 4s, 8s
 
 // =====================================================================
 // Construction / destruction
@@ -238,6 +240,113 @@ CloudPresetManager::HttpResponse CloudPresetManager::httpRequest(
     return resp;
 }
 
+// Transient-failure codes worth retrying. 4xx other than 408/429 are user
+// errors (malformed request, auth, not-found) and won't fix themselves.
+bool CloudPresetManager::isRetryableStatus(int code) noexcept
+{
+    if (code == 0) return true;               // network error / DNS / timeout
+    if (code == 408 || code == 429) return true; // request timeout / rate limit
+    if (code >= 500 && code < 600) return true;  // server error
+    return false;
+}
+
+CloudPresetManager::HttpResponse
+CloudPresetManager::httpRequestWithRetries(const juce::String& method,
+                                            const juce::String& endpoint,
+                                            const juce::String& jsonBody) const
+{
+    HttpResponse resp;
+    int delayMs = 500;
+    for (int attempt = 0; attempt < kMaxRetries; ++attempt)
+    {
+        resp = httpRequest(method, endpoint, jsonBody);
+        if (!isRetryableStatus(resp.statusCode))
+            return resp; // success or non-retryable failure (401/403/404/…)
+
+        // Last attempt — return whatever we got, caller decides what to do
+        if (attempt == kMaxRetries - 1)
+            return resp;
+
+        // Wait with ±20% jitter in 100ms slices so we can bail early on shutdown.
+        const int jitter = juce::Random::getSystemRandom().nextInt(delayMs / 5 + 1) - delayMs / 10;
+        int remaining = juce::jmax(0, delayMs + jitter);
+        while (remaining > 0)
+        {
+            if (shuttingDown_.load(std::memory_order_relaxed))
+                return resp;
+            const int slice = juce::jmin(100, remaining);
+            juce::Thread::sleep(slice);
+            remaining -= slice;
+        }
+        delayMs = juce::jmin(delayMs * 2, 8000); // cap at 8 s
+    }
+    return resp;
+}
+
+// ─ Persistent upload retry queue ──────────────────────────────────────
+
+juce::File CloudPresetManager::getPendingUploadsFile()
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                   .getChildFile("Voidscan").getChildFile("Parasite");
+    dir.createDirectory();
+    return dir.getChildFile("cloud_pending.json");
+}
+
+juce::StringArray CloudPresetManager::loadPendingUploads() const
+{
+    juce::StringArray out;
+    auto file = getPendingUploadsFile();
+    if (!file.existsAsFile()) return out;
+    auto parsed = juce::JSON::parse(file.loadFileAsString());
+    if (auto* arr = parsed.getArray())
+        for (const auto& v : *arr)
+            if (v.isString())
+                out.add(v.toString());
+    return out;
+}
+
+void CloudPresetManager::enqueuePendingUpload(const juce::String& uuid)
+{
+    if (uuid.isEmpty()) return;
+    auto pending = loadPendingUploads();
+    if (pending.contains(uuid)) return; // dedup
+    pending.add(uuid);
+
+    juce::Array<juce::var> arr;
+    for (const auto& u : pending) arr.add(juce::var(u));
+
+    auto file = getPendingUploadsFile();
+    juce::TemporaryFile tmp(file);
+    tmp.getFile().replaceWithText(juce::JSON::toString(juce::var(arr), true));
+    tmp.overwriteTargetFileWithTemporary();
+    BB_LOG_INFO("Queued preset upload for later retry: " + uuid);
+}
+
+void CloudPresetManager::removePendingUpload(const juce::String& uuid)
+{
+    auto pending = loadPendingUploads();
+    if (!pending.contains(uuid)) return;
+    pending.removeString(uuid);
+
+    juce::Array<juce::var> arr;
+    for (const auto& u : pending) arr.add(juce::var(u));
+
+    auto file = getPendingUploadsFile();
+    juce::TemporaryFile tmp(file);
+    tmp.getFile().replaceWithText(juce::JSON::toString(juce::var(arr), true));
+    tmp.overwriteTargetFileWithTemporary();
+}
+
+void CloudPresetManager::drainPendingUploads()
+{
+    auto pending = loadPendingUploads();
+    if (pending.isEmpty()) return;
+    BB_LOG_INFO("Draining " + juce::String(pending.size()) + " pending cloud uploads");
+    for (const auto& uuid : pending)
+        uploadPreset(uuid); // uploadPreset removes on success / re-queues on failure
+}
+
 // =====================================================================
 // Upload preset (after save)
 // =====================================================================
@@ -276,26 +385,42 @@ void CloudPresetManager::uploadPreset(const juce::String& uuid)
 
             if (shuttingDown_.load()) { --pendingThreads_; return; }
 
-            // Try create first
-            auto resp = httpRequest("POST", "/presets", json);
+            // Try create first — POST /presets with retries on transient
+            // failures (5xx / timeout / rate limit).
+            auto resp = httpRequestWithRetries("POST", "/presets", json);
             if (resp.statusCode == 409)
-            {
-                // Already exists — update
-                resp = httpRequest("PATCH", "/presets/" + uuid, json);
-            }
+                resp = httpRequestWithRetries("PATCH", "/presets/" + uuid, json);
 
             if (resp.statusCode == 401)
             {
                 if (shuttingDown_.load()) { --pendingThreads_; return; }
-                // Token expired — refresh and retry
+                // Token expired — refresh and retry once with new token.
                 refreshTokenSync();
-                resp = httpRequest("POST", "/presets", json);
+                resp = httpRequestWithRetries("POST", "/presets", json);
                 if (resp.statusCode == 409)
-                    resp = httpRequest("PATCH", "/presets/" + uuid, json);
+                    resp = httpRequestWithRetries("PATCH", "/presets/" + uuid, json);
             }
 
-            if (resp.statusCode != 200 && resp.statusCode != 201)
-                DBG("Cloud upload failed for " + uuid + " (HTTP " + juce::String(resp.statusCode) + ")");
+            const bool success = (resp.statusCode == 200 || resp.statusCode == 201);
+            if (success)
+            {
+                removePendingUpload(uuid);
+                BB_LOG_INFO("Uploaded preset " + uuid);
+            }
+            else if (isRetryableStatus(resp.statusCode))
+            {
+                // Still transient after backoff — queue for next session.
+                BB_LOG_WARN("Cloud upload transient failure for " + uuid
+                            + " (HTTP " + juce::String(resp.statusCode) + ") — queued");
+                enqueuePendingUpload(uuid);
+            }
+            else
+            {
+                // Hard error (auth / bad request / not found) — don't retry.
+                BB_LOG_ERROR("Cloud upload failed for " + uuid
+                             + " (HTTP " + juce::String(resp.statusCode) + ")");
+                removePendingUpload(uuid);
+            }
 
             break;
         }
@@ -322,17 +447,18 @@ void CloudPresetManager::deletePreset(const juce::String& uuid)
         if (!ensureToken()) { --pendingThreads_; return; }
         if (shuttingDown_.load()) { --pendingThreads_; return; }
 
-        auto resp = httpRequest("DELETE", "/presets/" + uuid);
+        auto resp = httpRequestWithRetries("DELETE", "/presets/" + uuid, {});
 
         if (resp.statusCode == 401)
         {
             if (shuttingDown_.load()) { --pendingThreads_; return; }
             refreshTokenSync();
-            resp = httpRequest("DELETE", "/presets/" + uuid);
+            resp = httpRequestWithRetries("DELETE", "/presets/" + uuid, {});
         }
 
         if (resp.statusCode != 204 && resp.statusCode != 404)
-            DBG("Cloud delete failed for " + uuid + " (HTTP " + juce::String(resp.statusCode) + ")");
+            BB_LOG_WARN("Cloud delete failed for " + uuid
+                        + " (HTTP " + juce::String(resp.statusCode) + ")");
 
         --pendingThreads_;
     });
@@ -401,20 +527,20 @@ void CloudPresetManager::performSync()
     reqBody->setProperty("presets", localPresets);
     auto json = juce::JSON::toString(juce::var(reqBody), true);
 
-    auto resp = httpRequest("POST", "/presets/sync", json);
+    auto resp = httpRequestWithRetries("POST", "/presets/sync", json);
 
     if (resp.statusCode == 401)
     {
         if (shuttingDown_.load()) return;
         refreshTokenSync();
-        resp = httpRequest("POST", "/presets/sync", json);
+        resp = httpRequestWithRetries("POST", "/presets/sync", json);
     }
 
     if (shuttingDown_.load()) return;
 
     if (resp.statusCode != 200)
     {
-        DBG("Cloud sync failed (HTTP " + juce::String(resp.statusCode) + ")");
+        BB_LOG_WARN("Cloud sync failed (HTTP " + juce::String(resp.statusCode) + ")");
         juce::MessageManager::callAsync([this, alive] {
             if (!alive->load()) return;
             listeners_.call(&Listener::cloudSyncCompleted, false);
@@ -440,6 +566,9 @@ void CloudPresetManager::performSync()
         applyServerPresets(serverPresets);
         clearDeletionLog();
         proc_.buildPresetRegistry();
+        // Sync succeeded → we have connectivity, a good moment to drain
+        // any uploads that failed in a previous session.
+        drainPendingUploads();
         listeners_.call(&Listener::cloudSyncCompleted, true);
     });
 }
@@ -534,7 +663,9 @@ juce::var CloudPresetManager::buildLocalPresetArray() const
             xml->setAttribute("version", 1);
             xml->setAttribute("updatedAt",
                 f.getLastModificationTime().toISO8601(true));
-            xml->writeTo(f);
+            juce::TemporaryFile tmp(f);
+            if (xml->writeTo(tmp.getFile()))
+                tmp.overwriteTargetFileWithTemporary();
         }
 
         auto* obj = new juce::DynamicObject();
@@ -598,7 +729,8 @@ void CloudPresetManager::writePresetToDisk(const juce::String& uuid,
         }
     }
 
-    if (!xml->writeTo(file))
+    juce::TemporaryFile tmp(file);
+    if (!xml->writeTo(tmp.getFile()) || !tmp.overwriteTargetFileWithTemporary())
         DBG("CloudPresetManager: failed to write preset to " + file.getFullPathName());
 }
 
@@ -626,7 +758,9 @@ void CloudPresetManager::logDeletion(const juce::String& uuid)
 
     auto file = getDeletionLogFile();
     file.getParentDirectory().createDirectory();
-    file.replaceWithText(juce::JSON::toString(juce::var(entries), true));
+    juce::TemporaryFile tmp(file);
+    tmp.getFile().replaceWithText(juce::JSON::toString(juce::var(entries), true));
+    tmp.overwriteTargetFileWithTemporary();
 }
 
 juce::var CloudPresetManager::loadDeletionLog() const

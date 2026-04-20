@@ -34,7 +34,19 @@ public:
     const juce::String getName() const override { return JucePlugin_Name; }
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return 2.0; }
+
+    // Reverb pre-delay can reach 200ms + the reverb tail itself runs several
+    // seconds; delay feedback can sustain longer still. Reporting a realistic
+    // tail prevents hosts (Ableton/Logic) from cutting offline renders
+    // prematurely and stopping the tail mid-frame in loop playback.
+    double getTailLengthSeconds() const override { return 12.0; }
+
+    // Bypass: output silence but keep DSP state live so unbypass resumes
+    // cleanly (reverb/delay buffers retain their content). We also skip
+    // MIDI processing while bypassed so new notes aren't accidentally
+    // triggered on resume.
+    void processBlockBypassed(juce::AudioBuffer<float>& buffer,
+                              juce::MidiBuffer& midi) override;
 
     int getNumPrograms() override;
     int getCurrentProgram() override;
@@ -112,6 +124,15 @@ private:
     // Pointeurs atomiques cachés vers les paramètres (pour accès rapide dans processBlock)
     bb::VoiceParams voiceParams;
     void cacheParameterPointers();
+
+    // Curve↔Param sync (harmonic tables, shaper steps, LFO tables)
+    void setupCurveParamListeners();
+    void syncInternalToCurveParams();           // Push internal state → params (e.g. after preset load)
+    void applyCurveParamToInternal(const juce::String& paramId, float value01);
+
+    // Forward declare the APVTS listener that owns curve-param callbacks
+    struct CurveListener;
+    std::unique_ptr<CurveListener> curveListener;
 
     juce::Synthesiser synth;
     int currentPreset = -1;  // -1 = uninitialised; set by loadPresetAt or setStateInformation
@@ -216,6 +237,54 @@ public:
     void sendPreviewNoteOff() { previewNoteOff.store(true, std::memory_order_relaxed); }
     std::atomic<bool> previewNoteOn  { false };
     std::atomic<bool> previewNoteOff { false };
+
+    // "Panic" — silence every active voice immediately and clear the
+    // effects chain's delay/reverb buffers. Called before any preset change
+    // (setStateInformation, loadUserPreset, loadPresetFromXml, randomize)
+    // so the incoming patch starts from silence instead of morphing a live
+    // tail with whatever new params just landed.
+    //
+    // Scheduled via an atomic flag so we stay message-thread-friendly and
+    // let the audio thread service it at the top of its next processBlock
+    // (where it already holds the internal Synthesiser lock).
+    void requestVoicePanic() { voicePanicPending.store(true, std::memory_order_release); }
+    std::atomic<bool> voicePanicPending { false };
+
+    // Bidirectional sync between APVTS H##/S## params and internal curve
+    // state so every bar edit is undoable via Cmd+Z. GUI writes go through
+    // AudioProcessorParameter::setValueNotifyingHost directly (see
+    // HarmonicEditor::onSetHarmonic / ShaperDisplay::onSetStep); the
+    // listener below propagates the change to the HarmonicTable /
+    // VolumeShaper. DAW undo/redo reverts the param → listener reapplies.
+    //
+    // Raised during bulk operations (preset load, syncInternalToCurveParams,
+    // apvts.replaceState) so the listener doesn't stomp internal state that
+    // was just restored from serialized strings.
+    std::atomic<bool> suppressCurveListener { false };
+
+    // Incremented every time a preset / full state is applied. GUI widgets
+    // poll this to discard transient UI state that only makes sense for the
+    // previous preset (e.g. LFOSection's learn-click armed on a now-stale
+    // slot). Monotonic, 32 bits is plenty — wraps every 4 billion loads.
+    std::atomic<uint32_t> stateGeneration { 0 };
+
+    // Last user-visible load error (empty when the most recent load was
+    // clean). GUI polls in its timer and shows a toast when this is set.
+    // SpinLock-guarded — set from the message thread only but still want
+    // coherent reads from the editor's timerCallback.
+    juce::String getAndClearLastLoadError()
+    {
+        const juce::SpinLock::ScopedLockType lock(lastLoadErrorLock);
+        auto out = lastLoadError;
+        lastLoadError.clear();
+        return out;
+    }
+    void setLastLoadError(const juce::String& msg)
+    {
+        const juce::SpinLock::ScopedLockType lock(lastLoadErrorLock);
+        lastLoadError = msg;
+    }
+
 private:
 
     // Visual buffers for GUI oscilloscope/FFT (L + R)
@@ -233,8 +302,25 @@ private:
     std::atomic<uint32_t> dspGainToken { 0 };
     static constexpr uint32_t kDspActive = 0x8A3C5F21;
 
-    // Migration des anciens presets (MOD_PITCH → COARSE+FINE ou FIXED_FREQ)
+    // Set by setStateInformation / loadUserPreset / loadPresetFromXml on any
+    // load error. GUI pulls + clears in its timer to surface a toast. Always
+    // accessed via getAndClearLastLoadError().
+    juce::String lastLoadError;
+    juce::SpinLock lastLoadErrorLock;
+
+    // ── State schema versioning ──
+    // Bump kCurrentSchemaVersion whenever params are renamed, reshuffled, or
+    // a new default behaviour needs to be backfilled for old presets. Every
+    // migration is additive: applyStateMigrations walks v1 → v2 → ... → current
+    // so a preset saved on any prior plugin version loads correctly.
+    static constexpr int kCurrentSchemaVersion = 2;
+    static int getSchemaVersion(const juce::ValueTree& tree) noexcept;
+    static void applyStateMigrations(juce::ValueTree& tree);
+
+    // v1 → v2: add COARSE+FINE from legacy MOD_PITCH, inject LFO defaults.
+    // Kept as named helpers so each migration step is easy to review.
     static void migrateOldPitchParams(juce::ValueTree& tree);
+    static void injectMissingLFODefaults(juce::ValueTree& tree);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ParasiteProcessor)
 };

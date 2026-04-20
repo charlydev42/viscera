@@ -41,6 +41,8 @@ target_sources(Parasite PRIVATE
     Source/PluginEditor.cpp
     # DSP
     Source/dsp/FMVoice.cpp
+    # Util
+    Source/util/Logger.cpp
     # License + Cloud
     Source/license/LicenseManager.cpp
     Source/cloud/CloudPresetManager.cpp

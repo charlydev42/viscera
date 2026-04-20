@@ -24,6 +24,7 @@
 
 class ParasiteEditor : public juce::AudioProcessorEditor,
                       public juce::DragAndDropContainer,
+                      public ModSliderContextProvider,
                       private juce::Timer
 {
 public:
@@ -35,8 +36,21 @@ public:
     void timerCallback() override;
     void dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&) override;
 
+    ModSliderContext& getModSliderContext() noexcept override { return modSliderContext; }
+
 private:
+    // Re-theme this editor after ParasiteLookAndFeel::darkMode has flipped.
+    // `localToggle` = true when THIS instance triggered the toggle (runs the
+    // full UX including the brief flubber hide/reshow). `localToggle` = false
+    // when we detected the flip from another instance — lighter path, just
+    // refresh colors + logos + force a redraw.
+    void applyDarkModeChange(bool localToggle);
+
     ParasiteProcessor& proc;
+    // Declared FIRST so it's destroyed LAST — after every child ModSlider
+    // finishes pending events. Dropping the onLearnClick lambda explicitly
+    // in the dtor avoids any rogue callback between sections being torn down.
+    ModSliderContext modSliderContext;
     ParasiteLookAndFeel lookAndFeel;
 
     // Sous-composants
@@ -56,6 +70,12 @@ private:
     // Label titre
     juce::Label titleLabel;
 
+    // Non-blocking error toast shown when a preset / state load fails.
+    // Polled from timerCallback; auto-hides after ~4 s via a countdown.
+    juce::Label errorToast;
+    int errorToastCountdown = 0; // ticks of timerCallback (10Hz)
+    void showErrorToast(const juce::String& msg);
+
     // Logo / branding
     juce::ImageComponent logoImage;        // advanced page (light/dark)
     juce::ImageComponent mainLogoImage;    // main page (neutral)
@@ -73,6 +93,12 @@ private:
 
     // Randomize logic (wired to PresetBrowser's ? button)
     void randomizeParams();
+
+    // Last observed value of the shared ParasiteLookAndFeel::darkMode atomic.
+    // Polled in timerCallback — when it changes from underneath us (another
+    // plugin instance toggled dark mode), we re-theme this editor too so the
+    // widgets stay in sync with the flubber (which reads the atomic live).
+    bool lastSeenDarkMode = false;
 
     // Two-page UI state
     bool showAdvanced = false;

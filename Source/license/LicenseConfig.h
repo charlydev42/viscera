@@ -24,6 +24,11 @@ static constexpr int64_t kVerifyIntervalMs  = 48LL * 60 * 60 * 1000;   // 48 h
 static constexpr int     kTimerIntervalMs   = 30 * 60 * 1000;           // 30 min
 static constexpr int     kHttpTimeoutMs     = 10000;                     // 10 s
 
+// Maximum time the plugin stays licensed without a successful server verify.
+// Users working offline keep the license alive; users blocking the domain
+// indefinitely have their license revoked after this window.
+static constexpr int64_t kOfflineGraceMs    = 7LL * 24 * 60 * 60 * 1000; // 7 days
+
 // ── Obfuscated secret ───────────────────────────────────────────────
 static constexpr uint8_t kXorKey[] = {
     0x4B, 0x72, 0x1F, 0xA8, 0x5C, 0xE3, 0x91, 0x07,

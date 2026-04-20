@@ -58,21 +58,47 @@ public:
     // Make popup window transparent so no white rect behind rounded corners
     void preparePopupMenuWindow(juce::Component& newWindow) override;
 
+    // Thread-safe colour cell. The theme palette is shared across all plugin
+    // instances in the process: another instance's dark-mode toggle writes
+    // these while our GUI / GL threads are reading them. Implicit conversion
+    // to uint32_t keeps every juce::Colour(kBgColor) call site unchanged.
+    // Relaxed ordering is sufficient — we don't synchronise other data on it.
+    class AtomicColor
+    {
+    public:
+        AtomicColor(uint32_t v) noexcept : value(v) {}
+        AtomicColor(const AtomicColor&) = delete;
+        AtomicColor& operator=(const AtomicColor&) = delete;
+
+        operator uint32_t() const noexcept
+        {
+            return value.load(std::memory_order_relaxed);
+        }
+        AtomicColor& operator=(uint32_t v) noexcept
+        {
+            value.store(v, std::memory_order_relaxed);
+            return *this;
+        }
+
+    private:
+        std::atomic<uint32_t> value;
+    };
+
     // Couleurs du theme — neumorphism (mutable for dark mode toggle)
-    static inline uint32_t kBgColor       = 0xFFE0E5EC;
-    static inline uint32_t kPanelColor    = 0xFFE0E5EC;
-    static inline uint32_t kKnobColor     = 0xFF9696A0;
-    static inline uint32_t kKnobMarker    = 0xFF222230;
-    static inline uint32_t kTextColor     = 0xFF24242E;
-    static inline uint32_t kAccentColor   = 0xFF8BC34A;
-    static inline uint32_t kToggleOn      = 0xFF8BC34A;
-    static inline uint32_t kToggleOff     = 0xFFB6BCC6;
-    static inline uint32_t kHeaderBg      = 0xFFC4CAD4;
-    static inline uint32_t kDisplayBg     = 0xFFD0D6E0;
+    static inline AtomicColor kBgColor       { 0xFFE0E5EC };
+    static inline AtomicColor kPanelColor    { 0xFFE0E5EC };
+    static inline AtomicColor kKnobColor     { 0xFF9696A0 };
+    static inline AtomicColor kKnobMarker    { 0xFF222230 };
+    static inline AtomicColor kTextColor     { 0xFF24242E };
+    static inline AtomicColor kAccentColor   { 0xFF8BC34A };
+    static inline AtomicColor kToggleOn      { 0xFF8BC34A };
+    static inline AtomicColor kToggleOff     { 0xFFB6BCC6 };
+    static inline AtomicColor kHeaderBg      { 0xFFC4CAD4 };
+    static inline AtomicColor kDisplayBg     { 0xFFD0D6E0 };
 
     // Neumorphic shadow colours
-    static inline uint32_t kShadowDark    = 0xFF8896AC;
-    static inline uint32_t kShadowLight   = 0xFFFFFFFF;
+    static inline AtomicColor kShadowDark    { 0xFF8896AC };
+    static inline AtomicColor kShadowLight   { 0xFFFFFFFF };
 
     // Dark mode toggle (atomic: read by GL thread, written by GUI thread)
     static inline std::atomic<bool> darkMode { false };

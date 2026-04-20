@@ -355,6 +355,7 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts,
             if (waveIdx != 5) // 5 = Custom
             {
                 harmonicTable.initFromWaveType(waveIdx);
+                syncHarmonicsToParams();
                 lastDesignWave = waveIdx;
             }
             else
@@ -377,6 +378,13 @@ CarrierSection::CarrierSection(juce::AudioProcessorValueTreeState& apvts,
         lastDesignWave = 5;
     };
 
+    // Route carrier harmonic edits through CAR_H## params for Cmd+Z undo
+    harmonicEditor.onSetHarmonic = [this](int idx, float amp) {
+        auto pid = "CAR_H" + juce::String(idx).paddedLeft('0', 2);
+        if (auto* param = state.getParameter(pid))
+            param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, amp));
+    };
+
     addChildComponent(harmonicEditor);
 
     // Timer to refresh labels on preset change
@@ -397,6 +405,7 @@ void CarrierSection::timerCallback()
         if (waveIdx != 5 && waveIdx != lastDesignWave)
         {
             harmonicTable.initFromWaveType(waveIdx);
+            syncHarmonicsToParams();
             lastDesignWave = waveIdx;
         }
     }
@@ -474,6 +483,18 @@ void CarrierSection::timerCallback()
 }
 
 
+
+void CarrierSection::syncHarmonicsToParams()
+{
+    // Per-tick beginNewTransaction in the editor groups these 32 writes into
+    // one undo step. Listener round-trip is idempotent (~32 rebakes total).
+    for (int i = 0; i < 32; ++i)
+    {
+        auto pid = "CAR_H" + juce::String(i).paddedLeft('0', 2);
+        if (auto* p = state.getParameter(pid))
+            p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, harmonicTable.getHarmonic(i)));
+    }
+}
 
 void CarrierSection::setDesignMode(bool on)
 {

@@ -4,13 +4,65 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/FMVoice.h" // for bb::LFODest, bb::VoiceParams
 #include "ParasiteLookAndFeel.h"
+#include <array>
 #include <functional>
+
+// Per-editor state shared between every ModSlider and the LFOSection. Owned
+// by ParasiteEditor, discovered by its descendants via the provider below.
+// Keeps each plugin instance's state independent in multi-instance hosts.
+struct ModSliderContext
+{
+    const bb::VoiceParams* voiceParams = nullptr;   // read-only, for arc peaks & ghost tick
+    std::function<void(bb::LFODest)> onLearnClick;  // next ModSlider click routes here
+    bool showDropTargets = false;                    // true while LFO D&D is in progress
+};
+
+// Interface implemented by ParasiteEditor. ModSlider and LFOSection look this
+// up via Component::findParentComponentOfClass so ModSlider.h has no compile
+// dependency on ParasiteEditor.
+class ModSliderContextProvider
+{
+public:
+    virtual ~ModSliderContextProvider() = default;
+    virtual ModSliderContext& getModSliderContext() noexcept = 0;
+};
+
+// Precomputed LFO slot parameter IDs ("LFO1_DEST3", "LFO2_AMT7", ...). Built
+// once via Meyers singleton; every ModSlider / LFOSection read is a zero-alloc
+// const-ref lookup instead of a per-frame juce::String concat.
+namespace detail {
+    struct LfoSlotIds
+    {
+        static constexpr int kLfos = 3;
+        static constexpr int kSlots = 8;
+        std::array<std::array<juce::String, kSlots>, kLfos> destIds;
+        std::array<std::array<juce::String, kSlots>, kLfos> amtIds;
+
+        LfoSlotIds()
+        {
+            for (int l = 0; l < kLfos; ++l)
+            {
+                auto pfx = "LFO" + juce::String(l + 1) + "_";
+                for (int s = 0; s < kSlots; ++s)
+                {
+                    destIds[l][s] = pfx + "DEST" + juce::String(s + 1);
+                    amtIds[l][s]  = pfx + "AMT"  + juce::String(s + 1);
+                }
+            }
+        }
+    };
+    inline const LfoSlotIds& lfoSlotIds() noexcept
+    {
+        static const LfoSlotIds instance;
+        return instance;
+    }
+}
 
 class ModSlider : public juce::Slider,
                   public juce::DragAndDropTarget,
                   private juce::Timer
 {
-    static constexpr int kSlotsPerLFO = 8;
+    static constexpr int kSlotsPerLFO = detail::LfoSlotIds::kSlots;
 public:
     ModSlider()
     {
@@ -19,15 +71,6 @@ public:
         setWantsKeyboardFocus(false);
     }
     ~ModSlider() override { stopTimer(); }
-
-    // Static learn mode callback — when non-null, next click on a ModSlider calls it
-    static inline std::function<void(bb::LFODest)> onLearnClick = nullptr;
-
-    // Static pointer to VoiceParams for reading live LFO modulation values
-    static inline const bb::VoiceParams* voiceParamsPtr = nullptr;
-
-    // When true, all assignable ModSliders highlight to show they're valid drop targets
-    static inline bool showDropTargets = false;
 
     bb::LFODest getDest() const { return myDest; }
     bool isMapped = false;  // true when at least one LFO targets this knob
@@ -43,6 +86,15 @@ public:
 
     bool hasModInit() const { return statePtr != nullptr; }
 
+    // Resolve the per-editor context when this component is attached / reattached.
+    // Handles addToDesktop → back, page switches, and editor recreation.
+    void parentHierarchyChanged() override
+    {
+        ctx = nullptr;
+        if (auto* provider = findParentComponentOfClass<ModSliderContextProvider>())
+            ctx = &provider->getModSliderContext();
+    }
+
     // --- DragAndDropTarget ---
     bool isInterestedInDragSource(const SourceDetails& details) override
     {
@@ -56,18 +108,17 @@ public:
     void itemDropped(const SourceDetails& details) override
     {
         dragHover = false;
-        showDropTargets = false;
+        if (ctx) ctx->showDropTargets = false;
         if (!statePtr) return;
         int lfoIdx = details.description.toString().getTrailingIntValue();
         if (lfoIdx < 0 || lfoIdx > 2) return;
 
-        auto pfx = "LFO" + juce::String(lfoIdx + 1) + "_";
+        const auto& ids = detail::lfoSlotIds();
 
         // Check if this exact LFO is already assigned to this knob
-        for (int s = 1; s <= kSlotsPerLFO; ++s)
+        for (int s = 0; s < kSlotsPerLFO; ++s)
         {
-            auto destId = pfx + "DEST" + juce::String(s);
-            int curDest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
+            int curDest = static_cast<int>(statePtr->getRawParameterValue(ids.destIds[lfoIdx][s])->load());
             if (curDest == static_cast<int>(myDest))
                 return; // already assigned, nothing to do
         }
@@ -75,11 +126,10 @@ public:
         // Policy: max 1 LFO per knob — remove any existing assignment from ANY LFO
         for (int l = 0; l < 3; ++l)
         {
-            auto otherPfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= kSlotsPerLFO; ++s)
+            for (int s = 0; s < kSlotsPerLFO; ++s)
             {
-                auto destId = otherPfx + "DEST" + juce::String(s);
-                auto amtId  = otherPfx + "AMT"  + juce::String(s);
+                const auto& destId = ids.destIds[l][s];
+                const auto& amtId  = ids.amtIds[l][s];
                 int curDest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
                 if (curDest == static_cast<int>(myDest))
                 {
@@ -92,10 +142,10 @@ public:
         }
 
         // Assign to first free slot on the dropped LFO
-        for (int s = 1; s <= kSlotsPerLFO; ++s)
+        for (int s = 0; s < kSlotsPerLFO; ++s)
         {
-            auto destId = pfx + "DEST" + juce::String(s);
-            auto amtId  = pfx + "AMT"  + juce::String(s);
+            const auto& destId = ids.destIds[lfoIdx][s];
+            const auto& amtId  = ids.amtIds[lfoIdx][s];
             int curDest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
 
             if (curDest == 0)
@@ -154,24 +204,24 @@ public:
         float ghostClampMin = baseRotAngle;
         float ghostClampMax = baseRotAngle;
 
+        const auto& ids = detail::lfoSlotIds();
+        const bb::VoiceParams* vp = ctx ? ctx->voiceParams : nullptr;
+
         for (int l = 0; l < 3; ++l)
         {
-            auto pfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= kSlotsPerLFO; ++s)
+            for (int s = 0; s < kSlotsPerLFO; ++s)
             {
-                auto destId = pfx + "DEST" + juce::String(s);
-                auto amtId  = pfx + "AMT"  + juce::String(s);
-                auto* destRaw = statePtr->getRawParameterValue(destId);
+                auto* destRaw = statePtr->getRawParameterValue(ids.destIds[l][s]);
                 if (!destRaw) continue;
                 int dest = static_cast<int>(destRaw->load());
                 if (dest != static_cast<int>(myDest)) continue;
 
-                float amt = statePtr->getRawParameterValue(amtId)->load();
+                float amt = statePtr->getRawParameterValue(ids.amtIds[l][s])->load();
                 auto col = lfoColors[l];
 
                 // Scale arc by actual LFO peak (custom curves may not reach 1.0)
-                float peak = voiceParamsPtr
-                    ? voiceParamsPtr->lfoPeak[l].load(std::memory_order_relaxed)
+                float peak = vp
+                    ? vp->lfoPeak[l].load(std::memory_order_relaxed)
                     : 1.0f;
                 // Arc endpoint in rotary space, clamped to knob range
                 float arcEnd = juce::jlimit(rotStart, rotEnd,
@@ -228,9 +278,9 @@ public:
     void mouseDown(const juce::MouseEvent& e) override
     {
         // Learn mode intercept
-        if (onLearnClick && statePtr)
+        if (statePtr && ctx && ctx->onLearnClick)
         {
-            onLearnClick(myDest);
+            ctx->onLearnClick(myDest);
             return;
         }
 
@@ -264,7 +314,7 @@ public:
             float newAmt = ringDragStartAmt + delta * sensitivity * 2.0f;
             newAmt = juce::jlimit(-1.0f, 1.0f, newAmt);
 
-            auto amtId = "LFO" + juce::String(ringDragLfo + 1) + "_AMT" + juce::String(ringDragSlot);
+            const auto& amtId = detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1];
             if (auto* p = statePtr->getParameter(amtId))
                 p->setValueNotifyingHost(p->convertTo0to1(newAmt));
             repaint();
@@ -314,6 +364,9 @@ public:
 
 private:
     juce::AudioProcessorValueTreeState* statePtr = nullptr;
+    // Resolved in parentHierarchyChanged — null when detached. All reads
+    // must null-check; writes use `if (ctx) ctx->...`.
+    ModSliderContext* ctx = nullptr;
     bb::LFODest myDest = bb::LFODest::None;
     bool dragHover = false;
 
@@ -335,12 +388,12 @@ private:
         bool mapped = false;
         if (statePtr && myDest != bb::LFODest::None)
         {
+            const auto& ids = detail::lfoSlotIds();
             for (int l = 0; l < 3 && !mapped; ++l)
             {
-                auto pfx = "LFO" + juce::String(l + 1) + "_";
-                for (int s = 1; s <= kSlotsPerLFO && !mapped; ++s)
+                for (int s = 0; s < kSlotsPerLFO && !mapped; ++s)
                 {
-                    auto* raw = statePtr->getRawParameterValue(pfx + "DEST" + juce::String(s));
+                    auto* raw = statePtr->getRawParameterValue(ids.destIds[l][s]);
                     if (raw && static_cast<int>(raw->load()) == static_cast<int>(myDest))
                         mapped = true;
                 }
@@ -350,12 +403,13 @@ private:
         bool changed = (mapped != isMapped);
         isMapped = mapped;
 
+        const bool dropTargets = (ctx && ctx->showDropTargets);
         // Detect drop-targets turning off — need one final repaint to clear the glow
-        bool dropTargetsJustEnded = (wasShowingDropTargets && !showDropTargets);
-        wasShowingDropTargets = showDropTargets;
+        bool dropTargetsJustEnded = (wasShowingDropTargets && !dropTargets);
+        wasShowingDropTargets = dropTargets;
 
         // Repaint if mapped, state changed, drag targets showing, or targets just ended
-        if (mapped || changed || showDropTargets || dropTargetsJustEnded)
+        if (mapped || changed || dropTargets || dropTargetsJustEnded)
             repaint();
     }
 
@@ -384,21 +438,20 @@ private:
 
         float baseRotAngle = rotStart + static_cast<float>(valueToProportionOfLength(getValue())) * rotRange;
 
+        const auto& ids = detail::lfoSlotIds();
         for (int l = 0; l < 3; ++l)
         {
-            auto pfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= kSlotsPerLFO; ++s)
+            for (int s = 0; s < kSlotsPerLFO; ++s)
             {
-                auto destId = pfx + "DEST" + juce::String(s);
-                auto* destRaw = statePtr->getRawParameterValue(destId);
+                auto* destRaw = statePtr->getRawParameterValue(ids.destIds[l][s]);
                 if (!destRaw) continue;
                 int dest = static_cast<int>(destRaw->load());
                 if (dest != static_cast<int>(myDest)) continue;
 
-                float amt = statePtr->getRawParameterValue(pfx + "AMT" + juce::String(s))->load();
+                float amt = statePtr->getRawParameterValue(ids.amtIds[l][s])->load();
                 float arcEnd = juce::jlimit(rotStart, rotEnd,
                                              baseRotAngle + amt * rotRange);
-                assignments[numAssignments++] = { l, s, arcEnd };
+                assignments[numAssignments++] = { l, s + 1, arcEnd }; // slot stays 1-indexed downstream
             }
         }
 
@@ -410,8 +463,8 @@ private:
             isRingDrag = true;
             ringDragLfo = assignments[0].lfo;
             ringDragSlot = assignments[0].slot;
-            auto amtId = "LFO" + juce::String(ringDragLfo + 1) + "_AMT" + juce::String(ringDragSlot);
-            ringDragStartAmt = statePtr->getRawParameterValue(amtId)->load();
+            ringDragStartAmt = statePtr->getRawParameterValue(
+                detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1])->load();
             return true;
         }
 
@@ -432,82 +485,81 @@ private:
         isRingDrag = true;
         ringDragLfo = assignments[bestIdx].lfo;
         ringDragSlot = assignments[bestIdx].slot;
-        {
-            auto amtId = "LFO" + juce::String(ringDragLfo + 1) + "_AMT" + juce::String(ringDragSlot);
-            ringDragStartAmt = statePtr->getRawParameterValue(amtId)->load();
-        }
+        ringDragStartAmt = statePtr->getRawParameterValue(
+            detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1])->load();
         return true;
     }
 
     // Get current live LFO modulation value for this destination
     float getModValue() const
     {
-        if (!voiceParamsPtr || myDest == bb::LFODest::None) return 0.0f;
+        const bb::VoiceParams* vp = ctx ? ctx->voiceParams : nullptr;
+        if (!vp || myDest == bb::LFODest::None) return 0.0f;
         switch (myDest)
         {
-            case bb::LFODest::Pitch:        return voiceParamsPtr->lfoModPitch.load(std::memory_order_relaxed);
-            case bb::LFODest::FilterCutoff:  return voiceParamsPtr->lfoModCutoff.load(std::memory_order_relaxed);
-            case bb::LFODest::FilterRes:     return voiceParamsPtr->lfoModRes.load(std::memory_order_relaxed);
-            case bb::LFODest::Mod1Level:     return voiceParamsPtr->lfoModMod1Lvl.load(std::memory_order_relaxed);
-            case bb::LFODest::Mod2Level:     return voiceParamsPtr->lfoModMod2Lvl.load(std::memory_order_relaxed);
-            case bb::LFODest::Volume:        return voiceParamsPtr->lfoModVolume.load(std::memory_order_relaxed);
-            case bb::LFODest::Drive:         return voiceParamsPtr->lfoModDrive.load(std::memory_order_relaxed);
-            case bb::LFODest::CarNoise:      return voiceParamsPtr->lfoModNoise.load(std::memory_order_relaxed);
-            case bb::LFODest::CarSpread:     return voiceParamsPtr->lfoModSpread.load(std::memory_order_relaxed);
-            case bb::LFODest::FoldAmt:       return voiceParamsPtr->lfoModFold.load(std::memory_order_relaxed);
-            case bb::LFODest::Mod1Fine:      return voiceParamsPtr->lfoModMod1Fine.load(std::memory_order_relaxed);
-            case bb::LFODest::Mod2Fine:      return voiceParamsPtr->lfoModMod2Fine.load(std::memory_order_relaxed);
-            case bb::LFODest::CarDrift:      return voiceParamsPtr->lfoModCarDrift.load(std::memory_order_relaxed);
-            case bb::LFODest::CarFine:       return voiceParamsPtr->lfoModCarFine.load(std::memory_order_relaxed);
-            case bb::LFODest::DlyTime:       return voiceParamsPtr->lfoModDlyTime.load(std::memory_order_relaxed);
-            case bb::LFODest::DlyFeed:       return voiceParamsPtr->lfoModDlyFeed.load(std::memory_order_relaxed);
-            case bb::LFODest::DlyMix:        return voiceParamsPtr->lfoModDlyMix.load(std::memory_order_relaxed);
-            case bb::LFODest::RevSize:       return voiceParamsPtr->lfoModRevSize.load(std::memory_order_relaxed);
-            case bb::LFODest::RevMix:        return voiceParamsPtr->lfoModRevMix.load(std::memory_order_relaxed);
-            case bb::LFODest::LiqDepth:      return voiceParamsPtr->lfoModLiqDepth.load(std::memory_order_relaxed);
-            case bb::LFODest::LiqMix:        return voiceParamsPtr->lfoModLiqMix.load(std::memory_order_relaxed);
-            case bb::LFODest::RubWarp:       return voiceParamsPtr->lfoModRubWarp.load(std::memory_order_relaxed);
-            case bb::LFODest::RubMix:        return voiceParamsPtr->lfoModRubMix.load(std::memory_order_relaxed);
-            case bb::LFODest::PEnvAmt:       return voiceParamsPtr->lfoModPEnvAmt.load(std::memory_order_relaxed);
-            case bb::LFODest::RevDamp:       return voiceParamsPtr->lfoModRevDamp.load(std::memory_order_relaxed);
-            case bb::LFODest::RevWidth:      return voiceParamsPtr->lfoModRevWidth.load(std::memory_order_relaxed);
-            case bb::LFODest::RevPdly:       return voiceParamsPtr->lfoModRevPdly.load(std::memory_order_relaxed);
-            case bb::LFODest::DlyDamp:       return voiceParamsPtr->lfoModDlyDamp.load(std::memory_order_relaxed);
-            case bb::LFODest::DlySpread:     return voiceParamsPtr->lfoModDlySpread.load(std::memory_order_relaxed);
-            case bb::LFODest::LiqRate:       return voiceParamsPtr->lfoModLiqRate.load(std::memory_order_relaxed);
-            case bb::LFODest::LiqTone:       return voiceParamsPtr->lfoModLiqTone.load(std::memory_order_relaxed);
-            case bb::LFODest::LiqFeed:       return voiceParamsPtr->lfoModLiqFeed.load(std::memory_order_relaxed);
-            case bb::LFODest::RubTone:       return voiceParamsPtr->lfoModRubTone.load(std::memory_order_relaxed);
-            case bb::LFODest::RubStretch:    return voiceParamsPtr->lfoModRubStretch.load(std::memory_order_relaxed);
-            case bb::LFODest::RubFeed:       return voiceParamsPtr->lfoModRubFeed.load(std::memory_order_relaxed);
-            case bb::LFODest::Porta:         return voiceParamsPtr->lfoModPorta.load(std::memory_order_relaxed);
-            case bb::LFODest::Env1A:         return voiceParamsPtr->lfoModEnv1A.load(std::memory_order_relaxed);
-            case bb::LFODest::Env1D:         return voiceParamsPtr->lfoModEnv1D.load(std::memory_order_relaxed);
-            case bb::LFODest::Env1S:         return voiceParamsPtr->lfoModEnv1S.load(std::memory_order_relaxed);
-            case bb::LFODest::Env1R:         return voiceParamsPtr->lfoModEnv1R.load(std::memory_order_relaxed);
-            case bb::LFODest::Env2A:         return voiceParamsPtr->lfoModEnv2A.load(std::memory_order_relaxed);
-            case bb::LFODest::Env2D:         return voiceParamsPtr->lfoModEnv2D.load(std::memory_order_relaxed);
-            case bb::LFODest::Env2S:         return voiceParamsPtr->lfoModEnv2S.load(std::memory_order_relaxed);
-            case bb::LFODest::Env2R:         return voiceParamsPtr->lfoModEnv2R.load(std::memory_order_relaxed);
-            case bb::LFODest::Env3A:         return voiceParamsPtr->lfoModEnv3A.load(std::memory_order_relaxed);
-            case bb::LFODest::Env3D:         return voiceParamsPtr->lfoModEnv3D.load(std::memory_order_relaxed);
-            case bb::LFODest::Env3S:         return voiceParamsPtr->lfoModEnv3S.load(std::memory_order_relaxed);
-            case bb::LFODest::Env3R:         return voiceParamsPtr->lfoModEnv3R.load(std::memory_order_relaxed);
-            case bb::LFODest::PEnvA:         return voiceParamsPtr->lfoModPEnvA.load(std::memory_order_relaxed);
-            case bb::LFODest::PEnvD:         return voiceParamsPtr->lfoModPEnvD.load(std::memory_order_relaxed);
-            case bb::LFODest::PEnvS:         return voiceParamsPtr->lfoModPEnvS.load(std::memory_order_relaxed);
-            case bb::LFODest::PEnvR:         return voiceParamsPtr->lfoModPEnvR.load(std::memory_order_relaxed);
-            case bb::LFODest::ShaperRate:    return voiceParamsPtr->lfoModShaperRate.load(std::memory_order_relaxed);
-            case bb::LFODest::ShaperDepth:   return voiceParamsPtr->lfoModShaperDepth.load(std::memory_order_relaxed);
-            case bb::LFODest::Mod1Coarse:    return voiceParamsPtr->lfoModMod1Coarse.load(std::memory_order_relaxed);
-            case bb::LFODest::Mod2Coarse:    return voiceParamsPtr->lfoModMod2Coarse.load(std::memory_order_relaxed);
-            case bb::LFODest::CarCoarse:     return voiceParamsPtr->lfoModCarCoarse.load(std::memory_order_relaxed);
-            case bb::LFODest::Tremor:        return voiceParamsPtr->lfoModTremor.load(std::memory_order_relaxed);
-            case bb::LFODest::Vein:          return voiceParamsPtr->lfoModVein.load(std::memory_order_relaxed);
-            case bb::LFODest::Flux:          return voiceParamsPtr->lfoModFlux.load(std::memory_order_relaxed);
-            case bb::LFODest::Cortex:        return voiceParamsPtr->lfoModCortex.load(std::memory_order_relaxed);
-            case bb::LFODest::Ichor:         return voiceParamsPtr->lfoModIchor.load(std::memory_order_relaxed);
-            case bb::LFODest::Plasma:        return voiceParamsPtr->lfoModPlasma.load(std::memory_order_relaxed);
+            case bb::LFODest::Pitch:        return vp->lfoModPitch.load(std::memory_order_relaxed);
+            case bb::LFODest::FilterCutoff:  return vp->lfoModCutoff.load(std::memory_order_relaxed);
+            case bb::LFODest::FilterRes:     return vp->lfoModRes.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod1Level:     return vp->lfoModMod1Lvl.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod2Level:     return vp->lfoModMod2Lvl.load(std::memory_order_relaxed);
+            case bb::LFODest::Volume:        return vp->lfoModVolume.load(std::memory_order_relaxed);
+            case bb::LFODest::Drive:         return vp->lfoModDrive.load(std::memory_order_relaxed);
+            case bb::LFODest::CarNoise:      return vp->lfoModNoise.load(std::memory_order_relaxed);
+            case bb::LFODest::CarSpread:     return vp->lfoModSpread.load(std::memory_order_relaxed);
+            case bb::LFODest::FoldAmt:       return vp->lfoModFold.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod1Fine:      return vp->lfoModMod1Fine.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod2Fine:      return vp->lfoModMod2Fine.load(std::memory_order_relaxed);
+            case bb::LFODest::CarDrift:      return vp->lfoModCarDrift.load(std::memory_order_relaxed);
+            case bb::LFODest::CarFine:       return vp->lfoModCarFine.load(std::memory_order_relaxed);
+            case bb::LFODest::DlyTime:       return vp->lfoModDlyTime.load(std::memory_order_relaxed);
+            case bb::LFODest::DlyFeed:       return vp->lfoModDlyFeed.load(std::memory_order_relaxed);
+            case bb::LFODest::DlyMix:        return vp->lfoModDlyMix.load(std::memory_order_relaxed);
+            case bb::LFODest::RevSize:       return vp->lfoModRevSize.load(std::memory_order_relaxed);
+            case bb::LFODest::RevMix:        return vp->lfoModRevMix.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqDepth:      return vp->lfoModLiqDepth.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqMix:        return vp->lfoModLiqMix.load(std::memory_order_relaxed);
+            case bb::LFODest::RubWarp:       return vp->lfoModRubWarp.load(std::memory_order_relaxed);
+            case bb::LFODest::RubMix:        return vp->lfoModRubMix.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvAmt:       return vp->lfoModPEnvAmt.load(std::memory_order_relaxed);
+            case bb::LFODest::RevDamp:       return vp->lfoModRevDamp.load(std::memory_order_relaxed);
+            case bb::LFODest::RevWidth:      return vp->lfoModRevWidth.load(std::memory_order_relaxed);
+            case bb::LFODest::RevPdly:       return vp->lfoModRevPdly.load(std::memory_order_relaxed);
+            case bb::LFODest::DlyDamp:       return vp->lfoModDlyDamp.load(std::memory_order_relaxed);
+            case bb::LFODest::DlySpread:     return vp->lfoModDlySpread.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqRate:       return vp->lfoModLiqRate.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqTone:       return vp->lfoModLiqTone.load(std::memory_order_relaxed);
+            case bb::LFODest::LiqFeed:       return vp->lfoModLiqFeed.load(std::memory_order_relaxed);
+            case bb::LFODest::RubTone:       return vp->lfoModRubTone.load(std::memory_order_relaxed);
+            case bb::LFODest::RubStretch:    return vp->lfoModRubStretch.load(std::memory_order_relaxed);
+            case bb::LFODest::RubFeed:       return vp->lfoModRubFeed.load(std::memory_order_relaxed);
+            case bb::LFODest::Porta:         return vp->lfoModPorta.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1A:         return vp->lfoModEnv1A.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1D:         return vp->lfoModEnv1D.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1S:         return vp->lfoModEnv1S.load(std::memory_order_relaxed);
+            case bb::LFODest::Env1R:         return vp->lfoModEnv1R.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2A:         return vp->lfoModEnv2A.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2D:         return vp->lfoModEnv2D.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2S:         return vp->lfoModEnv2S.load(std::memory_order_relaxed);
+            case bb::LFODest::Env2R:         return vp->lfoModEnv2R.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3A:         return vp->lfoModEnv3A.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3D:         return vp->lfoModEnv3D.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3S:         return vp->lfoModEnv3S.load(std::memory_order_relaxed);
+            case bb::LFODest::Env3R:         return vp->lfoModEnv3R.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvA:         return vp->lfoModPEnvA.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvD:         return vp->lfoModPEnvD.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvS:         return vp->lfoModPEnvS.load(std::memory_order_relaxed);
+            case bb::LFODest::PEnvR:         return vp->lfoModPEnvR.load(std::memory_order_relaxed);
+            case bb::LFODest::ShaperRate:    return vp->lfoModShaperRate.load(std::memory_order_relaxed);
+            case bb::LFODest::ShaperDepth:   return vp->lfoModShaperDepth.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod1Coarse:    return vp->lfoModMod1Coarse.load(std::memory_order_relaxed);
+            case bb::LFODest::Mod2Coarse:    return vp->lfoModMod2Coarse.load(std::memory_order_relaxed);
+            case bb::LFODest::CarCoarse:     return vp->lfoModCarCoarse.load(std::memory_order_relaxed);
+            case bb::LFODest::Tremor:        return vp->lfoModTremor.load(std::memory_order_relaxed);
+            case bb::LFODest::Vein:          return vp->lfoModVein.load(std::memory_order_relaxed);
+            case bb::LFODest::Flux:          return vp->lfoModFlux.load(std::memory_order_relaxed);
+            case bb::LFODest::Cortex:        return vp->lfoModCortex.load(std::memory_order_relaxed);
+            case bb::LFODest::Ichor:         return vp->lfoModIchor.load(std::memory_order_relaxed);
+            case bb::LFODest::Plasma:        return vp->lfoModPlasma.load(std::memory_order_relaxed);
             default: return 0.0f;
         }
     }
@@ -522,18 +574,16 @@ private:
         Hit hits[24];
         int numHits = 0;
 
+        const auto& ids = detail::lfoSlotIds();
         for (int l = 0; l < 3; ++l)
         {
-            auto pfx = "LFO" + juce::String(l + 1) + "_";
-            for (int s = 1; s <= kSlotsPerLFO; ++s)
+            for (int s = 0; s < kSlotsPerLFO; ++s)
             {
-                auto destId = pfx + "DEST" + juce::String(s);
-                auto amtId  = pfx + "AMT"  + juce::String(s);
-                int dest = static_cast<int>(statePtr->getRawParameterValue(destId)->load());
+                int dest = static_cast<int>(statePtr->getRawParameterValue(ids.destIds[l][s])->load());
                 if (dest == static_cast<int>(myDest))
                 {
-                    float amt = statePtr->getRawParameterValue(amtId)->load();
-                    hits[numHits] = { l, s, amt };
+                    float amt = statePtr->getRawParameterValue(ids.amtIds[l][s])->load();
+                    hits[numHits] = { l, s + 1, amt }; // keep slot 1-indexed for downstream code
                     auto amtStr = juce::String(static_cast<int>(amt * 100.0f));
                     menu.addItem(numHits + 1,
                         juce::String::charToString(0x2716) + "  LFO" + juce::String(l + 1)
@@ -571,9 +621,9 @@ private:
 
                 if (result > numHits) return;
                 auto h = hits[result - 1];
-                auto pfx = "LFO" + juce::String(h.lfo + 1) + "_";
-                auto destId = pfx + "DEST" + juce::String(h.slot);
-                auto amtId  = pfx + "AMT"  + juce::String(h.slot);
+                const auto& ids2 = detail::lfoSlotIds();
+                const auto& destId = ids2.destIds[h.lfo][h.slot - 1];
+                const auto& amtId  = ids2.amtIds[h.lfo][h.slot - 1];
                 statePtr->getParameter(destId)->setValueNotifyingHost(
                     statePtr->getParameter(destId)->convertTo0to1(0.0f));
                 statePtr->getParameter(amtId)->setValueNotifyingHost(

@@ -300,17 +300,32 @@ private:
     // Pitch wheel
     double pitchBendSemitones = 0.0;
 
-    // SmoothedValues pour les paramètres continus (anti-zipper)
+    // SmoothedValues pour les paramètres continus (anti-zipper).
+    // Every per-sample multiplier/mix that's exposed to DAW automation or
+    // LFO modulation must go through one of these — block-rate steps are
+    // otherwise audible as zipper / clicks on fast sweeps.
     juce::SmoothedValue<float> smoothVolume;
     juce::SmoothedValue<float> smoothCutoff;
     juce::SmoothedValue<float> smoothMod1Level;
     juce::SmoothedValue<float> smoothMod2Level;
     juce::SmoothedValue<float> smoothCarNoise;
     juce::SmoothedValue<float> smoothCarSpread;
+    juce::SmoothedValue<float> smoothDrive;    // post-filter saturation gain
+    juce::SmoothedValue<float> smoothFold;     // wavefolder amount
 
-    // Smooth global LFO modulation for pitch and cutoff (most audible)
+    // Smooth global LFO modulation contributions. Each LFO sum is updated
+    // at block rate by PluginProcessor; we smooth the sum itself so that
+    // the LFO's effect on each destination is continuous per-sample.
     juce::SmoothedValue<float> smoothGLfoPitch;
     juce::SmoothedValue<float> smoothGLfoCutoff;
+    juce::SmoothedValue<float> smoothGLfoRes;
+    juce::SmoothedValue<float> smoothGLfoVolume;
+    juce::SmoothedValue<float> smoothGLfoDrive;
+    juce::SmoothedValue<float> smoothGLfoMod1Lvl;
+    juce::SmoothedValue<float> smoothGLfoMod2Lvl;
+    juce::SmoothedValue<float> smoothGLfoNoise;
+    juce::SmoothedValue<float> smoothGLfoSpread;
+    juce::SmoothedValue<float> smoothGLfoFold;
 
     // Filter coefficient cache: skip recalculation when params haven't changed
     float lastFilterCutoff = -1.0f;

@@ -54,10 +54,16 @@ void ParasiteLookAndFeel::loadDarkModePreference()
 void ParasiteLookAndFeel::setDarkMode(bool dark)
 {
     darkMode = dark;
-    // Save preference (global, not per-preset)
+    // Save preference (global, not per-preset). Atomic write via TemporaryFile
+    // — two plugin instances toggling dark mode simultaneously can otherwise
+    // corrupt the file mid-write.
     auto f = getDarkModePrefFile();
     f.getParentDirectory().createDirectory();
-    f.replaceWithText(dark ? "dark" : "light");
+    {
+        juce::TemporaryFile tmp(f);
+        tmp.getFile().replaceWithText(dark ? "dark" : "light");
+        tmp.overwriteTargetFileWithTemporary();
+    }
 
     if (dark)
     {

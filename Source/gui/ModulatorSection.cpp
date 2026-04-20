@@ -120,6 +120,7 @@ ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
             if (waveIdx != 5) // 5 = Custom
             {
                 harmonicTable.initFromWaveType(waveIdx);
+                syncHarmonicsToParams();
                 lastDesignWave = waveIdx;
             }
             else
@@ -140,6 +141,14 @@ ModulatorSection::ModulatorSection(juce::AudioProcessorValueTreeState& apvts,
             param->setValueNotifyingHost(param->convertTo0to1(5.0f));
         }
         lastDesignWave = 5;
+    };
+
+    // Route harmonic edits through APVTS params so each bar change is undoable
+    // via Cmd+Z in the DAW. paramPrefix is "MOD1" or "MOD2", matching MOD1_H## / MOD2_H##.
+    harmonicEditor.onSetHarmonic = [this](int idx, float amp) {
+        auto pid = paramPrefix + "_H" + juce::String(idx).paddedLeft('0', 2);
+        if (auto* param = state.getParameter(pid))
+            param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, amp));
     };
 
     addChildComponent(harmonicEditor); // hidden by default
@@ -205,6 +214,7 @@ void ModulatorSection::timerCallback()
         if (waveIdx != 5 && waveIdx != lastDesignWave)
         {
             harmonicTable.initFromWaveType(waveIdx);
+            syncHarmonicsToParams();
             lastDesignWave = waveIdx;
         }
     }
@@ -231,6 +241,19 @@ void ModulatorSection::timerCallback()
         }
         else
             adsrLabels[i].setText(adsrNames[i], juce::dontSendNotification);
+    }
+}
+
+void ModulatorSection::syncHarmonicsToParams()
+{
+    // The editor's per-tick beginNewTransaction groups these 32 writes into
+    // a single undo step. Listener round-trip is idempotent (harmonicTable
+    // already holds these values), costs 32 rebakes (~1.6ms total).
+    for (int i = 0; i < 32; ++i)
+    {
+        auto pid = paramPrefix + "_H" + juce::String(i).paddedLeft('0', 2);
+        if (auto* p = state.getParameter(pid))
+            p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, harmonicTable.getHarmonic(i)));
     }
 }
 

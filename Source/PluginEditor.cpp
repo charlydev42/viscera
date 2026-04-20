@@ -6,6 +6,7 @@
 ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     : AudioProcessorEditor(processor),
       proc(processor),
+      modSliderContext{&processor.getVoiceParams(), {}, false},
       presetBrowser(processor),
       mod1Section(processor.apvts, "MOD1", "ENV1", processor.getHarmonicTable(0)),
       mod2Section(processor.apvts, "MOD2", "ENV2", processor.getHarmonicTable(1)),
@@ -24,15 +25,13 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
 {
     // Load persisted dark mode preference before any rendering
     ParasiteLookAndFeel::loadDarkModePreference();
+    lastSeenDarkMode = ParasiteLookAndFeel::darkMode.load(std::memory_order_acquire);
 
     setLookAndFeel(&lookAndFeel);
     juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
 
     // Push the loaded dark mode colors into the JUCE look and feel
     lookAndFeel.refreshJuceColours();
-
-    // Give ModSlider access to live LFO modulation values
-    ModSlider::voiceParamsPtr = &processor.getVoiceParams();
 
     addAndMakeVisible(presetBrowser);
     addAndMakeVisible(mod1Section);
@@ -54,6 +53,15 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     titleLabel.setJustificationType(juce::Justification::centred);
     titleLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold));
     addAndMakeVisible(titleLabel);
+
+    // Error toast — hidden by default, shown briefly on preset load failures.
+    errorToast.setJustificationType(juce::Justification::centred);
+    errorToast.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold));
+    errorToast.setColour(juce::Label::backgroundColourId, juce::Colour(0xCC8B2C2C)); // translucent red
+    errorToast.setColour(juce::Label::textColourId,       juce::Colour(0xFFFFFFFF));
+    errorToast.setInterceptsMouseClicks(false, false);
+    errorToast.setVisible(false);
+    addChildComponent(errorToast);
 
     // Advanced page logo (larger format, fills available space)
     {
@@ -141,11 +149,8 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
     presetBrowser.onBrowse = [this] {
         if (showPresetOverlay)
         {
-            // Toggling off = cancel (restore saved preset)
+            // Toggling off = commit currently auditioned preset
             presetOverlay.stopPreviewNote();
-            int saved = presetOverlay.getSavedPresetIndex();
-            if (saved >= 0)
-                proc.loadPresetAt(saved);
             setPresetOverlayVisible(false);
             presetBrowser.refreshPresetList();
         }
@@ -199,11 +204,8 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
         }
         else if (showPresetOverlay)
         {
-            // Back button = cancel (restore saved preset)
+            // Back button = commit currently auditioned preset
             presetOverlay.stopPreviewNote();
-            int saved = presetOverlay.getSavedPresetIndex();
-            if (saved >= 0)
-                proc.loadPresetAt(saved);
             setPresetOverlayVisible(false);
             presetBrowser.refreshPresetList();
         }
@@ -225,10 +227,10 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
         const MacroDef defs[6] = {
             { "VOLUME",      "Volume",  bb::LFODest::Volume       },
             { "DRIVE",       "Drive",   bb::LFODest::Drive        },
-            { "CORTEX",      "Cortex",  bb::LFODest::Cortex       },
+            { "CORTEX",      "Vortex",  bb::LFODest::Cortex       },
             { "PLASMA",      "Plasma",  bb::LFODest::Plasma       },
             { "DISP_AMT",    "Fold",    bb::LFODest::FoldAmt      },
-            { "ICHOR",       "Ichor",   bb::LFODest::Ichor        },
+            { "ICHOR",       "Helix",   bb::LFODest::Ichor        },
         };
 
         for (int i = 0; i < 6; ++i)
@@ -339,9 +341,81 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
 ParasiteEditor::~ParasiteEditor()
 {
     stopTimer();
-    ModSlider::voiceParamsPtr = nullptr;
-    ModSlider::onLearnClick = nullptr;
+    // Drop any lambda the LFOSection may have registered before children
+    // start destroying — the lambda's SafePointer already handles stale
+    // access but clearing here keeps the context in a clean state.
+    modSliderContext.onLearnClick = nullptr;
+    modSliderContext.showDropTargets = false;
+
+    // Only un-set the global default LaF if we're still the current one.
+    // Another plugin instance may have overwritten it in its constructor,
+    // in which case we must NOT clobber the live reference.
+    if (&juce::LookAndFeel::getDefaultLookAndFeel() == &lookAndFeel)
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+
     setLookAndFeel(nullptr);
+}
+
+void ParasiteEditor::applyDarkModeChange(bool localToggle)
+{
+    const bool dark = ParasiteLookAndFeel::darkMode.load(std::memory_order_acquire);
+    lastSeenDarkMode = dark;
+
+    // For the local toggle UX we briefly hide the flubber so its backing
+    // paint() fills with the new bg colour before GL repaints with the new
+    // shader — avoids a single-frame flash of the old theme.
+    if (localToggle)
+        flubberVisualizer.setVisible(false);
+
+    lookAndFeel.refreshJuceColours();
+
+    auto img = dark
+        ? juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_dark_png,
+                                           BinaryData::parasite_advanced_dark_pngSize)
+        : juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_light_png,
+                                           BinaryData::parasite_advanced_light_pngSize);
+    logoImage.setImage(img, juce::RectanglePlacement::centred);
+
+    auto mainImg = dark
+        ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_dark_png,
+                                           BinaryData::parasite_logo_neutral_dark_pngSize)
+        : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png,
+                                           BinaryData::parasite_logo_neutral_pngSize);
+    mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
+
+    std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
+        c->sendLookAndFeelChange();
+        c->repaint();
+        for (auto* ch : c->getChildren()) refreshAll(ch);
+    };
+    refreshAll(this);
+
+    flubberVisualizer.triggerGLRepaint();
+
+    if (localToggle)
+    {
+        auto safeThis = juce::Component::SafePointer<ParasiteEditor>(this);
+        juce::MessageManager::callAsync([safeThis] {
+            if (safeThis != nullptr && !safeThis->showAdvanced
+                && !safeThis->showPresetOverlay && !safeThis->showSaveOverlay)
+                safeThis->flubberVisualizer.setVisible(true);
+        });
+    }
+}
+
+void ParasiteEditor::showErrorToast(const juce::String& msg)
+{
+    errorToast.setText(msg, juce::dontSendNotification);
+    // 4 s at 10Hz timer = 40 ticks. setVisible + bring to front so any
+    // overlay (preset browser, save dialog) doesn't eat the notification.
+    errorToastCountdown = 40;
+    errorToast.setVisible(true);
+    errorToast.toFront(false);
+    // Resize against current bounds — top-centered banner.
+    auto b = getLocalBounds();
+    int w = juce::jmin(520, b.getWidth() - 40);
+    errorToast.setBounds(b.getCentreX() - w / 2, 8, w, 28);
+    repaint();
 }
 
 void ParasiteEditor::timerCallback()
@@ -349,6 +423,21 @@ void ParasiteEditor::timerCallback()
     updateAlgoLabel();
     updateOctaveLabel();
     proc.getUndoManager().beginNewTransaction();
+
+    // Surface preset-load failures reported by the processor. Cleared by
+    // the processor when read so two identical errors don't keep re-toasting.
+    if (auto err = proc.getAndClearLastLoadError(); err.isNotEmpty())
+        showErrorToast(err);
+    if (errorToastCountdown > 0 && --errorToastCountdown == 0)
+        errorToast.setVisible(false);
+
+    // Detect dark-mode changes made by other plugin instances. Polling at
+    // the editor timer rate (~10Hz) means remote toggles apply within ~100ms
+    // — matches the flubber's per-frame atomic read so widgets can't lag
+    // behind the visualizer anymore.
+    const bool curDark = ParasiteLookAndFeel::darkMode.load(std::memory_order_acquire);
+    if (curDark != lastSeenDarkMode)
+        applyDarkModeChange(/*localToggle*/ false);
 
     // Keep macro label colors in sync with theme
     auto labelCol = ParasiteLookAndFeel::darkMode
@@ -364,6 +453,12 @@ void ParasiteEditor::randomizeParams()
 {
     auto& rng = juce::Random::getSystemRandom();
     auto& apvts = proc.apvts;
+
+    // Silence any held notes + clear effect tails before the new patch takes
+    // hold — without this, a note that was ringing when the user clicks "?"
+    // keeps playing with the newly-randomised FM ratios / envelope / filter,
+    // which sounds like a ghost retrigger.
+    proc.requestVoicePanic();
 
     auto randFloat = [&](const juce::String& id, float lo, float hi) {
         if (auto* p = apvts.getParameter(id))
@@ -390,13 +485,17 @@ void ParasiteEditor::randomizeParams()
         randFloat(prefix + "_LEVEL", 0.1f, 1.0f);
     }
 
-    // Pick a random sound archetype for ADSR variety
+    // Pick a random sound archetype for ADSR variety.
+    // Distribution biased toward short/percussive patches — long sustained
+    // pads and evolving textures are harder to play in a musical context
+    // straight out of a random roll, so they get a smaller slice.
+    //   Pluck 35 / Stab 25 / Lead 25 / Pad 10 / Evolving 5   (long = 15% total)
     enum Archetype { Pluck, Stab, Pad, Lead, Evolving };
     float roll = rng.nextFloat();
-    Archetype arch = (roll < 0.30f) ? Pluck
-                   : (roll < 0.50f) ? Stab
-                   : (roll < 0.70f) ? Pad
-                   : (roll < 0.90f) ? Lead
+    Archetype arch = (roll < 0.35f) ? Pluck
+                   : (roll < 0.60f) ? Stab
+                   : (roll < 0.85f) ? Lead
+                   : (roll < 0.95f) ? Pad
                    :                  Evolving;
 
     // Mod envelopes — shaped by archetype
@@ -505,9 +604,21 @@ void ParasiteEditor::randomizeParams()
     randFloat("DLY_FEED", 0.1f, 0.6f);
     randFloat("DLY_MIX", 0.1f, 0.4f);
 
-    randBool("REV_ON", 0.3f);
+    // Reverb: percussive archetypes almost always want a small tail to sit
+    // in their own space ("dans son jus"). Pluck is the most reverb-hungry,
+    // Stab wants a discreet room, others get the default 30% chance.
+    const float revChance = (arch == Pluck) ? 0.85f
+                          : (arch == Stab)  ? 0.70f
+                          :                   0.30f;
+    const float revMixLo  = (arch == Pluck) ? 0.10f
+                          : (arch == Stab)  ? 0.08f
+                          :                   0.10f;
+    const float revMixHi  = (arch == Pluck) ? 0.30f   // small/medium tail
+                          : (arch == Stab)  ? 0.28f
+                          :                   0.40f;  // pads/leads can go wetter
+    randBool("REV_ON", revChance);
     randFloat("REV_SIZE", 0.2f, 0.9f);
-    randFloat("REV_MIX", 0.1f, 0.4f);
+    randFloat("REV_MIX", revMixLo, revMixHi);
 
     randBool("LIQ_ON", 0.2f);
     randBool("RUB_ON", 0.15f);
@@ -537,9 +648,23 @@ void ParasiteEditor::randomizeParams()
     // Macros
     randFloat("DRIVE", 0.0f, 0.4f);
     randFloat("DISP_AMT", 0.0f, 0.3f);
-    randFloat("CORTEX", 0.0f, 0.5f);
-    randFloat("PLASMA", 0.0f, 0.5f);
-    randFloat("ICHOR", 0.0f, 0.5f);
+
+    // Vortex / Helix / Plasma shift harmonic ratios and detune — engaging all
+    // three at once almost always produces an inharmonic mess. Each is opted
+    // in independently at ~20% → ~51% of rolls have zero active, ~38% have
+    // exactly one, the remaining tail very rarely stacks two or three.
+    auto randMacro = [&](const juce::String& id, float chance) {
+        if (auto* p = apvts.getParameter(id))
+        {
+            float value = 0.0f;
+            if (rng.nextFloat() < chance)
+                value = 0.15f + rng.nextFloat() * 0.30f; // [0.15, 0.45]
+            p->setValueNotifyingHost(p->convertTo0to1(value));
+        }
+    };
+    randMacro("CORTEX", 0.20f);
+    randMacro("PLASMA", 0.20f);
+    randMacro("ICHOR",  0.20f);
 
     // Estimate loudness from patch parameters and compensate volume
     {
@@ -632,7 +757,7 @@ void ParasiteEditor::updateOctaveLabel()
 void ParasiteEditor::dragOperationEnded(const juce::DragAndDropTarget::SourceDetails&)
 {
     // Clean up drop-target glow when any drag finishes (success or cancel)
-    ModSlider::showDropTargets = false;
+    modSliderContext.showDropTargets = false;
 }
 
 void ParasiteEditor::setPresetOverlayVisible(bool visible)
@@ -706,13 +831,10 @@ void ParasiteEditor::setPresetOverlayVisible(bool visible)
 
 void ParasiteEditor::setSaveOverlayVisible(bool visible)
 {
-    // Close preset overlay if opening save overlay
+    // Close preset overlay if opening save overlay (commit auditioned preset)
     if (visible && showPresetOverlay)
     {
         presetOverlay.stopPreviewNote();
-        int saved = presetOverlay.getSavedPresetIndex();
-        if (saved >= 0)
-            proc.loadPresetAt(saved);
         setPresetOverlayVisible(false);
         presetBrowser.refreshPresetList();
     }
@@ -1215,40 +1337,11 @@ void ParasiteEditor::showSettingsMenu()
 
             if (result == 1)
             {
-                // 1. Hide viz — paint() will fill with new bg color
-                flubberVisualizer.setVisible(false);
-
-                // 2. Switch colours
+                // Flip the shared atomic once, then let applyDarkModeChange
+                // handle the rest. Other plugin instances will detect the
+                // change via their timerCallback and re-theme themselves.
                 ParasiteLookAndFeel::setDarkMode(!ParasiteLookAndFeel::darkMode);
-                lookAndFeel.refreshJuceColours();
-
-                // Swap logos (advanced page uses the larger advanced variant)
-                auto img = ParasiteLookAndFeel::darkMode
-                    ? juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_dark_png, BinaryData::parasite_advanced_dark_pngSize)
-                    : juce::ImageCache::getFromMemory(BinaryData::parasite_advanced_light_png, BinaryData::parasite_advanced_light_pngSize);
-                logoImage.setImage(img, juce::RectanglePlacement::centred);
-
-                auto mainImg = ParasiteLookAndFeel::darkMode
-                    ? juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_dark_png, BinaryData::parasite_logo_neutral_dark_pngSize)
-                    : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png, BinaryData::parasite_logo_neutral_pngSize);
-                mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
-
-                // 3. Repaint everything
-                std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
-                    c->sendLookAndFeelChange();
-                    c->repaint();
-                    for (auto* ch : c->getChildren()) refreshAll(ch);
-                };
-                refreshAll(this);
-
-                // 4. Kick GL to render with new bg, then re-show after a frame
-                flubberVisualizer.triggerGLRepaint();
-                auto safeThis = juce::Component::SafePointer<ParasiteEditor>(this);
-                juce::MessageManager::callAsync([safeThis] {
-                    if (safeThis != nullptr && !safeThis->showAdvanced
-                        && !safeThis->showPresetOverlay && !safeThis->showSaveOverlay)
-                        safeThis->flubberVisualizer.setVisible(true);
-                });
+                applyDarkModeChange(/*localToggle*/ true);
             }
             else if (result == 2)
             {
@@ -1264,7 +1357,7 @@ void ParasiteEditor::showSettingsMenu()
             }
             else if (result == 4)
             {
-                juce::URL("https://thunderdolphin.studio/dashboard").launchInDefaultBrowser();
+                juce::URL("https://voidscan-audio.com/dashboard").launchInDefaultBrowser();
             }
         });
 }

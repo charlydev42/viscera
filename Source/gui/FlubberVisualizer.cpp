@@ -1,6 +1,7 @@
 // FlubberVisualizer.cpp — OpenGL raymarched audio-reactive blob
 #include "FlubberVisualizer.h"
 #include "ParasiteLookAndFeel.h"
+#include "../util/Logger.h"
 #include <cmath>
 
 
@@ -566,19 +567,19 @@ bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
 
     if (!ss.program->addVertexShader(vertexShaderSrc))
     {
-        DBG("[Flubber] Vertex shader error: " << ss.program->getLastError());
+        BB_LOG_ERROR("Flubber vertex shader error: " + ss.program->getLastError());
         ss.program.reset();
         return false;
     }
     if (!ss.program->addFragmentShader(fragSrc))
     {
-        DBG("[Flubber] Fragment shader error: " << ss.program->getLastError());
+        BB_LOG_ERROR("Flubber fragment shader error: " + ss.program->getLastError());
         ss.program.reset();
         return false;
     }
     if (!ss.program->link())
     {
-        DBG("[Flubber] Shader link error: " << ss.program->getLastError());
+        BB_LOG_ERROR("Flubber shader link error: " + ss.program->getLastError());
         ss.program.reset();
         return false;
     }
@@ -593,10 +594,16 @@ bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
 
 void FlubberVisualizer::newOpenGLContextCreated()
 {
+    // Fresh context — every GL resource (shader, texture, VAO, VBO) must be
+    // rebuilt here. This method is also called again after suspend/resume
+    // when macOS invalidates the old context, so treat it as idempotent and
+    // don't assume any prior state persisted.
+    smoothedFFT.fill(0.0f);
+
     if (!compileShader(lightShader, fragmentShaderLight))
-        DBG("[Flubber] Light shader FAILED");
+        BB_LOG_ERROR("Flubber light shader compile failed — visualiser disabled until restart");
     if (!compileShader(darkShader, fragmentShaderDark))
-        DBG("[Flubber] Dark shader FAILED");
+        BB_LOG_ERROR("Flubber dark shader compile failed — visualiser disabled until restart");
 
     // Audio texture (512 x 2, single-channel float)
     glGenTextures(1, &audioTex);
@@ -677,9 +684,22 @@ void FlubberVisualizer::renderOpenGL()
     // Skip rendering when not visible (e.g. edit page)
     if (!isVisible()) return;
 
-    // Pick shader based on current dark mode
-    auto& ss = ParasiteLookAndFeel::darkMode ? darkShader : lightShader;
-    if (!ss.program) return;
+    // Pick shader based on current dark mode. If the chosen one failed to
+    // compile, fall back to the other so the user still sees something. If
+    // BOTH failed, clear to the background colour — no garbage on screen.
+    auto* ssPtr = ParasiteLookAndFeel::darkMode ? &darkShader : &lightShader;
+    if (!ssPtr->program)
+        ssPtr = (ssPtr == &darkShader) ? &lightShader : &darkShader;
+    if (!ssPtr->program)
+    {
+        uint32_t bg = ParasiteLookAndFeel::kBgColor;
+        glClearColor(static_cast<float>((bg >> 16) & 0xFF) / 255.0f,
+                     static_cast<float>((bg >>  8) & 0xFF) / 255.0f,
+                     static_cast<float>((bg)       & 0xFF) / 255.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        return;
+    }
+    auto& ss = *ssPtr;
 
     updateAudioTexture();
 

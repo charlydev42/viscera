@@ -21,29 +21,34 @@ public:
     void prepare(double sr)
     {
         sampleRate = sr;
-        phase = 0.0;
+        phase.store(0.0, std::memory_order_relaxed);
     }
 
-    void setRate(float hz) { rate = hz; }
-    void setDepth(float d) { depth = d; }
+    void setRate(float hz)  { rate.store(hz, std::memory_order_relaxed); }
+    void setDepth(float d)  { depth.store(d, std::memory_order_relaxed); }
 
-    void reset() { phase = 0.0; }
+    void reset() { phase.store(0.0, std::memory_order_relaxed); }
 
     // Returns the gain value for the current sample (call once per sample)
     float tick()
     {
-        int idx = static_cast<int>(static_cast<float>(phase) * kNumSteps);
+        // Audio-thread-only mutation of phase is still atomic so that a GUI
+        // reset() can't interleave with our read-modify-write and tear the
+        // double across threads. Relaxed ordering is enough — we don't
+        // synchronise any other state on it.
+        double p = phase.load(std::memory_order_relaxed);
+        int idx = static_cast<int>(static_cast<float>(p) * kNumSteps);
         if (idx >= kNumSteps) idx = kNumSteps - 1;
 
         float tableVal = table[idx].load(std::memory_order_relaxed);
 
-        // Advance phase
-        phase += rate / sampleRate;
-        if (phase >= 1.0)
-            phase -= 1.0;
+        p += rate.load(std::memory_order_relaxed) / sampleRate;
+        if (p >= 1.0) p -= 1.0;
+        phase.store(p, std::memory_order_relaxed);
 
+        const float d = depth.load(std::memory_order_relaxed);
         // depth=0 → gain=1 (bypass), depth=1 → gain follows table
-        return 1.0f - depth * (1.0f - tableVal);
+        return 1.0f - d * (1.0f - tableVal);
     }
 
     // GUI writes steps here (lock-free via atomics)
@@ -60,7 +65,7 @@ public:
         return 1.0f;
     }
 
-    float getPhase() const { return static_cast<float>(phase); }
+    float getPhase() const { return static_cast<float>(phase.load(std::memory_order_relaxed)); }
 
     // Reset table to default sidechain curve
     void resetTable()
@@ -102,10 +107,17 @@ public:
 
 private:
     std::array<std::atomic<float>, kNumSteps> table;
+    // sampleRate is written only in prepare() (message thread, before audio starts)
+    // and read by the audio thread — no concurrent access so plain double is fine.
     double sampleRate = 44100.0;
-    double phase = 0.0;
-    float rate = 4.0f;
-    float depth = 0.0f;
+    // phase is written by the audio thread in tick() AND by the GUI thread via
+    // reset()/prepare(). rate/depth are written by the GUI thread and read by
+    // the audio thread every sample. All atomic with relaxed ordering — we don't
+    // synchronise any other state on these values, and floating-point tearing is
+    // otherwise observable on some 32-bit platforms.
+    std::atomic<double> phase { 0.0 };
+    std::atomic<float>  rate  { 4.0f };
+    std::atomic<float>  depth { 0.0f };
 };
 
 } // namespace bb

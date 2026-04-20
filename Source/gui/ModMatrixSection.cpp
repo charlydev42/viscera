@@ -4,12 +4,12 @@
 ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
 {
     cortexKnob.initMod(apvts, bb::LFODest::Cortex);
-    setupKnob(cortexKnob, cortexLabel, "Cortex");
+    setupKnob(cortexKnob, cortexLabel, "Vortex");
     cortexAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "CORTEX", cortexKnob);
 
     ichorKnob.initMod(apvts, bb::LFODest::Ichor);
-    setupKnob(ichorKnob, ichorLabel, "Ichor");
+    setupKnob(ichorKnob, ichorLabel, "Helix");
     ichorAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "ICHOR", ichorKnob);
 
@@ -39,8 +39,8 @@ void ModMatrixSection::timerCallback()
         else
             label.setText(name, juce::dontSendNotification);
     };
-    showPct(cortexKnob, cortexLabel, "Cortex");
-    showPct(ichorKnob, ichorLabel, "Ichor");
+    showPct(cortexKnob, cortexLabel, "Vortex");
+    showPct(ichorKnob, ichorLabel, "Helix");
     showPct(plasmaKnob, plasmaLabel, "Plasma");
 
     // Time: show multiplier value

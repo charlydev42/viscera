@@ -56,6 +56,25 @@ private:
                              const juce::String& endpoint,
                              const juce::String& jsonBody = {}) const;
 
+    // Exponential-backoff wrapper. Retries on transient failures
+    // (0 / 408 / 429 / 5xx) up to kMaxRetries with 500ms → 8s waits
+    // (plus ±20% jitter). Returns whatever the last attempt yielded.
+    // Respects shuttingDown_ between sleeps so the dtor doesn't have to
+    // wait minutes for a slow backoff.
+    HttpResponse httpRequestWithRetries(const juce::String& method,
+                                         const juce::String& endpoint,
+                                         const juce::String& jsonBody) const;
+    static bool  isRetryableStatus(int code) noexcept;
+
+    // ── Upload retry queue (persistent) ────────────────────────────
+    // Failed uploads land in ~/Voidscan/Parasite/cloud_pending.json so
+    // they retry on next plugin launch / next successful sync.
+    static juce::File getPendingUploadsFile();
+    void enqueuePendingUpload(const juce::String& uuid);
+    void removePendingUpload(const juce::String& uuid);
+    juce::StringArray loadPendingUploads() const;
+    void drainPendingUploads(); // fire-and-forget — called on launch + after sync
+
     // ── JWT management ─────────────────────────────────────────────
     mutable juce::CriticalSection tokenLock_;
     juce::String jwtToken_;

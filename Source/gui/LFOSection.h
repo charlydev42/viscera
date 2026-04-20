@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/LFO.h"
+#include "ModSlider.h" // ModSliderContext + ModSliderContextProvider
 
 class ParasiteProcessor; // forward declaration for phase getter
 
@@ -23,6 +24,13 @@ public:
     // Callback to switch wave type to Custom when double-clicking in standard mode
     std::function<void(int)> onWaveChange;
 
+    // Fires once per committed curve edit (end of drag / after add / after
+    // delete / wave→custom conversion). The owner pushes an UndoableAction
+    // with the before/after control-point snapshots so Cmd+Z restores the
+    // exact variable-length curve (Serum-style).
+    std::function<void(std::vector<bb::CurvePoint>,
+                       std::vector<bb::CurvePoint>)> onCurveCommit;
+
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
@@ -39,6 +47,7 @@ private:
     // Curve editor drag state
     int dragPointIndex = -1;
     bool isDraggingPoint = false;
+    std::vector<bb::CurvePoint> dragStartCurve; // snapshot at mouseDown for undo
     static constexpr float kPointRadius = 5.0f;
     static constexpr float kHitRadius = 8.0f;
 
@@ -62,6 +71,7 @@ public:
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
+    void parentHierarchyChanged() override;
     void resetToTab(int tab = 0) { switchTab(tab); }
 
 private:
@@ -69,18 +79,33 @@ private:
     void switchTab(int tab);
     void updateAssignmentLabels();
     void showSlotPopup(int slotIdx);
-    void showAssignmentsPopup();
+    void showAssignmentsPopup(juce::Component* anchor = nullptr);
     void updateSyncDisplay();
     int getSyncParam() const;
     void setSyncParam(int idx);
+
+    // Push an UndoableAction capturing the before/after control-point
+    // snapshots so Cmd+Z restores the exact curve topology.
+    void pushCurveEdit(int lfoIdx,
+                       const std::vector<bb::CurvePoint>& before,
+                       const std::vector<bb::CurvePoint>& after);
 
     // Learn mode
     void enterLearnMode(int slotIdx);
     void cancelLearnMode();
     int learnSlotIndex = -1; // slot in learn mode, -1 = inactive
 
+    // Processor's stateGeneration value as of the last poll. A mismatch
+    // means a preset was loaded (or setStateInformation ran) — the armed
+    // learn click is stale and must be cancelled.
+    uint32_t lastSeenStateGen = 0;
+
     juce::AudioProcessorValueTreeState& state;
     ParasiteProcessor& processor;
+
+    // Per-editor context — resolved on attach, used to read/write
+    // onLearnClick and showDropTargets without touching static state.
+    ModSliderContext* ctx = nullptr;
 
     int activeTab = 0;
 

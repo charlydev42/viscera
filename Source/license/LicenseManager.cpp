@@ -196,9 +196,47 @@ void LicenseManager::verify(Callback callback)
         }
         else if (resp.statusCode == 0)
         {
-            // Network error — keep using cache within grace period
-            ok  = true;
-            msg = "Offline — using cached license.";
+            // Network error — keep the cached license only if we've verified
+            // within the grace window. A user who's been offline (or has
+            // blocked the domain) beyond the window must reconnect to keep
+            // working.
+            //
+            // Clock-skew protection: if the system clock has been set BACK
+            // (lastVerified_ is in the "future"), we can't trust any time
+            // comparison. Revoke until a successful server verify re-anchors
+            // us to real time. Small positive tolerance absorbs NTP jitter.
+            int64_t lastOk = 0;
+            {
+                const juce::ScopedLock sl(stateLock);
+                lastOk = lastVerified_;
+            }
+            const auto now = juce::Time::currentTimeMillis();
+            const auto elapsed = now - lastOk;
+            constexpr int64_t kClockSkewTolerance = 60 * 60 * 1000; // 1 hour
+
+            if (lastOk > 0 && elapsed >= -kClockSkewTolerance && elapsed <= kOfflineGraceMs)
+            {
+                ok  = true;
+                msg = "Offline — using cached license (grace period).";
+            }
+            else if (lastOk > 0 && elapsed < -kClockSkewTolerance)
+            {
+                {
+                    const juce::ScopedLock sl(stateLock);
+                    licensed_ = false;
+                }
+                ok  = false;
+                msg = "Clock appears to have moved backward — please reconnect to verify.";
+            }
+            else
+            {
+                {
+                    const juce::ScopedLock sl(stateLock);
+                    licensed_ = false;
+                }
+                ok  = false;
+                msg = "Offline for too long — please reconnect to verify your license.";
+            }
         }
         else
         {

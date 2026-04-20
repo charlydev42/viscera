@@ -61,6 +61,11 @@ private:
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
     void setupKnob(juce::Slider& knob); // no label variant
 
+    // Push the 32 internal harmonics into the MOD{1,2}_H## params so a
+    // subsequent bar edit + Cmd+Z doesn't revert to a stale pre-sync value.
+    // Called after every initFromWaveType().
+    void syncHarmonicsToParams();
+
     // Design mode (harmonic editor)
     HarmonicEditor harmonicEditor;
     juce::TextButton designBtn { "Harmo" };

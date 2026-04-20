@@ -5,15 +5,36 @@
 #include "PluginEditor.h"
 #endif
 #include "dsp/FMSound.h"
+#include "util/Logger.h"
 #include <BinaryData.h>
 
 // --- Constructeur ---
+// APVTS listener that dispatches curve-param changes (harmonic, shaper, LFO
+// table steps) to the matching internal class. Lives in the .cpp so we can
+// keep the header lean.
+struct ParasiteProcessor::CurveListener : public juce::AudioProcessorValueTreeState::Listener
+{
+    explicit CurveListener(ParasiteProcessor& p) : proc(p) {}
+
+    void parameterChanged(const juce::String& id, float newValue) override
+    {
+        if (proc.suppressCurveListener.load(std::memory_order_relaxed)) return;
+        proc.applyCurveParamToInternal(id, newValue);
+    }
+
+    ParasiteProcessor& proc;
+};
+
 ParasiteProcessor::ParasiteProcessor()
     : AudioProcessor(BusesProperties()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, &undoManager, "ParasiteState", createParameterLayout()),
       cloudPresetManager(*this, licenseManager)
 {
+    // Install once per process — writes crash dumps beside parasite.log.
+    bb::Logger::installCrashHandler();
+    BB_LOG_INFO("ParasiteProcessor constructed");
+
     cacheParameterPointers();
 
     // Wire harmonic tables to voice params
@@ -26,6 +47,13 @@ ParasiteProcessor::ParasiteProcessor()
     for (int i = 0; i < 8; ++i)
         synth.addVoice(new bb::FMVoice(voiceParams));
     synth.setNoteStealingEnabled(true);
+
+    // Register curve listeners AFTER param layout is built and pointers cached.
+    // Then push initial internal state into the params so defaults stay in sync.
+    setupCurveParamListeners();
+    syncInternalToCurveParams();
+    // Matches the post-preset-load pattern: no undo entries from the sync.
+    undoManager.clearUndoHistory();
 
     buildPresetRegistry();
     loadFavorites();
@@ -42,6 +70,86 @@ ParasiteProcessor::ParasiteProcessor()
 ParasiteProcessor::~ParasiteProcessor()
 {
     licenseManager.removeListener(this);
+    // Explicit unregister so APVTS doesn't call into freed listener
+    if (curveListener)
+    {
+        auto unreg = [this](const juce::String& id) {
+            apvts.removeParameterListener(id, curveListener.get());
+        };
+        for (auto prefix : { juce::String("MOD1_H"), juce::String("MOD2_H"), juce::String("CAR_H") })
+            for (int h = 0; h < 32; ++h)
+                unreg(prefix + juce::String(h).paddedLeft('0', 2));
+        for (int s = 0; s < 32; ++s)
+            unreg("SHAPER_S" + juce::String(s).paddedLeft('0', 2));
+    }
+}
+
+// Register 224 curve-param listeners
+void ParasiteProcessor::setupCurveParamListeners()
+{
+    curveListener = std::make_unique<CurveListener>(*this);
+    auto reg = [this](const juce::String& id) {
+        apvts.addParameterListener(id, curveListener.get());
+    };
+    for (auto prefix : { juce::String("MOD1_H"), juce::String("MOD2_H"), juce::String("CAR_H") })
+        for (int h = 0; h < 32; ++h)
+            reg(prefix + juce::String(h).paddedLeft('0', 2));
+    for (int s = 0; s < 32; ++s)
+        reg("SHAPER_S" + juce::String(s).paddedLeft('0', 2));
+}
+
+// Push current internal state into APVTS params without triggering listeners
+// (used after preset load or initFromWaveType).
+void ParasiteProcessor::syncInternalToCurveParams()
+{
+    suppressCurveListener.store(true, std::memory_order_relaxed);
+    auto setParam = [this](const juce::String& id, float value01) {
+        if (auto* p = apvts.getParameter(id))
+            p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, value01));
+    };
+
+    struct HarmRef { const char* prefix; bb::HarmonicTable& tbl; };
+    HarmRef harms[] = {
+        { "MOD1_H", mod1Harmonics },
+        { "MOD2_H", mod2Harmonics },
+        { "CAR_H",  carHarmonics  },
+    };
+    for (auto& h : harms)
+        for (int i = 0; i < 32; ++i)
+            setParam(juce::String(h.prefix) + juce::String(i).paddedLeft('0', 2),
+                     h.tbl.getHarmonic(i));
+
+    for (int s = 0; s < 32; ++s)
+        setParam("SHAPER_S" + juce::String(s).paddedLeft('0', 2),
+                 volumeShaper.getStep(s));
+
+    suppressCurveListener.store(false, std::memory_order_relaxed);
+}
+
+// Called from listener — apply a single curve param change to internal state
+void ParasiteProcessor::applyCurveParamToInternal(const juce::String& id, float value01)
+{
+    // MOD1_H## / MOD2_H## / CAR_H##
+    auto applyHarm = [&](const juce::String& prefix, bb::HarmonicTable& tbl) -> bool
+    {
+        if (!id.startsWith(prefix)) return false;
+        int idx = id.substring(prefix.length()).getIntValue();
+        if (idx < 0 || idx >= 32) return true;
+        tbl.setHarmonic(idx, value01);
+        tbl.rebake();
+        return true;
+    };
+    if (applyHarm("MOD1_H", mod1Harmonics)) return;
+    if (applyHarm("MOD2_H", mod2Harmonics)) return;
+    if (applyHarm("CAR_H",  carHarmonics))  return;
+
+    if (id.startsWith("SHAPER_S"))
+    {
+        int idx = id.substring(8).getIntValue();
+        if (idx >= 0 && idx < 32) volumeShaper.setStep(idx, value01);
+        return;
+    }
+
 }
 
 void ParasiteProcessor::licenseStateChanged(bool licensed)
@@ -411,7 +519,7 @@ ParasiteProcessor::createParameterLayout()
                                       "ShpRate", "ShpDep",
                                       "M1Coar", "M2Coar", "CCoar",
                                       "Tremor", "Vein", "Flux",
-                                      "Cortex", "Ichor", "Plasma" };
+                                      "Vortex", "Helix", "Plasma" };
 
         for (int n = 1; n <= 3; ++n)
         {
@@ -470,15 +578,60 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DISP_AMT", "HemoFold",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
-        g->addChild(std::make_unique<juce::AudioParameterFloat>("CORTEX", "Cortex",
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("CORTEX", "Vortex",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
-        g->addChild(std::make_unique<juce::AudioParameterFloat>("ICHOR", "Ichor",
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("ICHOR", "Helix",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PLASMA", "Plasma",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("MACRO_TIME", "Time",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("OCTAVE", "Octave", -4, 4, 0));
+        groups.push_back(std::move(g));
+    }
+
+    // --- Groupe "curves" : 224 params cachés pour undo Cmd+Z ---
+    // Marked non-automatable to keep Ableton's automation list clean.
+    // These sync bidirectionally with HarmonicTable / VolumeShaper / LFO::customTable.
+    {
+        auto g = std::make_unique<juce::AudioProcessorParameterGroup>("curves", "Curves (internal)", "|");
+
+        auto addStepFloat = [&g](const juce::String& id, const juce::String& name,
+                                   float defaultVal)
+        {
+            g->addChild(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID(id, 1),
+                name,
+                juce::NormalisableRange<float>(0.0f, 1.0f),
+                defaultVal,
+                juce::AudioParameterFloatAttributes().withAutomatable(false)));
+        };
+
+        // Harmonic tables: MOD1_H00..31, MOD2_H00..31, CAR_H00..31 (sine default = H0=1)
+        for (auto prefix : { juce::String("MOD1_H"),
+                              juce::String("MOD2_H"),
+                              juce::String("CAR_H") })
+        {
+            for (int h = 0; h < 32; ++h)
+            {
+                auto id   = prefix + juce::String(h).paddedLeft('0', 2);
+                auto name = prefix + juce::String(h);
+                addStepFloat(id, name, h == 0 ? 1.0f : 0.0f);
+            }
+        }
+
+        // Shaper steps: SHAPER_S00..31 (default = 1.0 flat)
+        for (int s = 0; s < 32; ++s)
+        {
+            auto id   = "SHAPER_S" + juce::String(s).paddedLeft('0', 2);
+            addStepFloat(id, id, 1.0f);
+        }
+
+        // LFO custom curves are undoable via a dedicated UndoableAction
+        // (see LFOCurveEdit in LFOSection.cpp) — not through hidden params —
+        // so the exact variable-length control-point structure is preserved
+        // on Cmd+Z, matching Serum's behavior.
+
         groups.push_back(std::move(g));
     }
 
@@ -509,6 +662,19 @@ void ParasiteProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 }
 
 // --- Process audio ---
+void ParasiteProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer,
+                                              juce::MidiBuffer& midiMessages)
+{
+    // The host wants a silent buffer. We still run zero input through the
+    // effect tail (reverb/delay) so resuming from bypass doesn't introduce
+    // a hard cut when the tail would naturally fade. Simplest correct
+    // implementation: output silence and drop MIDI — the existing internal
+    // state is preserved automatically because we don't reset anything.
+    juce::ScopedNoDenormals noDenormals;
+    buffer.clear();
+    midiMessages.clear();
+}
+
 void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                          juce::MidiBuffer& midiMessages)
 {
@@ -520,6 +686,23 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     {
         midiMessages.clear();
         return;
+    }
+
+    // Serviced at the top of the block so a preset change that landed
+    // between blocks starts from a clean slate: every voice is silenced
+    // (with tail-off so the anti-click fade in FMVoice handles the pop),
+    // every effect buffer is zeroed, incoming MIDI in this block is
+    // dropped so a stale note-on from the previous patch can't arm the
+    // new one.
+    if (voicePanicPending.exchange(false, std::memory_order_acquire))
+    {
+        synth.allNotesOff(0, /*allowTailOff*/ false);
+        stereoDelay.reset();
+        plateReverb.reset();
+        liquidChorus.reset();
+        rubberComb.reset();
+        volumeShaper.reset();
+        midiMessages.clear();
     }
 
     // Preset preview notes (injected from GUI thread via atomic flags)
@@ -930,6 +1113,9 @@ void ParasiteProcessor::deserializeCustomData(const juce::ValueTree& tree)
 void ParasiteProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    // Stamp the current schema version so future loads know which migrations
+    // (if any) still need to run. Every save from this build onward carries it.
+    state.setProperty("schemaVersion", kCurrentSchemaVersion, nullptr);
     state.setProperty("_presetIndex", currentPreset, nullptr);
     state.setProperty("_isUserPreset", isUserPresetLoaded, nullptr);
     state.setProperty("_userPresetName", currentUserPresetName, nullptr);
@@ -941,47 +1127,36 @@ void ParasiteProcessor::getStateInformation(juce::MemoryBlock& destData)
 
 void ParasiteProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
+    // Validate the blob BEFORE mutating any internal state. A corrupt/foreign
+    // chunk here must leave the plugin running with whatever it had loaded.
+    if (data == nullptr || sizeInBytes <= 0)
+    {
+        BB_LOG_ERROR("setStateInformation: empty payload — keeping current state.");
+        return;
+    }
+
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
-    if (!xml) return;
-    if (!xml->hasTagName(apvts.state.getType())) return;
+    if (xml == nullptr)
+    {
+        BB_LOG_ERROR("setStateInformation: XML parse failed (size=" + juce::String(sizeInBytes)
+                     + ") — keeping current state.");
+        setLastLoadError("Invalid plugin state — XML parse failed");
+        return;
+    }
+    if (!xml->hasTagName(apvts.state.getType()))
+    {
+        BB_LOG_ERROR("setStateInformation: unexpected root tag '"
+                     + xml->getTagName() + "' — keeping current state.");
+        setLastLoadError("Invalid plugin state — wrong root tag");
+        return;
+    }
+    // Quiet everything before the new patch applies so stale voices /
+    // tails don't morph into the new params mid-note.
+    requestVoicePanic();
     {
         auto tree = juce::ValueTree::fromXml(*xml);
         deserializeCustomData(tree);
-        migrateOldPitchParams(tree);
-
-        // Migrate: inject default global LFO params if absent
-        {
-            bool hasLFO = false;
-            for (int i = 0; i < tree.getNumChildren(); ++i)
-            {
-                auto child = tree.getChild(i);
-                if (child.hasType("PARAM") && child.getProperty("id").toString() == "LFO1_RATE")
-                { hasLFO = true; break; }
-            }
-            if (!hasLFO)
-            {
-                auto addP = [&tree](const juce::String& id, float value) {
-                    juce::ValueTree p("PARAM");
-                    p.setProperty("id", id, nullptr);
-                    p.setProperty("value", value, nullptr);
-                    tree.addChild(p, -1, nullptr);
-                };
-                for (int n = 1; n <= 3; ++n)
-                {
-                    auto pfx = "LFO" + juce::String(n) + "_";
-                    addP(pfx + "RATE", 1.0f);
-                    addP(pfx + "WAVE", 0.0f);
-                    addP(pfx + "SYNC", 3.0f);
-                    addP(pfx + "RETRIG", 0.0f);
-                    addP(pfx + "VEL", 0.0f);
-                    for (int s = 1; s <= kSlotsPerLFO; ++s)
-                    {
-                        addP(pfx + "DEST" + juce::String(s), 0.0f);
-                        addP(pfx + "AMT" + juce::String(s), 0.0f);
-                    }
-                }
-            }
-        }
+        applyStateMigrations(tree);
 
         // Restore preset identity so the GUI shows the correct name
         if (tree.hasProperty("_presetIndex"))
@@ -999,8 +1174,18 @@ void ParasiteProcessor::setStateInformation(const void* data, int sizeInBytes)
         tree.removeProperty("_userPresetName", nullptr);
         tree.removeProperty("_displayName", nullptr);
 
+        // replaceState calls setValueNotifyingHost on every changed param,
+        // which would fire CurveListener and stomp the internal state we
+        // just restored from the old-format serialized strings. Gate it.
+        suppressCurveListener.store(true, std::memory_order_relaxed);
         apvts.replaceState(tree);
+        suppressCurveListener.store(false, std::memory_order_relaxed);
+
+        // Push the authoritative internal state into the params so any
+        // stale H##/S## values in the loaded XML get overwritten.
+        syncInternalToCurveParams();
         undoManager.clearUndoHistory();
+        stateGeneration.fetch_add(1, std::memory_order_release);
     }
 }
 
@@ -1051,7 +1236,14 @@ void ParasiteProcessor::saveUserPreset(const juce::String& name, const juce::Str
         xml->setAttribute("version", version);
         xml->setAttribute("updatedAt", juce::Time::getCurrentTime().toISO8601(true));
 
-        if (!xml->writeTo(file))
+        // Atomic write via TemporaryFile — otherwise a concurrent save from
+        // another instance (or a process crash mid-write) could leave the
+        // target half-written and unreadable. overwriteTargetFileWithTemporary
+        // maps to an atomic rename(2) on POSIX.
+        juce::TemporaryFile tmp(file);
+        bool ok = xml->writeTo(tmp.getFile())
+               && tmp.overwriteTargetFileWithTemporary();
+        if (!ok)
             DBG("Failed to save preset: " + file.getFullPathName());
 
         // Fire-and-forget cloud upload
@@ -1101,7 +1293,12 @@ void ParasiteProcessor::saveFavorites()
                    .getChildFile("Voidscan").getChildFile("Parasite");
     dir.createDirectory();
     auto file = dir.getChildFile("favorites.txt");
-    file.replaceWithText(favorites.joinIntoString("\n"));
+
+    // Atomic write: two instances toggling a favorite simultaneously would
+    // otherwise race on replaceWithText and risk a truncated file.
+    juce::TemporaryFile tmp(file);
+    tmp.getFile().replaceWithText(favorites.joinIntoString("\n"));
+    tmp.overwriteTargetFileWithTemporary();
 }
 
 void ParasiteProcessor::loadFavorites()
@@ -1122,40 +1319,77 @@ void ParasiteProcessor::loadFavorites()
 void ParasiteProcessor::loadUserPreset(const juce::String& name)
 {
     auto file = getUserPresetsDir().getChildFile(name + ".prst");
-    if (!file.existsAsFile()) return;
+    if (!file.existsAsFile())
+    {
+        BB_LOG_WARN("loadUserPreset: file not found '" + file.getFullPathName() + "'");
+        setLastLoadError("Preset not found: " + name);
+        return;
+    }
 
     auto xml = juce::parseXML(file);
-    if (!xml)
+    if (xml == nullptr)
     {
-        DBG("Failed to parse preset file: " + file.getFullPathName());
+        BB_LOG_ERROR("loadUserPreset: XML parse failed — '" + file.getFullPathName() + "'");
+        setLastLoadError("Preset file is corrupt: " + name);
         return;
     }
     if (!xml->hasTagName(apvts.state.getType()))
     {
-        DBG("Invalid preset tag <" + xml->getTagName() + "> in: " + file.getFullPathName());
+        BB_LOG_ERROR("loadUserPreset: wrong root tag '"
+                     + xml->getTagName() + "' in '" + file.getFullPathName() + "'");
+        setLastLoadError("Preset file has the wrong format: " + name);
         return;
     }
+    requestVoicePanic();
     auto tree = juce::ValueTree::fromXml(*xml);
-    deserializeCustomData(tree);
-    migrateOldPitchParams(tree);
+    applyStateMigrations(tree);
+    suppressCurveListener.store(true, std::memory_order_relaxed);
     apvts.replaceState(tree);
+    suppressCurveListener.store(false, std::memory_order_relaxed);
+    deserializeCustomData(tree);
+    syncInternalToCurveParams();
     undoManager.clearUndoHistory();
+    stateGeneration.fetch_add(1, std::memory_order_release);
     isUserPresetLoaded = true;
     currentUserPresetName = name;
+    setLastLoadError({});
+    BB_LOG_INFO("Loaded user preset '" + name + "'");
 }
 
 // --- Shared preset loading from XML string ---
 void ParasiteProcessor::loadPresetFromXml(const juce::String& xmlStr)
 {
+    // Direct apply without undo action — used by factory load / cloud sync.
+    if (xmlStr.isEmpty())
+    {
+        BB_LOG_WARN("loadPresetFromXml: empty XML string — ignoring.");
+        return;
+    }
     auto xml = juce::parseXML(xmlStr);
-    if (!xml) return;
-    if (!xml->hasTagName(apvts.state.getType())) return;
+    if (xml == nullptr)
+    {
+        BB_LOG_ERROR("loadPresetFromXml: XML parse failed — keeping current state.");
+        lastLoadError = "Failed to parse preset XML";
+        return;
+    }
+    if (!xml->hasTagName(apvts.state.getType()))
+    {
+        BB_LOG_ERROR("loadPresetFromXml: wrong root tag '" + xml->getTagName() + "'");
+        lastLoadError = "Preset XML has the wrong format";
+        return;
+    }
 
+    requestVoicePanic();
     auto tree = juce::ValueTree::fromXml(*xml);
-    deserializeCustomData(tree);
-    migrateOldPitchParams(tree);
+    applyStateMigrations(tree);
+    suppressCurveListener.store(true, std::memory_order_relaxed);
     apvts.replaceState(tree);
+    suppressCurveListener.store(false, std::memory_order_relaxed);
+    deserializeCustomData(tree);
+    syncInternalToCurveParams();
     undoManager.clearUndoHistory();
+    stateGeneration.fetch_add(1, std::memory_order_release);
+    setLastLoadError({});
 }
 
 void ParasiteProcessor::loadFactoryPreset(const juce::String& resName)
@@ -1271,6 +1505,70 @@ void ParasiteProcessor::loadPresetAt(int index)
     }
     currentPreset = index;
     setDisplayName({}); // clear override when loading a named preset
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// State schema migrations
+// ──────────────────────────────────────────────────────────────────────
+
+int ParasiteProcessor::getSchemaVersion(const juce::ValueTree& tree) noexcept
+{
+    // Pre-versioning presets default to v1. Anything saved by this build
+    // onward will carry the explicit schemaVersion property.
+    return tree.hasProperty("schemaVersion")
+        ? static_cast<int>(tree.getProperty("schemaVersion"))
+        : 1;
+}
+
+void ParasiteProcessor::applyStateMigrations(juce::ValueTree& tree)
+{
+    const int fromVersion = getSchemaVersion(tree);
+
+    if (fromVersion < 2)
+    {
+        migrateOldPitchParams(tree);
+        injectMissingLFODefaults(tree);
+    }
+
+    // When adding v3 migrations, chain them here:
+    //   if (fromVersion < 3) migrateV2ToV3(tree);
+
+    tree.setProperty("schemaVersion", kCurrentSchemaVersion, nullptr);
+}
+
+// Add default global-LFO params to presets that predate them. Idempotent —
+// only inserts rows whose IDs are missing.
+void ParasiteProcessor::injectMissingLFODefaults(juce::ValueTree& tree)
+{
+    bool hasLFO = false;
+    for (int i = 0; i < tree.getNumChildren(); ++i)
+    {
+        auto child = tree.getChild(i);
+        if (child.hasType("PARAM") && child.getProperty("id").toString() == "LFO1_RATE")
+        { hasLFO = true; break; }
+    }
+    if (hasLFO) return;
+
+    auto addP = [&tree](const juce::String& id, float value) {
+        juce::ValueTree p("PARAM");
+        p.setProperty("id", id, nullptr);
+        p.setProperty("value", value, nullptr);
+        tree.addChild(p, -1, nullptr);
+    };
+    for (int n = 1; n <= 3; ++n)
+    {
+        auto pfx = "LFO" + juce::String(n) + "_";
+        addP(pfx + "RATE",   1.0f);
+        addP(pfx + "WAVE",   0.0f);
+        addP(pfx + "SYNC",   3.0f);
+        addP(pfx + "RETRIG", 0.0f);
+        addP(pfx + "VEL",    0.0f);
+        for (int s = 1; s <= kSlotsPerLFO; ++s)
+        {
+            addP(pfx + "DEST" + juce::String(s), 0.0f);
+            addP(pfx + "AMT"  + juce::String(s), 0.0f);
+        }
+    }
 }
 
 // --- Migration anciens presets : MOD_PITCH → COARSE+FINE ou FIXED_FREQ ---

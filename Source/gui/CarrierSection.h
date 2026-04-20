@@ -81,6 +81,10 @@ private:
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
     void setupKnob(juce::Slider& knob);
 
+    // Push the 32 internal harmonics into the CAR_H## params so a subsequent
+    // bar edit + Cmd+Z doesn't revert to a stale pre-sync value.
+    void syncHarmonicsToParams();
+
     // Drift knob (LFO assignable)
     ModSlider driftKnob;
     juce::Label driftLabel;

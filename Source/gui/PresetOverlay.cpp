@@ -411,6 +411,8 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
             return;
         }
 
+        // Single-click: load + preview, browser stays open (audition mode)
+        // Double-click closes the browser (commit).
         selectCard(idx);
     }
 }
