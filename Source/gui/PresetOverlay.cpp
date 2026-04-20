@@ -507,11 +507,16 @@ void PresetOverlay::resized()
     favToggleBounds = heartArea;
     pillRow.removeFromRight(4);
 
-    int pillW = (pillRow.getWidth() - 6 * 4) / 7;
-    for (int i = 0; i < 9; ++i)
+    // 9 categories (All + 8 real) with 8 gaps of 4px between them.
+    // Previous formula assumed 7 pills which clipped Drums + FX off-screen.
+    constexpr int kNumPills = 9;
+    constexpr int kGap = 4;
+    const int pillW = (pillRow.getWidth() - (kNumPills - 1) * kGap) / kNumPills;
+    for (int i = 0; i < kNumPills; ++i)
     {
         categoryButtons[i].setBounds(pillRow.removeFromLeft(pillW));
-        pillRow.removeFromLeft(4);
+        if (i < kNumPills - 1)
+            pillRow.removeFromLeft(kGap);
     }
 
     rebuildCards();
