@@ -1,6 +1,7 @@
 // HarmonicEditor.cpp — 32-bar harmonic editor with shape presets
 #include "HarmonicEditor.h"
 #include "ParasiteLookAndFeel.h"
+#include <array>
 
 HarmonicEditor::HarmonicEditor(bb::HarmonicTable& table)
     : harmonicTable(table)
@@ -10,6 +11,11 @@ HarmonicEditor::HarmonicEditor(bb::HarmonicTable& table)
 
 void HarmonicEditor::timerCallback()
 {
+    // Flush pending wavetable rebake — the APVTS CurveListener only flags
+    // the table dirty; we batch the rebake here so a fast drag gets one
+    // rebake per tick instead of one per pixel.
+    harmonicTable.flushIfDirty();
+
     // 32 bars stay static until the user draws or a preset loads — no reason
     // to repaint 15×/sec when nothing changed. Digest is "sum of (amp × idx)"
     // which catches any single-bar edit without a full array compare.
@@ -41,6 +47,24 @@ void HarmonicEditor::paint(juce::Graphics& g)
     float barW = area.getWidth() / static_cast<float>(bb::kHarmonicCount);
     float maxH = area.getHeight();
 
+    // Pre-baked bar colours (one per harmonic index, darkening with index).
+    // withMultipliedBrightness does HSV conversion — caching avoids 32 of
+    // those per paint. Rebuilt lazily when the accent colour flips via
+    // dark mode (single uint32 compare tells us when).
+    static std::array<juce::Colour, bb::kHarmonicCount> barColourCache;
+    static uint32_t                                     cachedAccent = 0;
+    const uint32_t currentAccent = ParasiteLookAndFeel::kAccentColor;
+    if (currentAccent != cachedAccent)
+    {
+        cachedAccent = currentAccent;
+        const juce::Colour accent(currentAccent);
+        for (int h = 0; h < bb::kHarmonicCount; ++h)
+        {
+            float brightness = 1.0f - static_cast<float>(h) * 0.015f;
+            barColourCache[h] = accent.withMultipliedBrightness(brightness).withAlpha(0.85f);
+        }
+    }
+
     for (int h = 0; h < bb::kHarmonicCount; ++h)
     {
         float amp = harmonicTable.getHarmonic(h);
@@ -52,11 +76,7 @@ void HarmonicEditor::paint(juce::Graphics& g)
         {
             auto barRect = juce::Rectangle<float>(x + 1.0f, area.getBottom() - bh,
                                                    barW - 2.0f, bh);
-            // Color gradient: fundamental = accent, higher = dimmer
-            float brightness = 1.0f - static_cast<float>(h) * 0.015f;
-            g.setColour(juce::Colour(ParasiteLookAndFeel::kAccentColor)
-                            .withMultipliedBrightness(brightness)
-                            .withAlpha(0.85f));
+            g.setColour(barColourCache[h]);
             g.fillRect(barRect);
         }
 

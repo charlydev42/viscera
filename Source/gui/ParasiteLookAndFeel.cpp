@@ -17,19 +17,17 @@ void ParasiteLookAndFeel::drawNeumorphicRect(juce::Graphics& g,
         clip.addRoundedRectangle(bounds, cornerRadius);
         g.reduceClipRegion(clip);
 
-        juce::DropShadow darkInner(juce::Colour(kShadowDark).withAlpha(0.55f), 6, { 3, 3 });
-        darkInner.drawForRectangle(g, bounds.toNearestInt());
-        juce::DropShadow lightInner(juce::Colour(kShadowLight).withAlpha(0.55f), 6, { -3, -3 });
-        lightInner.drawForRectangle(g, bounds.toNearestInt());
+        const auto intB = bounds.toNearestInt();
+        shadowCache.neuInsetDark .drawForRectangle(g, intB);
+        shadowCache.neuInsetLight.drawForRectangle(g, intB);
 
         g.restoreState();
     }
     else
     {
-        juce::DropShadow lightShadow(juce::Colour(kShadowLight).withAlpha(0.65f), 5, { -3, -3 });
-        lightShadow.drawForRectangle(g, bounds.toNearestInt());
-        juce::DropShadow darkShadow(juce::Colour(kShadowDark).withAlpha(0.4f), 5, { 3, 3 });
-        darkShadow.drawForRectangle(g, bounds.toNearestInt());
+        const auto intB = bounds.toNearestInt();
+        shadowCache.neuRaisedLight.drawForRectangle(g, intB);
+        shadowCache.neuRaisedDark .drawForRectangle(g, intB);
 
         g.setColour(juce::Colour(kBgColor));
         g.fillRoundedRectangle(bounds, cornerRadius);
@@ -95,6 +93,44 @@ void ParasiteLookAndFeel::setDarkMode(bool dark)
         kShadowDark  = 0xFF8896AC;
         kShadowLight = 0xFFFFFFFF;
     }
+    // Rebuild the shadow cache so every subsequent paint reuses the new
+    // kShadow* colours instead of reconstructing DropShadow per call.
+    refreshShadowCache();
+}
+
+void ParasiteLookAndFeel::refreshShadowCache()
+{
+    const juce::Colour light (static_cast<uint32_t>(kShadowLight));
+    const juce::Colour dark  (static_cast<uint32_t>(kShadowDark));
+
+    auto set = [](juce::DropShadow& s, juce::Colour c, float alpha, int radius, juce::Point<int> off) {
+        s.colour = c.withAlpha(alpha);
+        s.radius = radius;
+        s.offset = off;
+    };
+
+    set(shadowCache.neuRaisedLight,     light, 0.65f, 5, { -3, -3 });
+    set(shadowCache.neuRaisedDark,      dark,  0.40f, 5, {  3,  3 });
+    set(shadowCache.neuInsetDark,       dark,  0.55f, 6, {  3,  3 });
+    set(shadowCache.neuInsetLight,      light, 0.55f, 6, { -3, -3 });
+
+    set(shadowCache.knobOuterLight,     light, 0.90f, 8, { -4, -4 });
+    set(shadowCache.knobOuterDark,      dark,  0.65f, 8, {  4,  4 });
+    set(shadowCache.knobInnerDark,      dark,  0.30f, 4, {  2,  2 });
+    set(shadowCache.knobInnerLight,     light, 0.30f, 4, { -2, -2 });
+
+    set(shadowCache.toggleOuterLight,   light, 0.85f, 5, { -2, -2 });
+    set(shadowCache.toggleOuterDark,    dark,  0.55f, 5, {  2,  2 });
+    set(shadowCache.toggleInsetDark,    dark,  0.35f, 3, {  1,  1 });
+    set(shadowCache.toggleInsetLight,   light, 0.35f, 3, { -1, -1 });
+
+    set(shadowCache.tinyInsetDark,      dark,  0.20f, 2, {  1,  1 });
+    set(shadowCache.tinyInsetLight,     light, 0.20f, 2, { -1, -1 });
+
+    set(shadowCache.btnInsetDark,       dark,  0.35f, 4, {  2,  2 });
+    set(shadowCache.btnInsetLight,      light, 0.35f, 4, { -2, -2 });
+    set(shadowCache.btnOuterLight,      light, 0.60f, 4, { -2, -2 });
+    set(shadowCache.btnOuterDark,       dark,  0.35f, 4, {  2,  2 });
 }
 
 void ParasiteLookAndFeel::refreshJuceColours()
@@ -113,6 +149,7 @@ void ParasiteLookAndFeel::refreshJuceColours()
     setColour(juce::TextButton::textColourOffId, juce::Colour(kTextColor));
     setColour(juce::TextButton::textColourOnId, juce::Colour(kTextColor));
     setColour(juce::TextButton::buttonColourId, juce::Colour(kBgColor));
+    refreshShadowCache();
 }
 
 ParasiteLookAndFeel::ParasiteLookAndFeel()
@@ -141,10 +178,8 @@ void ParasiteLookAndFeel::drawRotarySlider(juce::Graphics& g,
     // 1) Neumorphic double shadow — deep
     juce::Path circle;
     circle.addEllipse(outerBounds);
-    juce::DropShadow lightSh(juce::Colour(kShadowLight).withAlpha(0.9f), 8, { -4, -4 });
-    lightSh.drawForPath(g, circle);
-    juce::DropShadow darkSh(juce::Colour(kShadowDark).withAlpha(0.65f), 8, { 4, 4 });
-    darkSh.drawForPath(g, circle);
+    shadowCache.knobOuterLight.drawForPath(g, circle);
+    shadowCache.knobOuterDark .drawForPath(g, circle);
 
     // 2) Outer knob face with directional gradient
     {
@@ -171,10 +206,8 @@ void ParasiteLookAndFeel::drawRotarySlider(juce::Graphics& g,
         g.saveState();
         g.reduceClipRegion(innerPath);
 
-        juce::DropShadow darkIn(juce::Colour(kShadowDark).withAlpha(0.3f), 4, { 2, 2 });
-        darkIn.drawForPath(g, innerPath);
-        juce::DropShadow lightIn(juce::Colour(kShadowLight).withAlpha(0.3f), 4, { -2, -2 });
-        lightIn.drawForPath(g, innerPath);
+        shadowCache.knobInnerDark .drawForPath(g, innerPath);
+        shadowCache.knobInnerLight.drawForPath(g, innerPath);
 
         g.restoreState();
 
@@ -272,10 +305,8 @@ void ParasiteLookAndFeel::drawToggleButton(juce::Graphics& g,
     // Raised neumorphic circle — deep shadows
     juce::Path circle;
     circle.addEllipse(btnRect);
-    juce::DropShadow lightSh(juce::Colour(kShadowLight).withAlpha(0.85f), 5, { -2, -2 });
-    lightSh.drawForPath(g, circle);
-    juce::DropShadow darkSh(juce::Colour(kShadowDark).withAlpha(0.55f), 5, { 2, 2 });
-    darkSh.drawForPath(g, circle);
+    shadowCache.toggleOuterLight.drawForPath(g, circle);
+    shadowCache.toggleOuterDark .drawForPath(g, circle);
 
     // Button face with gradient
     {
@@ -298,10 +329,9 @@ void ParasiteLookAndFeel::drawToggleButton(juce::Graphics& g,
         g.setColour(juce::Colour(kBgColor));
         g.fillEllipse(innerRect);
 
-        juce::DropShadow darkIn(juce::Colour(kShadowDark).withAlpha(0.35f), 3, { 1, 1 });
-        darkIn.drawForRectangle(g, innerRect.toNearestInt());
-        juce::DropShadow lightIn(juce::Colour(kShadowLight).withAlpha(0.35f), 3, { -1, -1 });
-        lightIn.drawForRectangle(g, innerRect.toNearestInt());
+        const auto intInner = innerRect.toNearestInt();
+        shadowCache.toggleInsetDark .drawForRectangle(g, intInner);
+        shadowCache.toggleInsetLight.drawForRectangle(g, intInner);
 
         g.restoreState();
     }
@@ -374,10 +404,9 @@ void ParasiteLookAndFeel::drawComboBox(juce::Graphics& g,
     juce::Path clip;
     clip.addRoundedRectangle(bounds, cr);
     g.reduceClipRegion(clip);
-    juce::DropShadow darkIn(juce::Colour(kShadowDark).withAlpha(0.2f), 2, { 1, 1 });
-    darkIn.drawForRectangle(g, bounds.toNearestInt());
-    juce::DropShadow lightIn(juce::Colour(kShadowLight).withAlpha(0.2f), 2, { -1, -1 });
-    lightIn.drawForRectangle(g, bounds.toNearestInt());
+    const auto intB = bounds.toNearestInt();
+    shadowCache.tinyInsetDark .drawForRectangle(g, intB);
+    shadowCache.tinyInsetLight.drawForRectangle(g, intB);
     g.restoreState();
 
     // Dropdown arrow
@@ -460,10 +489,9 @@ void ParasiteLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& 
         juce::Path clip;
         clip.addRoundedRectangle(bounds, cr);
         g.reduceClipRegion(clip);
-        juce::DropShadow darkIn(juce::Colour(kShadowDark).withAlpha(0.2f), 2, { 1, 1 });
-        darkIn.drawForRectangle(g, bounds.toNearestInt());
-        juce::DropShadow lightIn(juce::Colour(kShadowLight).withAlpha(0.2f), 2, { -1, -1 });
-        lightIn.drawForRectangle(g, bounds.toNearestInt());
+        const auto intB = bounds.toNearestInt();
+        shadowCache.tinyInsetDark .drawForRectangle(g, intB);
+        shadowCache.tinyInsetLight.drawForRectangle(g, intB);
         g.restoreState();
 
         // Dropdown arrow triangle
@@ -487,10 +515,9 @@ void ParasiteLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& 
         juce::Path clip;
         clip.addRoundedRectangle(bounds, cr);
         g.reduceClipRegion(clip);
-        juce::DropShadow darkIn(juce::Colour(kShadowDark).withAlpha(0.35f), 4, { 2, 2 });
-        darkIn.drawForRectangle(g, bounds.toNearestInt());
-        juce::DropShadow lightIn(juce::Colour(kShadowLight).withAlpha(0.35f), 4, { -2, -2 });
-        lightIn.drawForRectangle(g, bounds.toNearestInt());
+        const auto intB = bounds.toNearestInt();
+        shadowCache.btnInsetDark .drawForRectangle(g, intB);
+        shadowCache.btnInsetLight.drawForRectangle(g, intB);
         g.restoreState();
     }
     else
@@ -498,10 +525,8 @@ void ParasiteLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& 
         // Raised pill — shadow follows pill shape
         juce::Path pillPath;
         pillPath.addRoundedRectangle(bounds, cr);
-        juce::DropShadow lightSh(juce::Colour(kShadowLight).withAlpha(0.6f), 4, { -2, -2 });
-        lightSh.drawForPath(g, pillPath);
-        juce::DropShadow darkSh(juce::Colour(kShadowDark).withAlpha(0.35f), 4, { 2, 2 });
-        darkSh.drawForPath(g, pillPath);
+        shadowCache.btnOuterLight.drawForPath(g, pillPath);
+        shadowCache.btnOuterDark .drawForPath(g, pillPath);
 
         g.setColour(juce::Colour(kBgColor).brighter(highlighted ? 0.03f : 0.0f));
         g.fillRoundedRectangle(bounds, cr);

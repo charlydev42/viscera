@@ -54,6 +54,13 @@ private:
     float lastPaintedPhase = -1.0f;
     float lastPeakSeen = -1.0f;
 
+    // Reused path buffers — constructed once per instance and clear()-ed
+    // at the top of each paint. Avoids per-frame heap allocations for the
+    // Catmull-Rom curve + its filled underneath in custom mode.
+    juce::Path curvePathBuf;
+    juce::Path fillPathBuf;
+    juce::Path wavePathBuf;
+
     // Curve editor drag state
     int dragPointIndex = -1;
     bool isDraggingPoint = false;

@@ -327,6 +327,14 @@ private:
     juce::SmoothedValue<float> smoothGLfoSpread;
     juce::SmoothedValue<float> smoothGLfoFold;
 
+    // Cached ADSR params (post-modulation, post-time-macro) per envelope.
+    // JUCE's ADSR::setParameters recomputes internal increments on every
+    // call — we skip it when none of the 4 values differ by >epsilon since
+    // the last block. Saves ~4 × JUCE ADSR recalc per block when the
+    // envelope is static, which is the common case (no LFO on ADSR).
+    struct AdsrCache { float a = -1, d = -1, s = -1, r = -1; };
+    AdsrCache lastEnv1, lastEnv2, lastEnv3, lastPitchEnv;
+
     // Filter coefficient cache: skip recalculation when params haven't changed
     float lastFilterCutoff = -1.0f;
     float lastFilterRes    = -1.0f;

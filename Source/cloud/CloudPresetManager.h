@@ -75,6 +75,12 @@ private:
     juce::StringArray loadPendingUploads() const;
     void drainPendingUploads(); // fire-and-forget — called on launch + after sync
 
+    // Synchronous upload body — runs on whichever thread the caller chose.
+    // uploadPreset() launches a one-shot thread around it; drainPendingUploads
+    // runs it in a loop on a single worker so we don't spawn N threads for
+    // a queue of N pending uploads.
+    void uploadPresetBlocking(const juce::String& uuid);
+
     // ── JWT management ─────────────────────────────────────────────
     mutable juce::CriticalSection tokenLock_;
     juce::String jwtToken_;

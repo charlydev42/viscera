@@ -115,6 +115,38 @@ public:
     static void drawNeumorphicRect(juce::Graphics& g, juce::Rectangle<float> bounds,
                                    float cornerRadius, bool inset = false);
 
+    // Shared DropShadow cache — reused by every draw* method instead of
+    // constructing a fresh juce::DropShadow on every paint call. Rebuilt in
+    // refreshShadowCache() which refreshJuceColours() calls whenever dark
+    // mode flips (the only time the shadow colours change).
+    struct ShadowCache
+    {
+        // drawNeumorphicRect — raised
+        juce::DropShadow neuRaisedLight, neuRaisedDark;
+        // drawNeumorphicRect — inset
+        juce::DropShadow neuInsetDark, neuInsetLight;
+        // drawRotarySlider outer + inner dish
+        juce::DropShadow knobOuterLight, knobOuterDark;
+        juce::DropShadow knobInnerDark,  knobInnerLight;
+        // drawToggleButton outer + inset (LED well)
+        juce::DropShadow toggleOuterLight, toggleOuterDark;
+        juce::DropShadow toggleInsetDark,  toggleInsetLight;
+        // drawComboBox / drawTextEditorOutline (2px inset)
+        juce::DropShadow tinyInsetDark, tinyInsetLight;
+        // drawButtonBackground (4px inset + outer)
+        juce::DropShadow btnInsetDark, btnInsetLight;
+        juce::DropShadow btnOuterLight, btnOuterDark;
+    };
+    // Single shared cache — rebuilt whenever dark mode changes. Safe to
+    // share: DropShadow is a POD (colour/radius/offset) and only the GUI
+    // thread mutates it via refreshShadowCache → setDarkMode.
+    static inline ShadowCache shadowCache {};
+    static const ShadowCache& getShadowCache() noexcept { return shadowCache; }
+
+    // Refresh the shadow cache to match the current kShadow* colour atoms.
+    // Called by refreshJuceColours() and from setDarkMode().
+    static void refreshShadowCache();
+
 private:
     // Per-toggle smooth animation state (0.0 = off, 1.0 = fully on)
     std::unordered_map<juce::Component*, float> toggleAnimValues;

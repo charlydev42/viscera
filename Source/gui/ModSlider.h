@@ -174,10 +174,22 @@ public:
             g.fillEllipse(getLocalBounds().toFloat().reduced(2));
         }
 
+        // Pre-built arc colours (bloom / core / hot center) for each LFO.
+        // Avoids 3× juce::Colour(...).withAlpha(...) per arc per frame
+        // across ~20 ModSliders on the advanced page.
         static const juce::Colour lfoColors[] = {
-            juce::Colour(0xFF8BC34A), // LFO1 — green
-            juce::Colour(0xFF8BC34A), // LFO2 — green
-            juce::Colour(0xFF8BC34A)  // LFO3 — green
+            juce::Colour(0xFF8BC34A), juce::Colour(0xFF8BC34A), juce::Colour(0xFF8BC34A)
+        };
+        static const juce::Colour arcBloom[] = {
+            lfoColors[0].withAlpha(0.08f), lfoColors[1].withAlpha(0.08f), lfoColors[2].withAlpha(0.08f)
+        };
+        static const juce::Colour arcCore[] = {
+            lfoColors[0].withAlpha(0.85f), lfoColors[1].withAlpha(0.85f), lfoColors[2].withAlpha(0.85f)
+        };
+        static const juce::Colour arcHot[] = {
+            lfoColors[0].brighter(0.5f).withAlpha(0.3f),
+            lfoColors[1].brighter(0.5f).withAlpha(0.3f),
+            lfoColors[2].brighter(0.5f).withAlpha(0.3f)
         };
 
         auto bounds = getLocalBounds().toFloat().reduced(1.0f);
@@ -217,7 +229,6 @@ public:
                 if (dest != static_cast<int>(myDest)) continue;
 
                 float amt = statePtr->getRawParameterValue(ids.amtIds[l][s])->load();
-                auto col = lfoColors[l];
 
                 // Scale arc by actual LFO peak (custom curves may not reach 1.0)
                 float peak = vp
@@ -239,14 +250,13 @@ public:
                 {
                     arc.addCentredArc(centre.x, centre.y, arcR, arcR, 0,
                                       a1, a2, true);
-                    // Soft bloom halo
-                    g.setColour(col.withAlpha(0.06f));
+                    // Soft bloom halo — use pre-built colours (no Colour +
+                    // withAlpha allocation per frame).
+                    g.setColour(arcBloom[l]);
                     g.strokePath(arc, juce::PathStrokeType(5.0f));
-                    // Core
-                    g.setColour(col.withAlpha(0.85f));
+                    g.setColour(arcCore[l]);
                     g.strokePath(arc, juce::PathStrokeType(2.8f));
-                    // Hot center
-                    g.setColour(col.brighter(0.5f).withAlpha(0.3f));
+                    g.setColour(arcHot[l]);
                     g.strokePath(arc, juce::PathStrokeType(1.0f));
                 }
             }

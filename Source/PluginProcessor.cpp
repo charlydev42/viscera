@@ -135,8 +135,9 @@ void ParasiteProcessor::applyCurveParamToInternal(const juce::String& id, float 
         if (!id.startsWith(prefix)) return false;
         int idx = id.substring(prefix.length()).getIntValue();
         if (idx < 0 || idx >= 32) return true;
+        // setHarmonic flags the table dirty; the editor's timer flushes the
+        // rebake so a fast drag doesn't re-bake 60×/sec.
         tbl.setHarmonic(idx, value01);
-        tbl.rebake();
         return true;
     };
     if (applyHarm("MOD1_H", mod1Harmonics)) return;
@@ -740,6 +741,19 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         for (int l = 0; l < 3; ++l)
         {
             auto& c = lfoCache[l];
+            // Fast exit when no slot on this LFO is routed — ticking the
+            // oscillator, evaluating Catmull-Rom, and updating atomics is
+            // pure waste. Still publish peak=1 so the GUI doesn't flicker
+            // between "assigned but silent" and "truly unassigned".
+            bool anyRouted = false;
+            for (int s = 0; s < kSlotsPerLFO; ++s)
+                if (static_cast<int>(c.dest[s]->load()) > 0) { anyRouted = true; break; }
+            if (!anyRouted)
+            {
+                voiceParams.lfoPeak[l].store(1.0f, std::memory_order_relaxed);
+                continue;
+            }
+
             float lfoRate = c.rate->load();
             int lfoSyncIdx = static_cast<int>(c.sync->load());
             if (lfoSyncIdx > 0)

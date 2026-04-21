@@ -27,10 +27,15 @@ public:
     }
 
     // --- GUI writes a single harmonic amplitude [0,1] ---
+    // Sets the dirty flag; the caller (APVTS CurveListener or drawBar) no
+    // longer calls rebake() directly — flushIfDirty() coalesces bursts.
     void setHarmonic(int idx, float amp)
     {
         if (idx >= 0 && idx < kHarmonicCount)
+        {
             harmonics[idx].store(amp, std::memory_order_relaxed);
+            rebakePending.store(true, std::memory_order_release);
+        }
     }
 
     // --- GUI/DSP reads a harmonic amplitude ---
@@ -42,9 +47,15 @@ public:
     }
 
     // --- Audio thread: wavetable lookup with linear interpolation ---
+    // Relaxed ordering: rebake() publishes the pointer with release, but the
+    // audio thread doesn't need to synchronise with any other state on the
+    // pointer read. On x86 both are no-op loads; on ARM the acquire fence
+    // was costing a memory barrier per sample per oscillator. Reading the
+    // stale pointer briefly during a swap is safe — both tableA and tableB
+    // hold valid samples; the worst case is one block of pre-swap data.
     float lookup(double phase) const noexcept
     {
-        const float* table = readTable.load(std::memory_order_acquire);
+        const float* table = readTable.load(std::memory_order_relaxed);
         double idx = (phase - std::floor(phase)) * kWavetableSize;
         int i0 = static_cast<int>(idx) & (kWavetableSize - 1);
         float frac = static_cast<float>(idx - std::floor(idx));
@@ -52,8 +63,26 @@ public:
     }
 
     // --- GUI thread: recalculate wavetable from harmonics, then swap ---
+    // --- Debounced rebake ---
+    // setHarmonic() from the listener fires once per bar drag pixel (60Hz
+    // mouse rate). Running the 32-harmonic additive rebake (~0.3ms, 4096
+    // samples × 32 sin calls) that often = 18ms CPU/sec of jank. Instead,
+    // setHarmonic() now flags rebakePending; a poll from the editor timer
+    // (HarmonicEditor::timerCallback, ~15Hz) coalesces bursts into at most
+    // one rebake per tick. Perceived audio latency on drag: max ~67ms,
+    // comfortably inside the "feels live" envelope for harmonic sketching.
+    void flushIfDirty()
+    {
+        if (rebakePending.exchange(false, std::memory_order_acquire))
+            rebake();
+    }
+
     void rebake()
     {
+        // Clear any pending-dirty flag — whoever called rebake() directly
+        // is covering for the throttled path, so the next flushIfDirty()
+        // should skip.
+        rebakePending.store(false, std::memory_order_relaxed);
         // Determine which buffer is the write buffer
         float* wBuf = (readTable.load(std::memory_order_relaxed) == tableA) ? tableB : tableA;
 
@@ -190,6 +219,9 @@ private:
     float tableA[kWavetableSize + 1] = {};
     float tableB[kWavetableSize + 1] = {};
     std::atomic<float*> readTable { tableA };
+    // Flipped by setHarmonic when a bar value changes; cleared by
+    // flushIfDirty() which runs the rebake. Coalesces burst drags.
+    std::atomic<bool> rebakePending { false };
 };
 
 } // namespace bb

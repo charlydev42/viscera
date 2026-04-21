@@ -338,23 +338,36 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Envelope time macro: 0.5 = 1x, 0 = 0.25x, 1 = 4x (exponential)
     float timeMul = std::pow(4.0f, params.macroTime->load() * 2.0f - 1.0f);
 
-    // Mettre à jour les paramètres d'enveloppe (+ LFO modulation + time macro)
-    env1.setParameters(
+    // Mettre à jour les paramètres d'enveloppe (+ LFO modulation + time macro).
+    // Skip the JUCE ADSR recompute when nothing changed since last block.
+    auto pushIfChanged = [](auto& env, AdsrCache& cache,
+                             float a, float d, float s, float r)
+    {
+        constexpr float eps = 1e-4f;
+        if (std::abs(a - cache.a) > eps || std::abs(d - cache.d) > eps
+            || std::abs(s - cache.s) > eps || std::abs(r - cache.r) > eps)
+        {
+            env.setParameters(a, d, s, r);
+            cache.a = a; cache.d = d; cache.s = s; cache.r = r;
+        }
+    };
+
+    pushIfChanged(env1, lastEnv1,
         std::max(0.0f, (params.env1A->load() + params.lfoModEnv1A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         std::max(0.0f, (params.env1D->load() + params.lfoModEnv1D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env1S->load() + params.lfoModEnv1S.load(std::memory_order_relaxed)),
         std::max(0.0f, (params.env1R->load() + params.lfoModEnv1R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
-    env2.setParameters(
+    pushIfChanged(env2, lastEnv2,
         std::max(0.0f, (params.env2A->load() + params.lfoModEnv2A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         std::max(0.0f, (params.env2D->load() + params.lfoModEnv2D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env2S->load() + params.lfoModEnv2S.load(std::memory_order_relaxed)),
         std::max(0.0f, (params.env2R->load() + params.lfoModEnv2R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
-    env3.setParameters(
+    pushIfChanged(env3, lastEnv3,
         std::max(0.0f, (params.env3A->load() + params.lfoModEnv3A.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         std::max(0.0f, (params.env3D->load() + params.lfoModEnv3D.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.env3S->load() + params.lfoModEnv3S.load(std::memory_order_relaxed)),
         std::max(0.0f, (params.env3R->load() + params.lfoModEnv3R.load(std::memory_order_relaxed) * 8.0f) * timeMul));
-    pitchEnv.setParameters(
+    pushIfChanged(pitchEnv, lastPitchEnv,
         std::max(0.0f, (params.pitchEnvA->load() + params.lfoModPEnvA.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         std::max(0.0f, (params.pitchEnvD->load() + params.lfoModPEnvD.load(std::memory_order_relaxed) * 5.0f) * timeMul),
         juce::jlimit(0.0f, 1.0f, params.pitchEnvS->load() + params.lfoModPEnvS.load(std::memory_order_relaxed)),
@@ -595,9 +608,14 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             float modulatedCutoff = (20.0f + 19980.0f * std::pow(cutNorm, kCutInvSkew)) * veinMod;
             modulatedCutoff = juce::jlimit(20.0f, 20000.0f, modulatedCutoff);
             float modulatedRes = juce::jlimit(0.0f, 1.0f, resonance + smoothGLfoRes.getNextValue());
-            // Only recalculate filter coefficients when parameters changed audibly
-            if (std::abs(modulatedCutoff - lastFilterCutoff) > 0.5f
-                || std::abs(modulatedRes - lastFilterRes) > 0.001f)
+            // Only recalculate filter coefficients when parameters changed
+            // audibly. Threshold widened from 0.5 Hz / 0.001 to 1.5 Hz / 0.002
+            // — the tighter values were flipping the tan()-based coeff math
+            // every few samples during automation sweeps for sub-perceptual
+            // (<0.05 dB) cutoff steps. Voice coeffs now recompute maybe
+            // 100× less often during smooth sweeps.
+            if (std::abs(modulatedCutoff - lastFilterCutoff) > 1.5f
+                || std::abs(modulatedRes    - lastFilterRes)    > 0.002f)
             {
                 filterL.setParameters(modulatedCutoff, modulatedRes);
                 filterR.setParameters(modulatedCutoff, modulatedRes);

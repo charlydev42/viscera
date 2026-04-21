@@ -343,13 +343,90 @@ void CloudPresetManager::drainPendingUploads()
     auto pending = loadPendingUploads();
     if (pending.isEmpty()) return;
     BB_LOG_INFO("Draining " + juce::String(pending.size()) + " pending cloud uploads");
-    for (const auto& uuid : pending)
-        uploadPreset(uuid); // uploadPreset removes on success / re-queues on failure
+
+    // Single worker thread that loops through every pending upload serially.
+    // Previously this spawned N threads (one per queued uuid) — Windows
+    // thread creation is ~1-5ms each, so a 50-preset queue wasted up to
+    // 250ms of thread-spawn overhead before any upload even started.
+    if (!license_.isLicensed()) return;
+
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, pending, alive]
+    {
+        for (const auto& uuid : pending)
+        {
+            if (!alive->load() || shuttingDown_.load()) break;
+            uploadPresetBlocking(uuid);
+        }
+        --pendingThreads_;
+    });
 }
 
 // =====================================================================
 // Upload preset (after save)
 // =====================================================================
+
+void CloudPresetManager::uploadPresetBlocking(const juce::String& uuid)
+{
+    if (!ensureToken() || shuttingDown_.load()) return;
+
+    auto dir = ParasiteProcessor::getUserPresetsDir();
+    juce::Array<juce::File> files;
+    files.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.prst"));
+
+    for (auto& f : files)
+    {
+        auto xml = juce::parseXML(f);
+        if (!xml) continue;
+        if (xml->getStringAttribute("uuid") != uuid) continue;
+
+        auto* body = new juce::DynamicObject();
+        body->setProperty("uuid",     uuid);
+        body->setProperty("name",     xml->getStringAttribute("name", f.getFileNameWithoutExtension()));
+        body->setProperty("category", xml->getStringAttribute("category", "User"));
+        body->setProperty("pack",     xml->getStringAttribute("pack", "User"));
+        body->setProperty("data",     xml->toString());
+
+        auto json = juce::JSON::toString(juce::var(body), true);
+
+        if (shuttingDown_.load()) return;
+
+        auto resp = httpRequestWithRetries("POST", "/presets", json);
+        if (resp.statusCode == 409)
+            resp = httpRequestWithRetries("PATCH", "/presets/" + uuid, json);
+
+        if (resp.statusCode == 401)
+        {
+            if (shuttingDown_.load()) return;
+            refreshTokenSync();
+            resp = httpRequestWithRetries("POST", "/presets", json);
+            if (resp.statusCode == 409)
+                resp = httpRequestWithRetries("PATCH", "/presets/" + uuid, json);
+        }
+
+        const bool success = (resp.statusCode == 200 || resp.statusCode == 201);
+        if (success)
+        {
+            removePendingUpload(uuid);
+            BB_LOG_INFO("Uploaded preset " + uuid);
+        }
+        else if (isRetryableStatus(resp.statusCode))
+        {
+            BB_LOG_WARN("Cloud upload transient failure for " + uuid
+                        + " (HTTP " + juce::String(resp.statusCode) + ") — queued");
+            enqueuePendingUpload(uuid);
+        }
+        else
+        {
+            BB_LOG_ERROR("Cloud upload failed for " + uuid
+                         + " (HTTP " + juce::String(resp.statusCode) + ")");
+            removePendingUpload(uuid);
+        }
+        break;
+    }
+}
 
 void CloudPresetManager::uploadPreset(const juce::String& uuid)
 {
@@ -360,71 +437,7 @@ void CloudPresetManager::uploadPreset(const juce::String& uuid)
 
     juce::Thread::launch([this, uuid, alive]
     {
-        if (!ensureToken()) { --pendingThreads_; return; }
-        if (shuttingDown_.load()) { --pendingThreads_; return; }
-
-        // Read the preset file to get its current data
-        auto dir = ParasiteProcessor::getUserPresetsDir();
-        juce::Array<juce::File> files;
-        files.addArray(dir.findChildFiles(juce::File::findFiles, false, "*.prst"));
-
-        for (auto& f : files)
-        {
-            auto xml = juce::parseXML(f);
-            if (!xml) continue;
-            if (xml->getStringAttribute("uuid") != uuid) continue;
-
-            auto* body = new juce::DynamicObject();
-            body->setProperty("uuid",     uuid);
-            body->setProperty("name",     xml->getStringAttribute("name", f.getFileNameWithoutExtension()));
-            body->setProperty("category", xml->getStringAttribute("category", "User"));
-            body->setProperty("pack",     xml->getStringAttribute("pack", "User"));
-            body->setProperty("data",     xml->toString());
-
-            auto json = juce::JSON::toString(juce::var(body), true);
-
-            if (shuttingDown_.load()) { --pendingThreads_; return; }
-
-            // Try create first — POST /presets with retries on transient
-            // failures (5xx / timeout / rate limit).
-            auto resp = httpRequestWithRetries("POST", "/presets", json);
-            if (resp.statusCode == 409)
-                resp = httpRequestWithRetries("PATCH", "/presets/" + uuid, json);
-
-            if (resp.statusCode == 401)
-            {
-                if (shuttingDown_.load()) { --pendingThreads_; return; }
-                // Token expired — refresh and retry once with new token.
-                refreshTokenSync();
-                resp = httpRequestWithRetries("POST", "/presets", json);
-                if (resp.statusCode == 409)
-                    resp = httpRequestWithRetries("PATCH", "/presets/" + uuid, json);
-            }
-
-            const bool success = (resp.statusCode == 200 || resp.statusCode == 201);
-            if (success)
-            {
-                removePendingUpload(uuid);
-                BB_LOG_INFO("Uploaded preset " + uuid);
-            }
-            else if (isRetryableStatus(resp.statusCode))
-            {
-                // Still transient after backoff — queue for next session.
-                BB_LOG_WARN("Cloud upload transient failure for " + uuid
-                            + " (HTTP " + juce::String(resp.statusCode) + ") — queued");
-                enqueuePendingUpload(uuid);
-            }
-            else
-            {
-                // Hard error (auth / bad request / not found) — don't retry.
-                BB_LOG_ERROR("Cloud upload failed for " + uuid
-                             + " (HTTP " + juce::String(resp.statusCode) + ")");
-                removePendingUpload(uuid);
-            }
-
-            break;
-        }
-
+        uploadPresetBlocking(uuid);
         --pendingThreads_;
     });
 }

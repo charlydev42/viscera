@@ -246,8 +246,10 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
         float midLineY = inner.getY() + inner.getHeight() * 0.5f;
         g.drawHorizontalLine(static_cast<int>(midLineY), inner.getX(), inner.getRight());
 
-        // Evaluate curve pixel by pixel using Catmull-Rom
-        juce::Path curvePath;
+        // Evaluate curve pixel by pixel using Catmull-Rom. Reuse the member
+        // Path buffers (clear() keeps capacity) so we don't heap-alloc a
+        // new vertex list every frame.
+        curvePathBuf.clear();
         int numPx = static_cast<int>(inner.getWidth());
         for (int px = 0; px <= numPx; ++px)
         {
@@ -256,24 +258,23 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
             float y = inner.getY() + (1.0f - val) * inner.getHeight();
             float x = inner.getX() + static_cast<float>(px);
             if (px == 0)
-                curvePath.startNewSubPath(x, y);
+                curvePathBuf.startNewSubPath(x, y);
             else
-                curvePath.lineTo(x, y);
+                curvePathBuf.lineTo(x, y);
         }
 
-        // Fill under the curve
-        {
-            juce::Path fillPath(curvePath);
-            fillPath.lineTo(inner.getRight(), inner.getBottom());
-            fillPath.lineTo(inner.getX(), inner.getBottom());
-            fillPath.closeSubPath();
-            g.setColour(lfoColor.withAlpha(0.15f));
-            g.fillPath(fillPath);
-        }
+        // Fill under the curve — build fillPath as a copy of the curve,
+        // then close it; next frame it'll be cleared and rebuilt in place.
+        fillPathBuf = curvePathBuf;
+        fillPathBuf.lineTo(inner.getRight(), inner.getBottom());
+        fillPathBuf.lineTo(inner.getX(), inner.getBottom());
+        fillPathBuf.closeSubPath();
+        g.setColour(lfoColor.withAlpha(0.15f));
+        g.fillPath(fillPathBuf);
 
         // Stroke the curve
         g.setColour(lfoColor.withAlpha(0.85f));
-        g.strokePath(curvePath, juce::PathStrokeType(1.5f));
+        g.strokePath(curvePathBuf, juce::PathStrokeType(1.5f));
 
         // Draw control points (outline only, filled when dragging)
         auto pts = lfoPtr->getCurvePoints();
@@ -294,7 +295,8 @@ void LFOWaveDisplay::paint(juce::Graphics& g)
     else
     {
         // --- Standard mode: draw waveform path ---
-        juce::Path wavePath;
+        wavePathBuf.clear();
+        auto& wavePath = wavePathBuf;
         for (int px = 0; px < static_cast<int>(w); ++px)
         {
             float p = static_cast<float>(px) / w;
