@@ -41,6 +41,29 @@ LFOWaveDisplay::LFOWaveDisplay(int index) : lfoIdx(index)
     startTimerHz(30);
 }
 
+void LFOWaveDisplay::timerCallback()
+{
+    // Cheap precondition — if the wave type or phase shifted since the last
+    // paint, we have to redraw. Otherwise, for the Custom waveform also check
+    // whether the baked curve changed (peak is a good proxy since bakeToTable
+    // updates it atomically).
+    bool needs = false;
+    if (waveType != lastWaveType)          { lastWaveType = waveType; needs = true; }
+    // Threshold of 1/kTexW (~1/512 = 0.002) of a cursor pixel width is enough
+    // to catch cursor movement without triggering on floating-point jitter.
+    if (std::abs(phase - lastPaintedPhase) > 0.002f)
+                                            { lastPaintedPhase = phase; needs = true; }
+    if (isDraggingPoint)                    needs = true;
+    if (lfoPtr != nullptr
+        && waveType == static_cast<int>(bb::LFOWaveType::Custom))
+    {
+        const float peak = lfoPtr->getUniPeak();
+        if (std::abs(peak - lastPeakSeen) > 1e-4f)
+                                            { lastPeakSeen = peak; needs = true; }
+    }
+    if (needs) repaint();
+}
+
 void LFOWaveDisplay::mouseDown(const juce::MouseEvent& e)
 {
     bool isCustom = (waveType == static_cast<int>(bb::LFOWaveType::Custom));

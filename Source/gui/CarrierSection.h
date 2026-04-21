@@ -32,6 +32,11 @@ private:
     // Cached ADSR points for hit-testing
     juce::Point<float> ptPeak, ptSustain, ptRelEnd;
 
+    // Change-detection cache — timerCallback skips repaint if ADSR +
+    // hovered point are identical to the last painted frame.
+    float lastAdsrDigest    = -1.0f;
+    int   lastHoveredPoint  = -2;
+
     int pointAtPosition(juce::Point<float> pos) const;
     void setParamNormalized(const juce::String& id, float newVal);
 

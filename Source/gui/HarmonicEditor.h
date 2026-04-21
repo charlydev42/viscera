@@ -31,5 +31,10 @@ private:
 
     juce::Rectangle<int> barArea;
 
+    // Change-detection cache. The editor is static between edits; scanning
+    // 32 floats at 15Hz and comparing to a digest is massively cheaper than
+    // repainting 32 bars every tick on Windows GDI.
+    float lastHarmonicsDigest = -1.0f;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HarmonicEditor)
 };

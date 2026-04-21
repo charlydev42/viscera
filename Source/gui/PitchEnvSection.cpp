@@ -12,7 +12,24 @@ PitchEnvDisplay::PitchEnvDisplay(juce::AudioProcessorValueTreeState& apvts)
     startTimerHz(15);
 }
 
-void PitchEnvDisplay::timerCallback() { repaint(); }
+void PitchEnvDisplay::timerCallback()
+{
+    // Pitch env display is static until a param changes. Digest the values
+    // to skip 15 repaints/sec when the user isn't editing.
+    const float amt = state.getRawParameterValue("PENV_AMT")->load();
+    const float a   = state.getRawParameterValue("PENV_A")->load();
+    const float d   = state.getRawParameterValue("PENV_D")->load();
+    const float s   = state.getRawParameterValue("PENV_S")->load();
+    const float r   = state.getRawParameterValue("PENV_R")->load();
+    const bool  on  = state.getRawParameterValue("PENV_ON")->load() > 0.5f;
+    const float digest = amt * 0.01f + a + d * 3.17f + s * 5.41f + r * 7.83f
+                       + (on ? 1000.0f : 0.0f);
+    if (std::abs(digest - lastPitchEnvDigest) > 1e-4f)
+    {
+        lastPitchEnvDigest = digest;
+        repaint();
+    }
+}
 
 // Same cumulative layout as CarrierEnvDisplay
 static constexpr float kPMaxA   = 5.0f;

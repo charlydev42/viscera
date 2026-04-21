@@ -10,7 +10,17 @@ HarmonicEditor::HarmonicEditor(bb::HarmonicTable& table)
 
 void HarmonicEditor::timerCallback()
 {
-    repaint();
+    // 32 bars stay static until the user draws or a preset loads — no reason
+    // to repaint 15×/sec when nothing changed. Digest is "sum of (amp × idx)"
+    // which catches any single-bar edit without a full array compare.
+    float digest = 0.0f;
+    for (int i = 0; i < bb::kHarmonicCount; ++i)
+        digest += harmonicTable.getHarmonic(i) * static_cast<float>(i + 1);
+    if (std::abs(digest - lastHarmonicsDigest) > 1e-4f)
+    {
+        lastHarmonicsDigest = digest;
+        repaint();
+    }
 }
 
 void HarmonicEditor::resized()

@@ -37,12 +37,22 @@ public:
     void mouseDoubleClick(const juce::MouseEvent& e) override;
 
 private:
-    void timerCallback() override { repaint(); }
+    // Only repaint when something actually changed since the last tick:
+    // the phase cursor crossing a pixel, the wave type switching, the user
+    // dragging a control point, or (in custom mode) the baked curve peak
+    // shifting. Idle displays cost one atomic load per 33 ms instead of a
+    // full repaint — material on FL Studio's GDI path where repaints
+    // dominate the editor's CPU cost.
+    void timerCallback() override;
 
     int lfoIdx = 0;
     int waveType = 0;
     float phase = 0.0f;
     bb::LFO* lfoPtr = nullptr;
+    // Change-detection cache
+    int   lastWaveType = -1;
+    float lastPaintedPhase = -1.0f;
+    float lastPeakSeen = -1.0f;
 
     // Curve editor drag state
     int dragPointIndex = -1;

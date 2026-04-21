@@ -13,7 +13,26 @@ ShaperDisplay::ShaperDisplay(bb::VolumeShaper& shaper)
     startTimerHz(30);
 }
 
-void ShaperDisplay::timerCallback() { repaint(); }
+void ShaperDisplay::timerCallback()
+{
+    // Only repaint when something actually moved: phase cursor advanced,
+    // coarseMode toggled, or a bar value shifted. Phase is the usual
+    // change driver during playback; bars move only on user edits.
+    bool needs = false;
+    const float phase = volumeShaper.getPhase();
+    if (std::abs(phase - lastPaintedPhase) > 0.002f)
+    { lastPaintedPhase = phase; needs = true; }
+    if (coarseMode != lastCoarseMode)
+    { lastCoarseMode = coarseMode; needs = true; }
+    // Cheap bars digest — sum of (step × index) catches any single-bar edit
+    // without scanning 32 values against an array each tick.
+    float digest = 0.0f;
+    for (int i = 0; i < bb::VolumeShaper::kNumSteps; ++i)
+        digest += volumeShaper.getStep(i) * static_cast<float>(i + 1);
+    if (std::abs(digest - lastBarsDigest) > 1e-4f)
+    { lastBarsDigest = digest; needs = true; }
+    if (needs) repaint();
+}
 
 void ShaperDisplay::applyMouse(const juce::MouseEvent& e)
 {

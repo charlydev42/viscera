@@ -16,6 +16,9 @@ public:
 
 private:
     juce::AudioProcessorValueTreeState& state;
+    // Change-detection cache — timerCallback digests the 5 pitch-env params
+    // and only repaints when the envelope actually shifted.
+    float lastPitchEnvDigest = -1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PitchEnvDisplay)
 };

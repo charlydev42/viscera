@@ -13,7 +13,24 @@ CarrierEnvDisplay::CarrierEnvDisplay(juce::AudioProcessorValueTreeState& apvts)
     setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 
-void CarrierEnvDisplay::timerCallback() { repaint(); }
+void CarrierEnvDisplay::timerCallback()
+{
+    // ADSR points are static unless the user is dragging or a param changes.
+    // Digest the 4 ADSR values; skip the repaint if the envelope is identical
+    // to the last one we painted.
+    const float a = state.getRawParameterValue("ENV3_A")->load();
+    const float d = state.getRawParameterValue("ENV3_D")->load();
+    const float s = state.getRawParameterValue("ENV3_S")->load();
+    const float r = state.getRawParameterValue("ENV3_R")->load();
+    const float digest = a + d * 3.17f + s * 5.41f + r * 7.83f;
+    const bool hoverChanged = (hoveredPoint != lastHoveredPoint);
+    if (hoverChanged || std::abs(digest - lastAdsrDigest) > 1e-4f)
+    {
+        lastAdsrDigest    = digest;
+        lastHoveredPoint  = hoveredPoint;
+        repaint();
+    }
+}
 
 // Fixed-zone layout (like Ableton Operator): each ADSR segment has a
 // maximum pixel budget.  When a param is 0, its segment collapses to 0px

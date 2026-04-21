@@ -27,6 +27,10 @@ public:
 private:
     bb::VolumeShaper& volumeShaper;
     bool coarseMode = false; // false=32 steps, true=8 steps
+    // Change-detection cache — timerCallback skips repaint if nothing moved.
+    float lastPaintedPhase = -1.0f;
+    float lastBarsDigest   = -1.0f;
+    bool  lastCoarseMode   = false;
     void applyMouse(const juce::MouseEvent& e);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ShaperDisplay)
