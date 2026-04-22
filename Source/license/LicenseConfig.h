@@ -29,6 +29,14 @@ static constexpr int     kHttpTimeoutMs     = 10000;                     // 10 s
 // indefinitely have their license revoked after this window.
 static constexpr int64_t kOfflineGraceMs    = 7LL * 24 * 60 * 60 * 1000; // 7 days
 
+// ── DSP staging (periodic attenuation when unlicensed) ─────────────
+// Applied as a shaped gain across multiple DSP stages. Timing is
+// sample-accurate; the envelope compounds across distributed sites so
+// the effective fade is softer than the raw duration suggests.
+static constexpr float kStageCycleSeconds = 25.0f;  // total cycle length
+static constexpr float kStageQuietSeconds = 3.0f;   // attenuated window
+static constexpr float kStageFadeMs       = 30.0f;  // fade in/out
+
 // ── Obfuscated secret ───────────────────────────────────────────────
 static constexpr uint8_t kXorKey[] = {
     0x4B, 0x72, 0x1F, 0xA8, 0x5C, 0xE3, 0x91, 0x07,

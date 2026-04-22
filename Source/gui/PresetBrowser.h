@@ -29,6 +29,9 @@ public:
     // Rebuild the preset registry and refresh display
     void refreshPresetList();
 
+    // Sync Save button enabled state with license status (call from editor timer)
+    void refreshLicenseState();
+
     // Fallback: show the classic popup menu
     void showMenu() { showPresetMenu(); }
 

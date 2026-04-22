@@ -144,6 +144,20 @@ private:
 
     // License overlay (blocks UI when not licensed)
     LicenseOverlay licenseOverlay;
+
+    // Small persistent banner shown when the user has opted into demo mode.
+    // Clicking it re-opens the activation overlay. Custom-painted because the
+    // project LookAndFeel's drawButtonBackground ignores per-button colour
+    // overrides — a stock TextButton here would blend into the main panel.
+    class DemoBannerButton : public juce::Button
+    {
+    public:
+        DemoBannerButton() : juce::Button("demoBanner") {}
+    private:
+        void paintButton(juce::Graphics& g, bool highlighted, bool /*down*/) override;
+    };
+    DemoBannerButton demoBanner;
+
     void updateLicenseOverlay();
 
     // Key handler (undo/redo on all platforms + MIDI keyboard standalone-only)

@@ -17,13 +17,18 @@ private:
     juce::ToggleButton onToggle, ppToggle;
     ModSlider timeKnob, feedKnob, dlyMixKnob;
     ModSlider dampKnob, spreadKnob;
+    ModSlider syncKnob; // Stepped 1..9 — same LFO destination as timeKnob
     juce::Label timeLabel, feedLabel, dampLabel, spreadLabel, dlyMixLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttach, ppAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
         timeAttach, feedAttach, dampAttach, spreadAttach, dlyMixAttach;
 
+    juce::AudioProcessorValueTreeState& state;
+    int lastSyncIdx = 1; // Remembered division when toggling Sync on
+
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
+    void updateSyncVisibility();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DelaySection)
 };

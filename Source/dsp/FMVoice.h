@@ -250,6 +250,12 @@ struct VoiceParams
     std::atomic<bool> velSwap { false };
     // Last note-on velocity (raw 0-1, written by voice, read by processor for LFO rate)
     std::atomic<float> lastVelocity { 0.7f };
+
+    // Per-block stage shaping factors. Normally 1.0f; both voice-level
+    // multipliers in renderNextBlock multiply by these. Updated once per
+    // block from the processor (atomic store, relaxed).
+    std::atomic<float> stageA { 1.0f };
+    std::atomic<float> stageB { 1.0f };
 };
 
 class FMVoice : public juce::SynthesiserVoice

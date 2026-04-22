@@ -35,12 +35,6 @@ LicenseOverlay::LicenseOverlay(bb::LicenseManager& mgr)
                                 14.0f, juce::Font::plain));
     keyInput.setJustification(juce::Justification::centred);
     keyInput.setInputRestrictions(29, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-");
-    // White-ish input field for contrast
-    keyInput.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xFFF0F0F0));
-    keyInput.setColour(juce::TextEditor::textColourId,       juce::Colours::black);
-    keyInput.setColour(juce::TextEditor::outlineColourId,    juce::Colour(0xFFD0D0D0));
-    keyInput.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(0xFFBBBBBB));
-    keyInput.setColour(juce::CaretComponent::caretColourId,     juce::Colour(0xFF888888));
     keyInput.onReturnKey = [this] { activateBtn.triggerClick(); };
     // Auto-format: uppercase + insert dashes every 4 chars (PARA-XXXX-XXXX-...)
     keyInput.onTextChange = [this]
@@ -102,15 +96,97 @@ LicenseOverlay::LicenseOverlay(bb::LicenseManager& mgr)
     };
     addAndMakeVisible(activateBtn);
 
+    demoBtn.setButtonText("Use demo mode");
+    demoBtn.onClick = [this]
+    {
+        writeDemoAcknowledged(true);
+        if (onDemoRequested) onDemoRequested();
+    };
+    addAndMakeVisible(demoBtn);
+
     statusLabel.setJustificationType(juce::Justification::centred);
     statusLabel.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(),
                                     10.0f, juce::Font::plain));
     addAndMakeVisible(statusLabel);
+
+    refreshColors();
 }
 
 LicenseOverlay::~LicenseOverlay()
 {
     manager.removeListener(this);
+}
+
+void LicenseOverlay::refreshColors()
+{
+    const bool dark = ParasiteLookAndFeel::darkMode;
+
+    // Input field — softer palette in both modes so the overlay doesn't
+    // feel like a Windows 95 dialog dropped in the middle of the plugin.
+    // Dark input bg sits noticeably deeper than the card bg (0xFF2E3440) so
+    // the text field reads as a sunken well, not a brighter rectangle.
+    const juce::uint32 inBg      = dark ? 0xFF252B35 : 0xFFF0F0F0;
+    const juce::uint32 inText    = dark ? 0xFFD8DEE9 : 0xFF444444;
+    const juce::uint32 inOutline = dark ? 0xFF4C566A : 0xFFD0D0D0;
+    const juce::uint32 inFocus   = dark ? 0xFF7B8494 : 0xFFBBBBBB;
+    const juce::uint32 caret     = dark ? 0xFFD8DEE9 : 0xFF888888;
+    const juce::uint32 hint      = dark ? 0xFF6E7686 : 0xFF9E9E9E;
+    const juce::uint32 subtitle  = dark ? 0xFF8B92A0 : 0xFF7A7A7A;
+    const juce::uint32 btnText   = dark ? 0xFFE0E4EC : 0xFF444444;
+    const juce::uint32 btnBg     = dark ? 0xFF3B4252 : 0xFFE8E8E8;
+
+    keyInput.setColour(juce::TextEditor::backgroundColourId,      juce::Colour(inBg));
+    keyInput.setColour(juce::TextEditor::textColourId,            juce::Colour(inText));
+    keyInput.setColour(juce::TextEditor::outlineColourId,         juce::Colour(inOutline));
+    keyInput.setColour(juce::TextEditor::focusedOutlineColourId,  juce::Colour(inFocus));
+    keyInput.setColour(juce::CaretComponent::caretColourId,       juce::Colour(caret));
+    keyInput.setTextToShowWhenEmpty("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX",
+                                    juce::Colour(hint));
+
+    subtitleLabel.setColour(juce::Label::textColourId, juce::Colour(subtitle));
+
+    // Status label keeps its context-specific colour (green/red on action).
+    // Reset its default base so the next success/error message starts from a
+    // neutral adaptive shade instead of a stale one from the other theme.
+    statusLabel.setColour(juce::Label::textColourId, juce::Colour(subtitle));
+
+    activateBtn.setColour(juce::TextButton::buttonColourId,   juce::Colour(btnBg));
+    activateBtn.setColour(juce::TextButton::textColourOffId,  juce::Colour(btnText));
+    activateBtn.setColour(juce::TextButton::textColourOnId,   juce::Colour(btnText));
+    demoBtn.setColour(juce::TextButton::buttonColourId,       juce::Colour(btnBg));
+    demoBtn.setColour(juce::TextButton::textColourOffId,      juce::Colour(btnText));
+    demoBtn.setColour(juce::TextButton::textColourOnId,       juce::Colour(btnText));
+
+    repaint();
+}
+
+static juce::File getDemoAckFile()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+           .getChildFile("Voidscan").getChildFile("Parasite")
+           .getChildFile("demo_ack");
+}
+
+bool LicenseOverlay::readDemoAcknowledged()
+{
+    return getDemoAckFile().existsAsFile();
+}
+
+void LicenseOverlay::writeDemoAcknowledged(bool ack)
+{
+    auto f = getDemoAckFile();
+    f.getParentDirectory().createDirectory();
+    if (ack)
+    {
+        // Atomic write — concurrent instances can't corrupt each other
+        juce::TemporaryFile tmp(f);
+        tmp.getFile().replaceWithText("ack");
+        tmp.overwriteTargetFileWithTemporary();
+    }
+    else if (f.existsAsFile())
+    {
+        f.deleteFile();
+    }
 }
 
 void LicenseOverlay::reset()
@@ -174,7 +250,14 @@ void LicenseOverlay::resized()
     keyInput.setBounds(area.removeFromTop(inputH).withSizeKeepingCentre(inputW, inputH + 4).translated(0, -2));
 
     area.removeFromTop(gap);
-    activateBtn.setBounds(area.removeFromTop(btnH).withSizeKeepingCentre(120, btnH));
+    {
+        auto btnRow = area.removeFromTop(btnH);
+        int rowW = juce::jmin(260, btnRow.getWidth());
+        auto row = btnRow.withSizeKeepingCentre(rowW, btnH);
+        activateBtn.setBounds(row.removeFromLeft(120));
+        row.removeFromLeft(20);
+        demoBtn.setBounds(row.removeFromLeft(120));
+    }
 
     area.removeFromTop(gap);
     statusLabel.setBounds(area.removeFromTop(statusH));

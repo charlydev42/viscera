@@ -92,6 +92,10 @@ public:
         width = std::clamp(widthParam, 0.0f, 1.0f);
     }
 
+    // Per-block auxiliary tap scale. Multiplied into the output stage in
+    // addition to the native 0.3 tap gain. Normally 1.0f.
+    void setAuxScale(float s) noexcept { auxScale = s; }
+
     void process(float* left, float* right, int numSamples) noexcept
     {
         for (int i = 0; i < numSamples; ++i)
@@ -173,8 +177,9 @@ public:
                        - tankDelayR[1].readAt(tapR[4])
                        - tankDiffR[1].readAt(tapR[5]);
 
-            outL *= 0.3f;
-            outR *= 0.3f;
+            float tapGain = 0.3f * auxScale;
+            outL *= tapGain;
+            outR *= tapGain;
 
             // Width: blend between mono (mid) and full stereo
             float mid = (outL + outR) * 0.5f;
@@ -307,6 +312,7 @@ private:
     float wet = 0.0f;
     float width = 1.0f;
     int pdSamples = 0;
+    float auxScale = 1.0f;
 
     // Pre-delay buffers
     DelayLine predelayL, predelayR;

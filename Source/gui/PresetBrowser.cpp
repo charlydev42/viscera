@@ -46,11 +46,13 @@ PresetBrowser::PresetBrowser(ParasiteProcessor& processor)
 
     saveButton.setButtonText("Save");
     saveButton.onClick = [this] {
+        if (! proc.getLicenseManager().isLicensed()) return;
         if (onSave) onSave();
     };
     addAndMakeVisible(saveButton);
 
     updatePresetName();
+    refreshLicenseState();
 }
 
 void PresetBrowser::refreshPresetList()
@@ -82,10 +84,19 @@ void PresetBrowser::updatePresetName()
     presetNameBtn.setButtonText(name);
 }
 
+void PresetBrowser::refreshLicenseState()
+{
+    const bool licensed = proc.getLicenseManager().isLicensed();
+    saveButton.setEnabled(licensed);
+    saveButton.setTooltip(licensed ? juce::String()
+                                   : juce::String("Activate your license to save presets"));
+}
+
 void PresetBrowser::showPresetMenu()
 {
     proc.buildPresetRegistry();
     auto& registry = proc.getPresetRegistry();
+    const bool licensed = proc.getLicenseManager().isLicensed();
     juce::PopupMenu menu;
 
     // Category order for factory presets
@@ -115,7 +126,8 @@ void PresetBrowser::showPresetMenu()
             menu.addItem(i + 1, registry[static_cast<size_t>(i)].name, true, i == currentIdx);
     }
 
-    // User presets — sorted alphabetically
+    // User presets — sorted alphabetically (only when licensed)
+    if (licensed)
     {
         std::vector<int> userIndices;
         for (int i = 0; i < static_cast<int>(registry.size()); ++i)
@@ -175,17 +187,21 @@ std::vector<int> PresetBrowser::buildSortedOrder()
             order.push_back(i);
     }
 
-    // User presets sorted alphabetically
-    std::vector<int> userIndices;
-    for (int i = 0; i < static_cast<int>(registry.size()); ++i)
-        if (!registry[static_cast<size_t>(i)].isFactory)
-            userIndices.push_back(i);
-    std::sort(userIndices.begin(), userIndices.end(), [&](int a, int b) {
-        return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
-               registry[static_cast<size_t>(b)].name) < 0;
-    });
-    for (int i : userIndices)
-        order.push_back(i);
+    // User presets sorted alphabetically (only when licensed — prev/next
+    // otherwise cycles just the factory library)
+    if (proc.getLicenseManager().isLicensed())
+    {
+        std::vector<int> userIndices;
+        for (int i = 0; i < static_cast<int>(registry.size()); ++i)
+            if (!registry[static_cast<size_t>(i)].isFactory)
+                userIndices.push_back(i);
+        std::sort(userIndices.begin(), userIndices.end(), [&](int a, int b) {
+            return registry[static_cast<size_t>(a)].name.compareIgnoreCase(
+                   registry[static_cast<size_t>(b)].name) < 0;
+        });
+        for (int i : userIndices)
+            order.push_back(i);
+    }
 
     return order;
 }

@@ -6,6 +6,8 @@
 #endif
 #include "dsp/FMSound.h"
 #include "util/Logger.h"
+#include "license/LicenseConfig.h"
+#include "SnappedParameterBool.h"
 #include <BinaryData.h>
 
 // --- Constructeur ---
@@ -156,6 +158,11 @@ void ParasiteProcessor::applyCurveParamToInternal(const juce::String& id, float 
 void ParasiteProcessor::licenseStateChanged(bool licensed)
 {
     dspGainToken.store(licensed ? kDspActive : 0, std::memory_order_relaxed);
+    // On any transition, reset the stage cycle so licensing changes never
+    // drop the user mid-quiet-window. Audio thread reads this counter in
+    // computeStageEnvelope — plain write from the message thread is an
+    // intentional benign race (brief overlap is inaudible).
+    stageSamplePos = 0;
     if (licensed)
         cloudPresetManager.syncAll();
 }
@@ -241,6 +248,7 @@ void ParasiteProcessor::cacheParameterPointers()
 
     // FX param pointers
     dlyTimeParam = apvts.getRawParameterValue("DLY_TIME");
+    dlySyncParam = apvts.getRawParameterValue("DLY_SYNC");
     dlyFeedParam = apvts.getRawParameterValue("DLY_FEED");
     dlyDampParam = apvts.getRawParameterValue("DLY_DAMP");
     dlyMixParam  = apvts.getRawParameterValue("DLY_MIX");
@@ -304,11 +312,11 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Modulateur 1 ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("mod1", "Modulator 1", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("MOD1_ON", "Mod1 On", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("MOD1_ON", "Mod1 On", true));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("MOD1_WAVE", "Mod1 Wave", waveNames, 1));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("MOD1_PITCH", "Mod1 Pitch",
             juce::NormalisableRange<float>(-24.0f, 24.0f, 0.01f), 0.0f)); // legacy
-        g->addChild(std::make_unique<juce::AudioParameterBool>("MOD1_KB", "Mod1 KB", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("MOD1_KB", "Mod1 KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("MOD1_LEVEL", "Mod1 Level",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD1_COARSE", "Mod1 Coarse", 0, 48, 1));
@@ -331,11 +339,11 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Modulateur 2 ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("mod2", "Modulator 2", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("MOD2_ON", "Mod2 On", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("MOD2_ON", "Mod2 On", true));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("MOD2_WAVE", "Mod2 Wave", waveNames, 1));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("MOD2_PITCH", "Mod2 Pitch",
             juce::NormalisableRange<float>(-24.0f, 24.0f, 0.01f), 0.0f)); // legacy
-        g->addChild(std::make_unique<juce::AudioParameterBool>("MOD2_KB", "Mod2 KB", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("MOD2_KB", "Mod2 KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("MOD2_LEVEL", "Mod2 Level",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("MOD2_COARSE", "Mod2 Coarse", 0, 48, 1));
@@ -366,7 +374,7 @@ ParasiteProcessor::createParameterLayout()
         g->addChild(std::make_unique<juce::AudioParameterFloat>("CAR_FIXED_FREQ", "Carrier Fixed Freq",
             juce::NormalisableRange<float>(20.0f, 16000.0f, 0.0f, 0.3f), 440.0f));
         g->addChild(std::make_unique<juce::AudioParameterInt>("CAR_MULTI", "Carrier Multi", 0, 5, 4));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("CAR_KB", "Carrier KB", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("CAR_KB", "Carrier KB", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_A", "Env3 Attack",
             juce::NormalisableRange<float>(0.0f, 5.0f, 0.0f, 0.3f), 0.01f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("ENV3_D", "Env3 Decay",
@@ -393,8 +401,8 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("FLUX", "Flux (Index LFO)",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("XOR_ON", "XOR", false));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("SYNC", "Sync", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("XOR_ON", "XOR", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("SYNC", "Sync", false));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("FM_ALGO", "FM Algorithm",
             juce::StringArray{ "Series", "Parallel", "Stack", "Ring", "Feedback", "Mix" }, 0));
         groups.push_back(std::move(g));
@@ -403,7 +411,7 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Pitch Envelope ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("pitchenv", "Pitch Envelope", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("PENV_ON", "Pitch Env On", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("PENV_ON", "Pitch Env On", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_AMT", "Pitch Env Amount",
             juce::NormalisableRange<float>(-96.0f, 96.0f, 0.1f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PENV_A", "Pitch Env Attack",
@@ -420,7 +428,7 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Filtre ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("filter", "Filter", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("FILT_ON", "Filter On", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("FILT_ON", "Filter On", true));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("FILT_TYPE", "Filter Type",
             juce::StringArray{ "LP", "HP", "BP", "Notch" }, 0));
         {
@@ -437,19 +445,25 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe FX (Delay + Reverb) ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("fx", "FX", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("DLY_ON", "Delay On", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("DLY_ON", "Delay On", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DLY_TIME", "Delay Time",
             juce::NormalisableRange<float>(0.01f, 2.0f, 0.0f, 0.4f), 0.3f));
+        // Sync index: 0 = free (use DLY_TIME), 1..9 = tempo-sync beat divisions
+        // (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/4T, 1/8T, 1/16T). When >0 the
+        // delay time is derived from host BPM instead of the DLY_TIME knob.
+        g->addChild(std::make_unique<juce::AudioParameterChoice>("DLY_SYNC", "Delay Sync",
+            juce::StringArray{ "Free", "1/1", "1/2", "1/4", "1/8", "1/16", "1/32",
+                               "1/4T", "1/8T", "1/16T" }, 0));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DLY_FEED", "Delay Feedback",
             juce::NormalisableRange<float>(0.0f, 0.9f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DLY_DAMP", "Delay Damp",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DLY_MIX", "Delay Mix",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("DLY_PING", "Delay Ping-Pong", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("DLY_PING", "Delay Ping-Pong", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DLY_SPREAD", "Delay Spread",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("REV_ON", "Reverb On", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("REV_ON", "Reverb On", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("REV_SIZE", "Reverb Size",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.3f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("REV_DAMP", "Reverb Damp",
@@ -466,7 +480,7 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Liquid Chorus ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("liquid", "Liquid", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("LIQ_ON", "Liquid On", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("LIQ_ON", "Liquid On", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("LIQ_RATE", "Liquid Rate",
             juce::NormalisableRange<float>(0.05f, 3.0f, 0.0f, 0.5f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("LIQ_DEPTH", "Liquid Depth",
@@ -483,7 +497,7 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Rubber Comb ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("rubber", "Rubber", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("RUB_ON", "Rubber On", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("RUB_ON", "Rubber On", false));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("RUB_TONE", "Rubber Tone",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("RUB_STRETCH", "Rubber Stretch",
@@ -536,8 +550,8 @@ ParasiteProcessor::createParameterLayout()
             g->addChild(std::make_unique<juce::AudioParameterChoice>(id("SYNC"), nm("Sync"),
                 juce::StringArray{ "Free", "8 bar", "4 bar", "2 bar", "1 bar", "1/2", "1/4", "1/8", "1/16", "1/32",
                                    "1/4T", "1/8T", "1/16T" }, 0));
-            g->addChild(std::make_unique<juce::AudioParameterBool>(id("RETRIG"), nm("Retrigger"), false));
-            g->addChild(std::make_unique<juce::AudioParameterBool>(id("VEL"), nm("Vel Rate"), false));
+            g->addChild(std::make_unique<SnappedParameterBool>(id("RETRIG"), nm("Retrigger"), false));
+            g->addChild(std::make_unique<SnappedParameterBool>(id("VEL"), nm("Vel Rate"), false));
 
             for (int s = 1; s <= kSlotsPerLFO; ++s)
             {
@@ -555,7 +569,7 @@ ParasiteProcessor::createParameterLayout()
     // --- Groupe Volume Shaper ---
     {
         auto g = std::make_unique<juce::AudioProcessorParameterGroup>("shaper", "Volume Shaper", "|");
-        g->addChild(std::make_unique<juce::AudioParameterBool>("SHAPER_ON", "Shaper On", false));
+        g->addChild(std::make_unique<SnappedParameterBool>("SHAPER_ON", "Shaper On", false));
         g->addChild(std::make_unique<juce::AudioParameterChoice>("SHAPER_SYNC", "Shaper Sync",
             juce::StringArray{ "Free", "1/1", "1/2", "1/4", "1/8", "1/16", "1/32",
                                "1/4T", "1/8T", "1/16T" }, 0));
@@ -573,8 +587,8 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DRIVE", "Drive",
             juce::NormalisableRange<float>(1.0f, 10.0f, 0.01f, 0.5f), 1.0f));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("MONO", "Mono", true));
-        g->addChild(std::make_unique<juce::AudioParameterBool>("RETRIG", "Retrigger", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("MONO", "Mono", true));
+        g->addChild(std::make_unique<SnappedParameterBool>("RETRIG", "Retrigger", true));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PORTA", "Portamento",
             juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DISP_AMT", "HemoFold",
@@ -660,6 +674,51 @@ void ParasiteProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     liquidChorus.prepare(sampleRate, samplesPerBlock);
     rubberComb.prepare(sampleRate, samplesPerBlock);
     volumeShaper.prepare(sampleRate);
+
+    // Stage shaping timing (sample-accurate — independent of host transport)
+    stageCycleSamples = static_cast<int64_t>(bb::license::kStageCycleSeconds * sampleRate);
+    stageQuietSamples = static_cast<int64_t>(bb::license::kStageQuietSeconds * sampleRate);
+    stageFadeSamples  = static_cast<int>(bb::license::kStageFadeMs * 0.001f * sampleRate);
+    if (stageCycleSamples < 1)        stageCycleSamples = 1;
+    if (stageQuietSamples < 0)        stageQuietSamples = 0;
+    if (stageFadeSamples  < 1)        stageFadeSamples  = 1;
+    // Guarantee quiet window fits inside cycle with fade room
+    if (stageQuietSamples + 2 * stageFadeSamples > stageCycleSamples)
+        stageQuietSamples = stageCycleSamples - 2 * stageFadeSamples;
+    stageSamplePos = 0;
+    stageMaster.store(1.0f, std::memory_order_relaxed);
+    voiceParams.stageA.store(1.0f, std::memory_order_relaxed);
+    voiceParams.stageB.store(1.0f, std::memory_order_relaxed);
+    plateReverb.setAuxScale(1.0f);
+    stereoDelay.setAuxScale(1.0f);
+}
+
+// Sample-accurate envelope for periodic attenuation. Returns 1.0f when
+// licensed or between cycles; dips to 0.0f during the configured quiet
+// window with linear fades at either end. Advances stageSamplePos.
+float ParasiteProcessor::computeStageEnvelope(int numSamples)
+{
+    if (dspGainToken.load(std::memory_order_relaxed) == kDspActive)
+        return 1.0f;
+
+    const int64_t pos     = stageSamplePos % stageCycleSamples;
+    const int64_t muteHi  = stageCycleSamples - stageFadeSamples;
+    const int64_t muteLo  = muteHi - stageQuietSamples;
+    const int64_t fadeIn  = muteLo - stageFadeSamples;
+
+    float g = 1.0f;
+    if (pos >= muteLo && pos < muteHi)
+        g = 0.0f;
+    else if (pos >= fadeIn && pos < muteLo)
+        g = 1.0f - static_cast<float>(pos - fadeIn) / static_cast<float>(stageFadeSamples);
+    else if (pos >= muteHi)
+        g = static_cast<float>(pos - muteHi) / static_cast<float>(stageFadeSamples);
+
+    stageSamplePos += numSamples;
+    // Keep counter from growing unbounded over very long sessions
+    if (stageSamplePos >= stageCycleSamples * 1024)
+        stageSamplePos %= stageCycleSamples;
+    return g;
 }
 
 // --- Process audio ---
@@ -682,12 +741,13 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
 
-    // --- Input gate (primary) ---
-    if (dspGainToken.load(std::memory_order_relaxed) != kDspActive)
-    {
-        midiMessages.clear();
-        return;
-    }
+    // Block-rate stage envelope + distributed publication. When the plugin is
+    // licensed this is the identity (all factors = 1.0f). When unlicensed it
+    // sweeps a periodic attenuation cycle across multiple DSP stages so the
+    // attenuation cannot be bypassed from a single multiply patch.
+    const float stageG = computeStageEnvelope(buffer.getNumSamples());
+    const float s30    = std::pow(stageG, 0.30f);
+    voiceParams.stageA.store(s30, std::memory_order_relaxed);
 
     // Serviced at the top of the block so a preset change that landed
     // between blocks starts from a clean slate: every voice is silenced
@@ -923,6 +983,7 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                         std::memory_order_relaxed);
     }
 
+    voiceParams.stageB.store(std::pow(stageG, 0.25f), std::memory_order_relaxed);
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
 
     int numSamples = buffer.getNumSamples();
@@ -970,10 +1031,41 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (dlyOn && !dlyWasOn) stereoDelay.reset();
         dlyWasOn = dlyOn;
     }
+    // Always publish auxScale so the stored factor is current even when the
+    // effect is off — if it gets toggled on mid-cycle we want the right gain.
+    stereoDelay.setAuxScale(std::pow(stageG, 0.20f));
     if (dlyWasOn && buffer.getNumChannels() >= 2)
     {
-        float dlyTime = juce::jlimit(0.01f, 2.0f, dlyTimeParam->load()
+        // Sync index: 0 = free (use DLY_TIME knob + LFO), 1..9 map to beat
+        // divisions in quarter-note units. In sync mode, any LFO mapped to
+        // DlyTime shifts the beat index (rounded) so modulation still has a
+        // musical effect — it steps rhythmically through adjacent divisions.
+        int dlySyncIdx = static_cast<int>(dlySyncParam->load());
+        float dlyTime;
+        if (dlySyncIdx > 0)
+        {
+            static constexpr float beatsQN[] = {
+                4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f,   // 1/1 .. 1/32
+                2.0f / 3.0f, 1.0f / 3.0f, 1.0f / 6.0f    // 1/4T, 1/8T, 1/16T
+            };
+            const float lfoMod = voiceParams.lfoModDlyTime.load(std::memory_order_relaxed);
+            const int idxOffset = static_cast<int>(std::lround(lfoMod * 4.0f));
+            const int effectiveIdx = juce::jlimit(1, 9, dlySyncIdx + idxOffset);
+            float bpm = 120.0f;
+            if (auto* ph = getPlayHead())
+            {
+                auto pos = ph->getPosition();
+                if (pos.hasValue() && pos->getBpm().hasValue())
+                    bpm = static_cast<float>(*pos->getBpm());
+            }
+            const float beats = beatsQN[effectiveIdx - 1];
+            dlyTime = juce::jlimit(0.01f, 2.0f, (60.0f / bpm) * beats);
+        }
+        else
+        {
+            dlyTime = juce::jlimit(0.01f, 2.0f, dlyTimeParam->load()
                         + voiceParams.lfoModDlyTime.load(std::memory_order_relaxed) * 0.5f);
+        }
         float dlyFeed = juce::jlimit(0.0f, 0.99f, dlyFeedParam->load()
                         + voiceParams.lfoModDlyFeed.load(std::memory_order_relaxed));
         float dlyMix  = juce::jlimit(0.0f, 1.0f, dlyMixParam->load()
@@ -995,6 +1087,7 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (revOn && !revWasOn) plateReverb.reset();
         revWasOn = revOn;
     }
+    plateReverb.setAuxScale(std::pow(stageG, 0.15f));
     if (revWasOn && buffer.getNumChannels() >= 2)
     {
         float revSize = juce::jlimit(0.0f, 1.0f, revSizeParam->load()
@@ -1048,9 +1141,20 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // --- Output gate (secondary) ---
-    if (dspGainToken.load(std::memory_order_relaxed) != kDspActive)
-        buffer.clear();
+    // --- Output stage trim (site 5: final compounding factor) ---
+    // When licensed, s10 = 1.0^0.1 = 1.0 → no-op. When unlicensed and inside
+    // the quiet window, all five site factors collapse the signal to silence.
+    {
+        const float s10 = std::pow(stageG, 0.10f);
+        stageMaster.store(s10, std::memory_order_relaxed);
+        if (s10 < 0.9999f)
+        {
+            if (s10 < 1.0e-4f)
+                buffer.clear();
+            else
+                buffer.applyGain(s10);
+        }
+    }
 
     // Push L+R channels to visual buffers for GUI oscilloscope/FFT
     if (buffer.getNumChannels() > 0)
@@ -1214,6 +1318,15 @@ juce::File ParasiteProcessor::getUserPresetsDir()
 
 void ParasiteProcessor::saveUserPreset(const juce::String& name, const juce::String& category)
 {
+    // Demo mode — user-preset writes are disabled. The editor greys the Save
+    // button but a second guard here covers host-automation / API paths.
+    if (! licenseManager.isLicensed())
+    {
+        setLastLoadError("Saving user presets requires a license — please activate.");
+        BB_LOG_WARN("Preset save attempted in demo mode; ignored.");
+        return;
+    }
+
     // Sanitize filename to prevent path traversal
     auto safeName = juce::File::createLegalFileName(name);
     if (safeName.isEmpty()) return;

@@ -35,6 +35,10 @@ public:
         delaySamplesR = std::clamp(delaySamples * (1.0 + sp * 0.5), 1.0, static_cast<double>(maxSamples - 1));
     }
 
+    // Per-block auxiliary wet scale. Multiplied into the wet output so a
+    // dormant signal path cannot bleed through during buffered states.
+    void setAuxScale(float s) noexcept { auxScale = s; }
+
     void process(float* left, float* right, int numSamples) noexcept
     {
         for (int i = 0; i < numSamples; ++i)
@@ -82,8 +86,9 @@ public:
             }
 
             // Mix dry/wet
-            left[i]  = left[i]  * (1.0f - wet) + delayedL * wet;
-            right[i] = right[i] * (1.0f - wet) + delayedR * wet;
+            float wetGain = wet * auxScale;
+            left[i]  = left[i]  * (1.0f - wet) + delayedL * wetGain;
+            right[i] = right[i] * (1.0f - wet) + delayedR * wetGain;
 
             writePos = (writePos + 1) % maxSamples;
         }
@@ -109,6 +114,7 @@ private:
     float wet = 0.0f;
     float dampCoeff = 0.3f;
     bool pingPong = false;
+    float auxScale = 1.0f;
 
     // 1-pole LP filter states for feedback damping
     float lpStateL = 0.0f;

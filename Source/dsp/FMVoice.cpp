@@ -228,6 +228,10 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Exponential FM depth: 0→0.25×, 0.5→1× (neutral), 1→4× (±12dB range)
     float plasmaMul    = std::pow(4.0f, plasmaP * 2.0f - 1.0f);
 
+    // Block-rate output shaping factors (normally 1.0 — updated by processor)
+    float vBias = params.stageA.load(std::memory_order_relaxed);
+    float vTrim = params.stageB.load(std::memory_order_relaxed);
+
     bool  mod1OnP        = !params.mod1On || params.mod1On->load() > 0.5f;
     auto mod1WaveIdx     = static_cast<int>(params.mod1Wave->load());
     bool  mod1KB         = params.mod1KB->load() > 0.5f;
@@ -439,7 +443,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float fluxMod = 1.0f + fluxAmount * lfo1Val;
 
         // Smooth parameters + apply global LFO modulations
-        float vol      = juce::jlimit(0.0f, 1.0f, smoothVolume.getNextValue() + smoothGLfoVolume.getNextValue());
+        float vol      = juce::jlimit(0.0f, 1.0f, smoothVolume.getNextValue() + smoothGLfoVolume.getNextValue()) * vBias;
         float cutoff   = smoothCutoff.getNextValue();
         float m1Level  = std::max(0.0f, smoothMod1Level.getNextValue() + smoothGLfoMod1Lvl.getNextValue());
         float m2Level  = std::max(0.0f, smoothMod2Level.getNextValue() + smoothGLfoMod2Lvl.getNextValue());
@@ -552,7 +556,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // --- Carrier noise mix (+ global LFO) ---
         float noiseMix = juce::jlimit(0.0f, 1.0f, smoothCarNoise.getNextValue() + smoothGLfoNoise.getNextValue());
         float outputL, outputR;
-        float velGain = params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity;
+        float velGain = (params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity) * vTrim;
         if (noiseMix > 0.0001f)
         {
             // xorshift32 white noise: decorrelated L/R (independent seeds)

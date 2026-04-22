@@ -193,7 +193,19 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
 
     // License overlay — shown when not licensed
     licenseOverlay.onLicensed = [this] { updateLicenseOverlay(); };
+    licenseOverlay.onDemoRequested = [this] { updateLicenseOverlay(); };
     addChildComponent(licenseOverlay);
+
+    // Demo banner — visible only when user has dismissed the overlay and the
+    // plugin is still unlicensed. Clicking it clears the ack so the overlay
+    // re-appears (letting the user type a key).
+    demoBanner.setButtonText("DEMO - click to activate");
+    demoBanner.onClick = [this] {
+        LicenseOverlay::writeDemoAcknowledged(false);
+        licenseOverlay.reset();
+        updateLicenseOverlay();
+    };
+    addChildComponent(demoBanner);
 
     // Page toggle button
     pageToggleBtn.setButtonText("Advanced");
@@ -382,6 +394,10 @@ void ParasiteEditor::applyDarkModeChange(bool localToggle)
         : juce::ImageCache::getFromMemory(BinaryData::parasite_logo_neutral_png,
                                            BinaryData::parasite_logo_neutral_pngSize);
     mainLogoImage.setImage(mainImg, juce::RectanglePlacement::centred);
+
+    // Keep the license overlay + demo banner palette in sync
+    licenseOverlay.refreshColors();
+    demoBanner.repaint();
 
     std::function<void(juce::Component*)> refreshAll = [&](juce::Component* c) {
         c->sendLookAndFeelChange();
@@ -1027,6 +1043,16 @@ void ParasiteEditor::resized()
         licenseOverlay.toFront(false);
     }
 
+    // Demo banner floats centered at the very top when visible.
+    // Component bounds are padded around the pill so the drop shadows aren't
+    // clipped to a rectangular silhouette by JUCE's component clip region.
+    if (demoBanner.isVisible())
+    {
+        const int bw = 236, bh = 28;
+        demoBanner.setBounds((getWidth() - bw) / 2, 0, bw, bh);
+        demoBanner.toFront(false);
+    }
+
     auto area = getLocalBounds().reduced(4);
     titleLabel.setBounds(0, 0, 0, 0); // hidden
 
@@ -1188,7 +1214,7 @@ void ParasiteEditor::resized()
         int macrosH = 70;
         int filterH = 70;
         int pitchH = 160;
-        int logoH = 100;  // advanced page uses larger logo
+        int logoH = 80;  // advanced page logo — trimmed to give LFO section more vertical room
         int lfoH = totalH - macrosH - filterH - pitchH - logoH - gap * 4;
 
         // Filter top Y in centre column = macrosH + gap + lfoH + gap + logoH + gap
@@ -1258,13 +1284,62 @@ bool ParasiteEditor::keyPressed(const juce::KeyPress&)
 // License overlay — shown when plugin is not licensed
 // =====================================================================
 
+void ParasiteEditor::DemoBannerButton::paintButton(juce::Graphics& g, bool highlighted, bool)
+{
+    // Neumorphic raised pill matching the project's button language:
+    // outer soft light shadow top-left + dark shadow bottom-right, fill in
+    // kBgColor. A small accent dot + accent-coloured text carry the "demo"
+    // signal without breaking the visual flow of the top bar.
+    const juce::Colour bg          = juce::Colour(ParasiteLookAndFeel::kBgColor);
+    const juce::Colour accent      = juce::Colour(ParasiteLookAndFeel::kAccentColor);
+    const juce::Colour text        = juce::Colour(ParasiteLookAndFeel::kTextColor);
+    const juce::Colour shadowLight = juce::Colour(ParasiteLookAndFeel::kShadowLight);
+    const juce::Colour shadowDark  = juce::Colour(ParasiteLookAndFeel::kShadowDark);
+
+    // Inset the pill so there's room around it for the shadow halo —
+    // otherwise JUCE's per-component clip region cuts the blur to a
+    // rectangle silhouette.
+    auto bounds = getLocalBounds().toFloat().reduced(8.0f, 5.0f);
+    const float cr = bounds.getHeight() * 0.5f;
+
+    juce::Path pill;
+    pill.addRoundedRectangle(bounds, cr);
+
+    juce::DropShadow(shadowLight.withAlpha(0.55f), 5, { -2, -2 }).drawForPath(g, pill);
+    juce::DropShadow(shadowDark .withAlpha(0.55f), 6, {  2,  2 }).drawForPath(g, pill);
+
+    g.setColour(highlighted ? bg.brighter(0.04f) : bg);
+    g.fillRoundedRectangle(bounds, cr);
+
+    // Small accent dot on the left — subtle "attention" marker
+    const float dotR = bounds.getHeight() * 0.22f;
+    const float dotX = bounds.getX() + bounds.getHeight() * 0.55f;
+    const float dotY = bounds.getCentreY();
+    g.setColour(accent.withAlpha(highlighted ? 1.0f : 0.85f));
+    g.fillEllipse(dotX - dotR, dotY - dotR, dotR * 2.0f, dotR * 2.0f);
+
+    g.setColour(text.interpolatedWith(accent, 0.35f));
+    g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(),
+                         10.5f, juce::Font::plain));
+    g.drawText(getButtonText(), bounds, juce::Justification::centred, false);
+}
+
 void ParasiteEditor::updateLicenseOverlay()
 {
-    bool licensed = proc.getLicenseManager().isLicensed();
-    licenseOverlay.setVisible(!licensed);
+    const bool licensed        = proc.getLicenseManager().isLicensed();
+    const bool demoAcked       = LicenseOverlay::readDemoAcknowledged();
+    // Overlay shows only when unlicensed AND the user has not chosen demo.
+    const bool showOverlay     = (!licensed) && (!demoAcked);
 
-    if (!licensed)
+    licenseOverlay.setVisible(showOverlay);
+    demoBanner.setVisible((!licensed) && demoAcked);
+    presetBrowser.refreshLicenseState();
+
+    if (showOverlay)
     {
+        // Re-sync colors in case dark mode changed while overlay was hidden
+        licenseOverlay.refreshColors();
+
         // Hide OpenGL visualizer — native view renders above JUCE components
         flubberVisualizer.setVisible(false);
         flubberVisualizer.setBounds(0, 0, 0, 0);
@@ -1274,7 +1349,7 @@ void ParasiteEditor::updateLicenseOverlay()
     }
     else
     {
-        // Restore visualizer if on main page
+        // Restore visualizer if on main page (works in both licensed + demo modes)
         if (!showAdvanced && !showPresetOverlay && !showSaveOverlay)
             flubberVisualizer.setVisible(true);
         resized();
@@ -1310,6 +1385,7 @@ void ParasiteEditor::showSettingsMenu()
     else
     {
         menu.addItem(-1, "Not licensed", false);
+        menu.addItem(5, "Activate License...");
     }
 
     menu.addSeparator();
@@ -1345,8 +1421,11 @@ void ParasiteEditor::showSettingsMenu()
             }
             else if (result == 2)
             {
-                // Deactivate license
+                // Deactivate license — user is already educated about licensing,
+                // so mark demo as acknowledged so they land straight in demo
+                // mode (small banner) rather than the full activation overlay.
                 proc.getLicenseManager().deactivate();
+                LicenseOverlay::writeDemoAcknowledged(true);
                 licenseOverlay.reset();
                 updateLicenseOverlay();
                 return; // overlay handles viz visibility
@@ -1358,6 +1437,13 @@ void ParasiteEditor::showSettingsMenu()
             else if (result == 4)
             {
                 juce::URL("https://voidscan-audio.com/dashboard").launchInDefaultBrowser();
+            }
+            else if (result == 5)
+            {
+                // Reopen the activation overlay from demo mode
+                LicenseOverlay::writeDemoAcknowledged(false);
+                licenseOverlay.reset();
+                updateLicenseOverlay();
             }
         });
 }

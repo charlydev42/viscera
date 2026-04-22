@@ -574,6 +574,18 @@ private:
         }
     }
 
+public:
+    // Optional hooks so individual owners (e.g. DelaySection) can append
+    // extra items to the right-click context menu without every ModSlider
+    // sharing the same sub-UI. Items added by the builder must use IDs
+    // starting at kExtraMenuIdBase to avoid colliding with reserved IDs
+    // (1..24 = LFO unmaps, 100 = Reset). Handler is invoked when the result
+    // is >= kExtraMenuIdBase.
+    static constexpr int kExtraMenuIdBase = 200;
+    std::function<void(juce::PopupMenu&, int menuIdBase)> buildExtraMenuItems;
+    std::function<void(int result)>                       handleExtraMenuResult;
+
+private:
     void showContextMenu()
     {
         if (!statePtr) return;
@@ -608,6 +620,10 @@ private:
             menu.addSeparator();
         menu.addItem(100, juce::String::charToString(0x21BA) + "  Reset to Default");
 
+        // Optional per-instance extras (e.g. delay-time Sync submenu)
+        if (buildExtraMenuItems)
+            buildExtraMenuItems(menu, kExtraMenuIdBase);
+
         auto safeThis = juce::Component::SafePointer<ModSlider>(this);
         menu.setLookAndFeel(&getLookAndFeel());
         menu.showMenuAsync(juce::PopupMenu::Options()
@@ -625,6 +641,14 @@ private:
                         param->setValueNotifyingHost(param->getDefaultValue());
                     else
                         safeThis->setValue(safeThis->getDoubleClickReturnValue(), juce::sendNotificationSync);
+                    safeThis->repaint();
+                    return;
+                }
+
+                if (result >= kExtraMenuIdBase)
+                {
+                    if (safeThis->handleExtraMenuResult)
+                        safeThis->handleExtraMenuResult(result);
                     safeThis->repaint();
                     return;
                 }

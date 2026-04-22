@@ -180,7 +180,11 @@ void PresetOverlay::rebuildCards()
         return registry[static_cast<size_t>(i)].pack == selectedPack;
     };
 
+    const bool licensed = proc.getLicenseManager().isLicensed();
+
     auto passesFilters = [&](int i) {
+        // In demo mode only factory presets are browsable.
+        if (!licensed && !registry[static_cast<size_t>(i)].isFactory) return false;
         return passesFavFilter(i) && passesPackFilter(i);
     };
 

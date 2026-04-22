@@ -176,6 +176,7 @@ private:
     bool revWasOn = false;
     bool dlyWasOn = false;
     std::atomic<float>* dlyTimeParam  = nullptr;
+    std::atomic<float>* dlySyncParam  = nullptr;
     std::atomic<float>* dlyFeedParam  = nullptr;
     std::atomic<float>* dlyDampParam  = nullptr;
     std::atomic<float>* dlyMixParam    = nullptr;
@@ -301,6 +302,18 @@ private:
     // Audio-thread gate (magic token, not a simple bool — harder to find/patch)
     std::atomic<uint32_t> dspGainToken { 0 };
     static constexpr uint32_t kDspActive = 0x8A3C5F21;
+
+    // ── Stage shaping (periodic attenuation when unlicensed) ──
+    // Sample-accurate cycle; values computed in processBlock from a rolling
+    // sample counter. Intentionally distributed across multiple sites (voice,
+    // reverb, delay, master) so a single patched multiply does not defeat it.
+    int64_t stageSamplePos     = 0;
+    int64_t stageCycleSamples  = 0;
+    int64_t stageQuietSamples  = 0;
+    int     stageFadeSamples   = 0;
+    std::atomic<float> stageMaster { 1.0f };  // cached for master-out site
+
+    float computeStageEnvelope(int numSamples);
 
     // Set by setStateInformation / loadUserPreset / loadPresetFromXml on any
     // load error. GUI pulls + clears in its timer to surface a toast. Always

@@ -2,6 +2,7 @@
 #include "DelaySection.h"
 
 DelaySection::DelaySection(juce::AudioProcessorValueTreeState& apvts)
+    : state(apvts)
 {
     onToggle.setButtonText("On");
     addAndMakeVisible(onToggle);
@@ -12,6 +13,55 @@ DelaySection::DelaySection(juce::AudioProcessorValueTreeState& apvts)
     setupKnob(timeKnob, timeLabel, "Time");
     timeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "DLY_TIME", timeKnob);
+
+    // Sync knob: same slot as timeKnob (only one visible at a time), stepped
+    // across 9 beat divisions. Shares the DlyTime LFO destination so any
+    // mapped LFO keeps working across Time <-> Sync mode transitions.
+    syncKnob.initMod(apvts, bb::LFODest::DlyTime);
+    syncKnob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    syncKnob.setSliderSnapsToMousePosition(false);
+    syncKnob.setMouseDragSensitivity(180);
+    syncKnob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    syncKnob.setRange(1.0, 9.0, 1.0);
+    syncKnob.onValueChange = [this] {
+        if (auto* p = state.getParameter("DLY_SYNC"))
+        {
+            const int idx = juce::jlimit(1, 9, static_cast<int>(syncKnob.getValue()));
+            lastSyncIdx = idx;
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(idx)));
+        }
+    };
+    addChildComponent(syncKnob);
+
+    // Right-click menu: both Time and Sync entries always shown with a
+    // checkmark on the current mode. Select the other to flip.
+    static constexpr int kModeTime = ModSlider::kExtraMenuIdBase;
+    static constexpr int kModeSync = ModSlider::kExtraMenuIdBase + 1;
+    auto buildModeItems = [this](juce::PopupMenu& m, int base)
+    {
+        int current = 0;
+        if (auto* p = state.getRawParameterValue("DLY_SYNC"))
+            current = static_cast<int>(p->load());
+        const bool synced = current > 0;
+        m.addSeparator();
+        m.addItem(base,     "Time mode", true, !synced);
+        m.addItem(base + 1, "Sync mode", true,  synced);
+    };
+    auto handleMode = [this](int result)
+    {
+        if (auto* p = state.getParameter("DLY_SYNC"))
+        {
+            int target;
+            if (result == kModeTime)        target = 0;
+            else if (result == kModeSync)   target = lastSyncIdx;
+            else                             return;
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(target)));
+        }
+    };
+    timeKnob.buildExtraMenuItems  = buildModeItems;
+    timeKnob.handleExtraMenuResult = handleMode;
+    syncKnob.buildExtraMenuItems  = buildModeItems;
+    syncKnob.handleExtraMenuResult = handleMode;
 
     feedKnob.initMod(apvts, bb::LFODest::DlyFeed);
     setupKnob(feedKnob, feedLabel, "Fdbk");
@@ -38,7 +88,26 @@ DelaySection::DelaySection(juce::AudioProcessorValueTreeState& apvts)
     ppAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, "DLY_PING", ppToggle);
 
+    updateSyncVisibility();
     startTimerHz(5);
+}
+
+void DelaySection::updateSyncVisibility()
+{
+    int syncIdx = 0;
+    if (auto* p = state.getRawParameterValue("DLY_SYNC"))
+        syncIdx = static_cast<int>(p->load());
+    const bool synced = syncIdx > 0;
+
+    timeKnob.setVisible(!synced);
+    syncKnob.setVisible(synced);
+
+    if (synced)
+    {
+        if (syncIdx != static_cast<int>(syncKnob.getValue()))
+            syncKnob.setValue(static_cast<double>(syncIdx), juce::dontSendNotification);
+        lastSyncIdx = syncIdx;
+    }
 }
 
 void DelaySection::timerCallback()
@@ -50,7 +119,25 @@ void DelaySection::timerCallback()
             label.setText(name, juce::dontSendNotification);
     };
 
-    if (timeKnob.isMouseOverOrDragging())
+    int syncIdx = 0;
+    if (auto* sp = state.getRawParameterValue("DLY_SYNC"))
+        syncIdx = static_cast<int>(sp->load());
+
+    // Keep knob visibility in sync with the param (covers external changes:
+    // automation, preset load, undo).
+    const bool currentlySynced = syncKnob.isVisible();
+    if ((syncIdx > 0) != currentlySynced)
+        updateSyncVisibility();
+
+    if (syncIdx > 0)
+    {
+        // Sync mode — permanent readout so users know they're tempo-locked
+        static const char* const labels[] = {
+            "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T"
+        };
+        timeLabel.setText(labels[syncIdx - 1], juce::dontSendNotification);
+    }
+    else if (timeKnob.isMouseOverOrDragging())
     {
         float v = static_cast<float>(timeKnob.getValue());
         if (v < 1.0f)
@@ -103,6 +190,7 @@ void DelaySection::resized()
     };
 
     layout(timeKnob, timeLabel);
+    syncKnob.setBounds(timeKnob.getBounds());
     layout(feedKnob, feedLabel);
     layout(dampKnob, dampLabel);
     layout(spreadKnob, spreadLabel);
