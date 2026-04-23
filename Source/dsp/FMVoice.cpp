@@ -336,8 +336,14 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     smoothDrive.setTargetValue(driveParam);
     smoothFold.setTargetValue(dispAmount);
 
-    // Envelope time macro: 0.5 = 1x, 0 = 0.25x, 1 = 4x (exponential)
-    float timeMul = std::pow(4.0f, params.macroTime->load() * 2.0f - 1.0f);
+    // Envelope time macro: 0.5 = 1x, 0 = 0.25x, 1 = 4x (exponential).
+    // LFO mod is additive in the unit-interval knob space, so a ±1 LFO
+    // sweep spans the full 0.25x..4x range symmetrically around the set
+    // macro value.
+    float macroTimePos = juce::jlimit(0.0f, 1.0f,
+        params.macroTime->load()
+        + params.lfoModMacroTime.load(std::memory_order_relaxed));
+    float timeMul = std::pow(4.0f, macroTimePos * 2.0f - 1.0f);
 
     // Mettre à jour les paramètres d'enveloppe (+ LFO modulation + time macro).
     // Skip the JUCE ADSR recompute when nothing changed since last block.

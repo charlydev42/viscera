@@ -374,7 +374,8 @@ static const juce::StringArray kDestNames {
     "ShpRate", "ShpDep",
     "M1Coar", "M2Coar", "CCoar",
     "Tremor", "Vein", "Flux",
-    "Vortex", "Helix", "Plasma"
+    "Vortex", "Helix", "Plasma",
+    "MacTime"
 };
 
 // --- RefreshButton ---

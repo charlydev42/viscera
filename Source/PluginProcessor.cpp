@@ -534,7 +534,8 @@ ParasiteProcessor::createParameterLayout()
                                       "ShpRate", "ShpDep",
                                       "M1Coar", "M2Coar", "CCoar",
                                       "Tremor", "Vein", "Flux",
-                                      "Vortex", "Helix", "Plasma" };
+                                      "Vortex", "Helix", "Plasma",
+                                      "MacTime" };
 
         for (int n = 1; n <= 3; ++n)
         {
@@ -1016,6 +1017,8 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                        std::memory_order_relaxed);
         voiceParams.lfoModPlasma.store(modSums[static_cast<int>(bb::LFODest::Plasma)],
                                         std::memory_order_relaxed);
+        voiceParams.lfoModMacroTime.store(modSums[static_cast<int>(bb::LFODest::MacroTime)],
+                                           std::memory_order_relaxed);
     }
 
     voiceParams.stageB.store(std::pow(stageG, 0.25f), std::memory_order_relaxed);

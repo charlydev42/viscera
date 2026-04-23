@@ -80,6 +80,7 @@ enum class LFODest : int {
     Cortex,        // ±harmonic spread macro
     Ichor,         // ±inharmonicity offset
     Plasma,        // ±FM depth multiplier
+    MacroTime,     // ±envelope time-scale macro
     Count
 };
 
@@ -239,6 +240,7 @@ struct VoiceParams
     std::atomic<float> lfoModCortex      { 0.0f };
     std::atomic<float> lfoModIchor       { 0.0f };
     std::atomic<float> lfoModPlasma      { 0.0f };
+    std::atomic<float> lfoModMacroTime   { 0.0f };
 
     // Per-LFO unipolar peak (for arc scaling in GUI)
     std::atomic<float> lfoPeak[3]    { {1.0f}, {1.0f}, {1.0f} };

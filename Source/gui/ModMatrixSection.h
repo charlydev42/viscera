@@ -14,8 +14,7 @@ public:
     void timerCallback() override;
 
 private:
-    ModSlider cortexKnob, ichorKnob, plasmaKnob;
-    juce::Slider timeKnob;
+    ModSlider cortexKnob, ichorKnob, plasmaKnob, timeKnob;
     juce::Label cortexLabel, ichorLabel, plasmaLabel, timeLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
