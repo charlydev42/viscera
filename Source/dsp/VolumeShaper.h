@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cmath>
 #include <juce_core/juce_core.h>
+#include <juce_audio_basics/juce_audio_basics.h>
 
 namespace bb {
 
@@ -22,6 +23,11 @@ public:
     {
         sampleRate = sr;
         phase.store(0.0, std::memory_order_relaxed);
+        // Per-sample smoother so step-to-step jumps in the drawable table
+        // don't fire audible clicks. 3 ms keeps the rhythmic character of
+        // sharp shapes while killing the zero-crossing discontinuities.
+        smoothedGain.reset(sr, 0.003);
+        smoothedGain.setCurrentAndTargetValue(1.0f);
     }
 
     void setRate(float hz)  { rate.store(hz, std::memory_order_relaxed); }
@@ -48,7 +54,9 @@ public:
 
         const float d = depth.load(std::memory_order_relaxed);
         // depth=0 → gain=1 (bypass), depth=1 → gain follows table
-        return 1.0f - d * (1.0f - tableVal);
+        const float target = 1.0f - d * (1.0f - tableVal);
+        smoothedGain.setTargetValue(target);
+        return smoothedGain.getNextValue();
     }
 
     // GUI writes steps here (lock-free via atomics)
@@ -118,6 +126,7 @@ private:
     std::atomic<double> phase { 0.0 };
     std::atomic<float>  rate  { 4.0f };
     std::atomic<float>  depth { 0.0f };
+    juce::SmoothedValue<float> smoothedGain;
 };
 
 } // namespace bb

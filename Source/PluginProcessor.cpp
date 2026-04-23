@@ -772,6 +772,22 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (previewNoteOff.exchange(false, std::memory_order_relaxed))
         midiMessages.addEvent(juce::MidiMessage::noteOff(1, 60, 0.0f), 0);
 
+    // Mono mode enforcement: when enabled, any new note-on releases the
+    // currently-playing voices so polyphony is reduced to one. allowTailOff
+    // keeps the transition click-free — the briefly-overlapping release
+    // segment bridges the two notes musically (legato-style).
+    if (voiceParams.mono && voiceParams.mono->load() > 0.5f)
+    {
+        for (const auto metadata : midiMessages)
+        {
+            if (metadata.getMessage().isNoteOn())
+            {
+                synth.allNotesOff(0, /*allowTailOff*/ true);
+                break;
+            }
+        }
+    }
+
     // --- LFO retrigger on note-on (only if retrig enabled per LFO) ---
     for (const auto metadata : midiMessages)
     {
