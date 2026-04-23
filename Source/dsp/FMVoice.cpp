@@ -173,18 +173,14 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
 
 void FMVoice::stopNote(float /*velocity*/, bool allowTailOff)
 {
-    // Operator-style noteOff: if sustain ≈ 0, skip noteOff and let the
-    // decay run its natural course.  This prevents clicks when releasing
-    // during the decay phase (kicks, plucks, percussion).
-    // When sustain > 0, noteOff triggers the normal release phase.
-    float env1Sus = params.env1S->load();
-    float env2Sus = params.env2S->load();
-    float env3Sus = params.env3S->load();
-
-    if (env1Sus > 0.01f) env1.noteOff();
-    if (env2Sus > 0.01f) env2.noteOff();
-    if (env3Sus > 0.01f) env3.noteOff();
-    // pitchEnv never responds to noteOff (always completes A→D→S)
+    // Standard ADSR: every envelope responds to noteOff, including pitch.
+    // At sustain=0 with long decay, release then starts from 0 and ramps
+    // from 0 → 0 (silent, no click). Users expect the release knob to
+    // always have an effect, which requires always calling noteOff.
+    env1.noteOff();
+    env2.noteOff();
+    env3.noteOff();
+    pitchEnv.noteOff();
 
     if (!allowTailOff)
     {
@@ -263,7 +259,8 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 + params.lfoModCarCoarse.load(std::memory_order_relaxed) * 24.0f))
         : 1;
     float carFineCents   = (params.carFine ? params.carFine->load() : 0.0f)
-                           + params.lfoModCarFine.load(std::memory_order_relaxed) * 100.0f;
+                           + params.lfoModCarFine.load(std::memory_order_relaxed) * 100.0f
+                           + params.modWheel.load(std::memory_order_relaxed) * 100.0f;
     float carFixedHz     = params.carFixedFreq ? params.carFixedFreq->load() : 440.0f;
     int   carMultiVal    = params.carMulti ? static_cast<int>(params.carMulti->load()) : 4;
     bool  carKB          = params.carKB ? params.carKB->load() > 0.5f : true;
@@ -556,7 +553,9 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // --- Carrier noise mix (+ global LFO) ---
         float noiseMix = juce::jlimit(0.0f, 1.0f, smoothCarNoise.getNextValue() + smoothGLfoNoise.getNextValue());
         float outputL, outputR;
-        float velGain = (params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity) * vTrim;
+        float velGain = (params.velSwap.load(std::memory_order_relaxed) ? 1.0f : noteVelocity)
+                        * vTrim
+                        * params.expression.load(std::memory_order_relaxed);
         if (noiseMix > 0.0001f)
         {
             // xorshift32 white noise: decorrelated L/R (independent seeds)
@@ -638,10 +637,12 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         outputL = hemoFoldL.tick(outputL);
         outputR = hemoFoldR.tick(outputR);
 
-        // --- Volume + drive saturation + soft clipper ---
+        // --- Drive saturation (Serum/Vital order: drive pre-volume so the
+        // saturation character stays constant regardless of the volume knob,
+        // then volume attenuates the already-shaped signal) ---
         float drv = juce::jlimit(1.0f, 10.0f, smoothDrive.getNextValue() + smoothGLfoDrive.getNextValue() * 9.0f);
-        outputL *= vol;  outputL *= drv;  outputL = std::tanh(outputL);
-        outputR *= vol;  outputR *= drv;  outputR = std::tanh(outputR);
+        outputL = std::tanh(outputL * drv) * vol;
+        outputR = std::tanh(outputR * drv) * vol;
 
         // --- Anti-click fade-in for new notes ---
         if (noteFadeInSamples > 0)

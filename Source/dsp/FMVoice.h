@@ -256,6 +256,12 @@ struct VoiceParams
     // block from the processor (atomic store, relaxed).
     std::atomic<float> stageA { 1.0f };
     std::atomic<float> stageB { 1.0f };
+
+    // MIDI CC mod sources (written by processor on CC events).
+    //   modWheel (CC1)    — 0..1, detunes carrier fine up to +100 cents
+    //   expression (CC11) — 0..1, multiplies voice output (defaults to 1.0)
+    std::atomic<float> modWheel   { 0.0f };
+    std::atomic<float> expression { 1.0f };
 };
 
 class FMVoice : public juce::SynthesiserVoice

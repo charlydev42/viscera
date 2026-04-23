@@ -669,18 +669,30 @@ void ParasiteEditor::randomizeParams()
     // three at once almost always produces an inharmonic mess. Each is opted
     // in independently at ~20% → ~51% of rolls have zero active, ~38% have
     // exactly one, the remaining tail very rarely stacks two or three.
+    // Rests at the param's DEFAULT (CORTEX/PLASMA default to 0.5 = neutral)
+    // and perturbs bipolarly when triggered.
     auto randMacro = [&](const juce::String& id, float chance) {
         if (auto* p = apvts.getParameter(id))
         {
-            float value = 0.0f;
+            float value = p->getDefaultValue(); // normalised base
             if (rng.nextFloat() < chance)
-                value = 0.15f + rng.nextFloat() * 0.30f; // [0.15, 0.45]
-            p->setValueNotifyingHost(p->convertTo0to1(value));
+            {
+                const float spread = (rng.nextFloat() - 0.5f) * 0.6f; // ±0.3 around default
+                value = juce::jlimit(0.0f, 1.0f, value + spread);
+            }
+            p->setValueNotifyingHost(value);
         }
     };
     randMacro("CORTEX", 0.20f);
     randMacro("PLASMA", 0.20f);
     randMacro("ICHOR",  0.20f);
+
+    // Portamento: rarely engaged, small glide amount when it is (mostly for
+    // mono leads). Defaults to 0 so poly patches don't get ghost pitch glides.
+    if (rng.nextFloat() < 0.10f)
+        randFloat("PORTA", 0.05f, 0.25f);
+    else if (auto* p = apvts.getParameter("PORTA"))
+        p->setValueNotifyingHost(0.0f);
 
     // Estimate loudness from patch parameters and compensate volume
     {
@@ -734,14 +746,26 @@ void ParasiteEditor::randomizeParams()
         auto pfx = "LFO" + juce::String(n) + "_";
         randFloat(pfx + "RATE", 0.2f, 8.0f);
         randInt(pfx + "WAVE", 0, 4);
-        // 30% chance of one active assignment per LFO, clear all 8 slots
-        // Never assign to Volume (index 6) — vol shaper handles that
+        // 30% chance of one active assignment per LFO, clear all 8 slots.
+        // Curated destination list: only targets with a visible knob and a
+        // musically useful effect when wiggled. Skips Pitch (no knob in the
+        // UI), Volume (the shaper handles that), and niche per-envelope
+        // time knobs that are too subtle to notice in a preview.
+        static const int kRandomDests[] = {
+             2,  3,            // Cutoff, Res
+             4,  5,            // Mod1Lvl, Mod2Lvl
+             7,  8,  9, 10,    // Drive, Noise, Spread, Fold
+            11, 12, 13, 14,    // M1Fine, M2Fine, Drift, CarFine
+            58, 59, 60,        // Tremor, Vein, Flux
+            61, 62, 63         // Vortex, Helix, Plasma
+        };
+        constexpr int kNumRandomDests = sizeof(kRandomDests) / sizeof(kRandomDests[0]);
+
         for (int s = 1; s <= 8; ++s)
         {
             if (s == 1 && rng.nextFloat() < 0.3f)
             {
-                int dest;
-                do { dest = 1 + rng.nextInt(10); } while (dest == 6);
+                const int dest = kRandomDests[rng.nextInt(kNumRandomDests)];
                 randInt(pfx + "DEST" + juce::String(s), dest, dest);
                 randFloat(pfx + "AMT" + juce::String(s), -0.5f, 0.5f);
             }

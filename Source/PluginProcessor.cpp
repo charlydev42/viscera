@@ -772,6 +772,25 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (previewNoteOff.exchange(false, std::memory_order_relaxed))
         midiMessages.addEvent(juce::MidiMessage::noteOff(1, 60, 0.0f), 0);
 
+    // MIDI CC handling:
+    //   CC1  (mod wheel)  → carrier fine-tune offset (+100 cents at full)
+    //   CC11 (expression) → voice output multiplier
+    // CC64 (sustain pedal) and CC123 (all-notes-off) are handled by JUCE's
+    // Synthesiser default controller routing — no custom code needed.
+    for (const auto metadata : midiMessages)
+    {
+        const auto& msg = metadata.getMessage();
+        if (msg.isController())
+        {
+            const int cc  = msg.getControllerNumber();
+            const float v = msg.getControllerValue() / 127.0f;
+            if (cc == 1)
+                voiceParams.modWheel.store(v, std::memory_order_relaxed);
+            else if (cc == 11)
+                voiceParams.expression.store(v, std::memory_order_relaxed);
+        }
+    }
+
     // Mono mode enforcement: when enabled, any new note-on releases the
     // currently-playing voices so polyphony is reduced to one. allowTailOff
     // keeps the transition click-free — the briefly-overlapping release
