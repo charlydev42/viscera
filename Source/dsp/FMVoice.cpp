@@ -161,6 +161,16 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
     pitchEnv.setParameters(params.pitchEnvA->load(), params.pitchEnvD->load(),
                            params.pitchEnvS->load(), params.pitchEnvR->load());
 
+    // Invalidate the ADSR cache: setParameters above just re-applied the raw
+    // A/D/S/R (without the time macro multiplier). The next renderNextBlock
+    // must re-push the timeMul-scaled values — otherwise pushIfChanged sees
+    // its cache still at the last scaled values and skips the update,
+    // leaving the envelope at base time for every note after the first.
+    lastEnv1 = {};
+    lastEnv2 = {};
+    lastEnv3 = {};
+    lastPitchEnv = {};
+
     mod2FeedbackSample = 0.0f;
     env1.noteOn();
     env2.noteOn();
