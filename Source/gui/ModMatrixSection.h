@@ -14,7 +14,14 @@ public:
     void timerCallback() override;
 
 private:
-    ModSlider cortexKnob, ichorKnob, plasmaKnob, timeKnob;
+    ModSlider cortexKnob, ichorKnob, plasmaKnob;
+    // timeKnob stays a plain juce::Slider — making it a ModSlider broke the
+    // regular drag behaviour on this specific knob (release snapped the
+    // value back). Couldn't pin down the root cause; rolled back the GUI
+    // wiring. The LFODest::MacroTime backend is intact, so users can still
+    // target the envelope-time macro via the LFO section's destination
+    // dropdown — just no arc overlay on the knob itself.
+    juce::Slider timeKnob;
     juce::Label cortexLabel, ichorLabel, plasmaLabel, timeLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
