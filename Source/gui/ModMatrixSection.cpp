@@ -3,15 +3,15 @@
 
 ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
 {
-    cortexKnob.initMod(apvts, bb::LFODest::Cortex);
-    setupKnob(cortexKnob, cortexLabel, "Vortex");
-    cortexAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "CORTEX", cortexKnob);
+    vortexKnob.initMod(apvts, bb::LFODest::Vortex);
+    setupKnob(vortexKnob, vortexLabel, "Vortex");
+    vortexAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "VORTEX", vortexKnob);
 
-    ichorKnob.initMod(apvts, bb::LFODest::Ichor);
-    setupKnob(ichorKnob, ichorLabel, "Helix");
-    ichorAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "ICHOR", ichorKnob);
+    helixKnob.initMod(apvts, bb::LFODest::Helix);
+    setupKnob(helixKnob, helixLabel, "Helix");
+    helixAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "HELIX", helixKnob);
 
     plasmaKnob.initMod(apvts, bb::LFODest::Plasma);
     setupKnob(plasmaKnob, plasmaLabel, "Plasma");
@@ -24,8 +24,8 @@ ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
         apvts, "MACRO_TIME", timeKnob);
 
     // Double-click resets to default
-    cortexKnob.setDoubleClickReturnValue(true, 0.5);
-    ichorKnob.setDoubleClickReturnValue(true, 0.0);
+    vortexKnob.setDoubleClickReturnValue(true, 0.5);
+    helixKnob.setDoubleClickReturnValue(true, 0.0);
     plasmaKnob.setDoubleClickReturnValue(true, 0.5);
     timeKnob.setDoubleClickReturnValue(true, 0.5);
 
@@ -40,8 +40,8 @@ void ModMatrixSection::timerCallback()
         else
             label.setText(name, juce::dontSendNotification);
     };
-    showPct(cortexKnob, cortexLabel, "Vortex");
-    showPct(ichorKnob, ichorLabel, "Helix");
+    showPct(vortexKnob, vortexLabel, "Vortex");
+    showPct(helixKnob, helixLabel, "Helix");
     showPct(plasmaKnob, plasmaLabel, "Plasma");
 
     // Time: show multiplier value
@@ -83,8 +83,8 @@ void ModMatrixSection::resized()
         knob.setBounds(col);
     };
 
-    placeKnob(cortexKnob, cortexLabel);
-    placeKnob(ichorKnob, ichorLabel);
+    placeKnob(vortexKnob, vortexLabel);
+    placeKnob(helixKnob, helixLabel);
     placeKnob(plasmaKnob, plasmaLabel);
     placeKnob(timeKnob, timeLabel);
 }

@@ -236,8 +236,8 @@ void ParasiteProcessor::cacheParameterPointers()
     voiceParams.porta      = apvts.getRawParameterValue("PORTA");
     voiceParams.dispAmt    = apvts.getRawParameterValue("DISP_AMT");
     voiceParams.carDrift   = apvts.getRawParameterValue("CAR_DRIFT");
-    voiceParams.cortex     = apvts.getRawParameterValue("CORTEX");
-    voiceParams.ichor      = apvts.getRawParameterValue("ICHOR");
+    voiceParams.vortex     = apvts.getRawParameterValue("VORTEX");
+    voiceParams.helix      = apvts.getRawParameterValue("HELIX");
     voiceParams.plasma     = apvts.getRawParameterValue("PLASMA");
     voiceParams.macroTime  = apvts.getRawParameterValue("MACRO_TIME");
     voiceParams.octave     = apvts.getRawParameterValue("OCTAVE");
@@ -594,9 +594,9 @@ ParasiteProcessor::createParameterLayout()
             juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("DISP_AMT", "HemoFold",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
-        g->addChild(std::make_unique<juce::AudioParameterFloat>("CORTEX", "Vortex",
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("VORTEX", "Vortex",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
-        g->addChild(std::make_unique<juce::AudioParameterFloat>("ICHOR", "Helix",
+        g->addChild(std::make_unique<juce::AudioParameterFloat>("HELIX", "Helix",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
         g->addChild(std::make_unique<juce::AudioParameterFloat>("PLASMA", "Plasma",
             juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
@@ -1011,9 +1011,9 @@ void ParasiteProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                       std::memory_order_relaxed);
         voiceParams.lfoModFlux.store(modSums[static_cast<int>(bb::LFODest::Flux)],
                                       std::memory_order_relaxed);
-        voiceParams.lfoModCortex.store(modSums[static_cast<int>(bb::LFODest::Cortex)],
+        voiceParams.lfoModVortex.store(modSums[static_cast<int>(bb::LFODest::Vortex)],
                                         std::memory_order_relaxed);
-        voiceParams.lfoModIchor.store(modSums[static_cast<int>(bb::LFODest::Ichor)],
+        voiceParams.lfoModHelix.store(modSums[static_cast<int>(bb::LFODest::Helix)],
                                        std::memory_order_relaxed);
         voiceParams.lfoModPlasma.store(modSums[static_cast<int>(bb::LFODest::Plasma)],
                                         std::memory_order_relaxed);
@@ -1695,10 +1695,29 @@ void ParasiteProcessor::applyStateMigrations(juce::ValueTree& tree)
         injectMissingLFODefaults(tree);
     }
 
-    // When adding v3 migrations, chain them here:
-    //   if (fromVersion < 3) migrateV2ToV3(tree);
+    if (fromVersion < 3)
+        renameMacroParamIds(tree);
 
     tree.setProperty("schemaVersion", kCurrentSchemaVersion, nullptr);
+}
+
+// v2 → v3: harmonic macros were renamed in code to match the UI labels —
+// CORTEX → VORTEX, ICHOR → HELIX. Walk the tree and rewrite any PARAM
+// child's `id` property so previously-saved values carry over without
+// resetting to default. Idempotent; safe to run on v3+ trees (no PARAM
+// children will match the old IDs after the first migration).
+void ParasiteProcessor::renameMacroParamIds(juce::ValueTree& tree)
+{
+    for (int i = 0; i < tree.getNumChildren(); ++i)
+    {
+        auto child = tree.getChild(i);
+        if (!child.hasType("PARAM")) continue;
+        const auto id = child.getProperty("id").toString();
+        if (id == "CORTEX")
+            child.setProperty("id", "VORTEX", nullptr);
+        else if (id == "ICHOR")
+            child.setProperty("id", "HELIX", nullptr);
+    }
 }
 
 // Add default global-LFO params to presets that predate them. Idempotent —

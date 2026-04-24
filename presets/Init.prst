@@ -3,7 +3,7 @@
   <PARAM id="MOD1_PITCH" value="0"/>
   <PARAM id="MOD1_KB" value="1"/>
   <PARAM id="MOD1_LEVEL" value="0.5"/>
-  <PARAM id="MOD1_COARSE" value="1"/>
+  <PARAM id="MOD1_COARSE" value="2"/>
   <PARAM id="MOD1_FINE" value="0"/>
   <PARAM id="MOD1_FIXED_FREQ" value="440"/>
   <PARAM id="MOD1_MULTI" value="4"/>

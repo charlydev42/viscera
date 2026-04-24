@@ -14,11 +14,11 @@ public:
     void timerCallback() override;
 
 private:
-    ModSlider cortexKnob, ichorKnob, plasmaKnob, timeKnob;
-    juce::Label cortexLabel, ichorLabel, plasmaLabel, timeLabel;
+    ModSlider vortexKnob, helixKnob, plasmaKnob, timeKnob;
+    juce::Label vortexLabel, helixLabel, plasmaLabel, timeLabel;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
-        cortexAttach, ichorAttach, plasmaAttach, timeAttach;
+        vortexAttach, helixAttach, plasmaAttach, timeAttach;
 
     void setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 

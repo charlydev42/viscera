@@ -239,10 +239,10 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
         const MacroDef defs[6] = {
             { "VOLUME",      "Volume",  bb::LFODest::Volume       },
             { "DRIVE",       "Drive",   bb::LFODest::Drive        },
-            { "CORTEX",      "Vortex",  bb::LFODest::Cortex       },
+            { "VORTEX",      "Vortex",  bb::LFODest::Vortex       },
             { "PLASMA",      "Plasma",  bb::LFODest::Plasma       },
             { "DISP_AMT",    "Fold",    bb::LFODest::FoldAmt      },
-            { "ICHOR",       "Helix",   bb::LFODest::Ichor        },
+            { "HELIX",       "Helix",   bb::LFODest::Helix        },
         };
 
         for (int i = 0; i < 6; ++i)
@@ -669,7 +669,7 @@ void ParasiteEditor::randomizeParams()
     // three at once almost always produces an inharmonic mess. Each is opted
     // in independently at ~20% → ~51% of rolls have zero active, ~38% have
     // exactly one, the remaining tail very rarely stacks two or three.
-    // Rests at the param's DEFAULT (CORTEX/PLASMA default to 0.5 = neutral)
+    // Rests at the param's DEFAULT (VORTEX/PLASMA default to 0.5 = neutral)
     // and perturbs bipolarly when triggered.
     auto randMacro = [&](const juce::String& id, float chance) {
         if (auto* p = apvts.getParameter(id))
@@ -683,9 +683,9 @@ void ParasiteEditor::randomizeParams()
             p->setValueNotifyingHost(value);
         }
     };
-    randMacro("CORTEX", 0.20f);
+    randMacro("VORTEX", 0.20f);
     randMacro("PLASMA", 0.20f);
-    randMacro("ICHOR",  0.20f);
+    randMacro("HELIX",  0.20f);
 
     // Portamento: rarely engaged, small glide amount when it is (mostly for
     // mono leads). Defaults to 0 so poly patches don't get ghost pitch glides.
@@ -716,10 +716,10 @@ void ParasiteEditor::randomizeParams()
         loudness += fold * 0.35f;
 
         // Cortex / Plasma / Ichor can add energy
-        float cortex = apvts.getRawParameterValue("CORTEX")->load();
+        float vortex = apvts.getRawParameterValue("VORTEX")->load();
         float plasma = apvts.getRawParameterValue("PLASMA")->load();
-        float ichor  = apvts.getRawParameterValue("ICHOR")->load();
-        loudness += (cortex + plasma + ichor) * 0.15f;
+        float helix  = apvts.getRawParameterValue("HELIX")->load();
+        loudness += (vortex + plasma + helix) * 0.15f;
 
         // Effects add energy
         if (apvts.getRawParameterValue("DLY_ON")->load() > 0.5f)

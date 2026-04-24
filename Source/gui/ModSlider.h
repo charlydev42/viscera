@@ -567,8 +567,8 @@ private:
             case bb::LFODest::Tremor:        return vp->lfoModTremor.load(std::memory_order_relaxed);
             case bb::LFODest::Vein:          return vp->lfoModVein.load(std::memory_order_relaxed);
             case bb::LFODest::Flux:          return vp->lfoModFlux.load(std::memory_order_relaxed);
-            case bb::LFODest::Cortex:        return vp->lfoModCortex.load(std::memory_order_relaxed);
-            case bb::LFODest::Ichor:         return vp->lfoModIchor.load(std::memory_order_relaxed);
+            case bb::LFODest::Vortex:        return vp->lfoModVortex.load(std::memory_order_relaxed);
+            case bb::LFODest::Helix:         return vp->lfoModHelix.load(std::memory_order_relaxed);
             case bb::LFODest::Plasma:        return vp->lfoModPlasma.load(std::memory_order_relaxed);
             case bb::LFODest::MacroTime:     return vp->lfoModMacroTime.load(std::memory_order_relaxed);
             default: return 0.0f;

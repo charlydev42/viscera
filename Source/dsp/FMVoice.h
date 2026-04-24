@@ -77,8 +77,8 @@ enum class LFODest : int {
     Tremor,        // ±tremor (per-voice pitch vibrato amount)
     Vein,          // ±vein (per-voice filter LFO amount)
     Flux,          // ±flux (per-voice mod index LFO amount)
-    Cortex,        // ±harmonic spread macro
-    Ichor,         // ±inharmonicity offset
+    Vortex,        // ±harmonic spread macro
+    Helix,         // ±inharmonicity offset
     Plasma,        // ±FM depth multiplier
     MacroTime,     // ±envelope time-scale macro
     Count
@@ -170,8 +170,8 @@ struct VoiceParams
     std::atomic<float>* porta      = nullptr; // Portamento time (0-1)
     std::atomic<float>* dispAmt    = nullptr; // Disperser amount
     std::atomic<float>* carDrift   = nullptr; // Carrier analog drift
-    std::atomic<float>* cortex    = nullptr; // Harmonic spread macro (0=unison, 0.5=neutral, 1=wide)
-    std::atomic<float>* ichor     = nullptr; // Inharmonicity offset (0=harmonic, 1=metallic)
+    std::atomic<float>* vortex    = nullptr; // Harmonic spread macro (0=unison, 0.5=neutral, 1=wide)
+    std::atomic<float>* helix     = nullptr; // Inharmonicity offset (0=harmonic, 1=metallic)
     std::atomic<float>* plasma    = nullptr; // FM depth multiplier (0=pure, 1=full FM)
     std::atomic<float>* macroTime = nullptr; // Envelope time scale (0.5=1x, 0=0.25x, 1=4x)
     std::atomic<float>* octave    = nullptr; // Global octave shift (−4 to +4)
@@ -237,8 +237,8 @@ struct VoiceParams
     std::atomic<float> lfoModTremor      { 0.0f };
     std::atomic<float> lfoModVein        { 0.0f };
     std::atomic<float> lfoModFlux        { 0.0f };
-    std::atomic<float> lfoModCortex      { 0.0f };
-    std::atomic<float> lfoModIchor       { 0.0f };
+    std::atomic<float> lfoModVortex      { 0.0f };
+    std::atomic<float> lfoModHelix       { 0.0f };
     std::atomic<float> lfoModPlasma      { 0.0f };
     std::atomic<float> lfoModMacroTime   { 0.0f };
 

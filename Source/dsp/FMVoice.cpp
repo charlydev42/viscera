@@ -206,12 +206,12 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
     // --- Lire les paramètres une fois par bloc ---
     // Macros (read first, used by mod levels below)
-    float cortexP      = juce::jlimit(0.0f, 1.0f,
-        (params.cortex ? params.cortex->load() : 0.5f)
-        + params.lfoModCortex.load(std::memory_order_relaxed));
-    float ichorP       = juce::jlimit(0.0f, 1.0f,
-        (params.ichor ? params.ichor->load() : 0.0f)
-        + params.lfoModIchor.load(std::memory_order_relaxed));
+    float vortexP      = juce::jlimit(0.0f, 1.0f,
+        (params.vortex ? params.vortex->load() : 0.5f)
+        + params.lfoModVortex.load(std::memory_order_relaxed));
+    float helixP       = juce::jlimit(0.0f, 1.0f,
+        (params.helix ? params.helix->load() : 0.0f)
+        + params.lfoModHelix.load(std::memory_order_relaxed));
     float plasmaP      = juce::jlimit(0.0f, 1.0f,
         (params.plasma ? params.plasma->load() : 0.5f)
         + params.lfoModPlasma.load(std::memory_order_relaxed));
@@ -384,7 +384,7 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     xorDist.setMask(xorMask);
 
     // Pre-compute block-rate ratios (saves 3× exp2 + 3× pow per sample)
-    // For KB-track mode: ratio includes cortex, ichor and fine shift.
+    // For KB-track mode: ratio includes vortex, helix and fine shift.
     // For fixed mode: ratio is fixedFreqHz × multiValue (absolute freq, not multiplied by baseFreq).
     auto precomputeRatio = [&](int coarseIdx, float fineCents, bool kbTrack,
                                 float fixedFreqHz, int multi) -> double
@@ -394,8 +394,8 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             int idx = juce::jlimit(0, kMaxCoarseIdx, coarseIdx);
             double ratio = static_cast<double>(coarseRatio(idx));
             if (ratio > 0.0)
-                ratio = std::pow(ratio, static_cast<double>(cortexP) * 2.0);
-            ratio += static_cast<double>(ichorP) * 0.3 * ratio;
+                ratio = std::pow(ratio, static_cast<double>(vortexP) * 2.0);
+            ratio += static_cast<double>(helixP) * 0.3 * ratio;
             return ratio * fineShift;
         } else {
             return static_cast<double>(fixedFreqHz) * static_cast<double>(multiValue(multi));

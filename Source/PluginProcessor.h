@@ -326,7 +326,7 @@ private:
     // a new default behaviour needs to be backfilled for old presets. Every
     // migration is additive: applyStateMigrations walks v1 → v2 → ... → current
     // so a preset saved on any prior plugin version loads correctly.
-    static constexpr int kCurrentSchemaVersion = 2;
+    static constexpr int kCurrentSchemaVersion = 3;
     static int getSchemaVersion(const juce::ValueTree& tree) noexcept;
     static void applyStateMigrations(juce::ValueTree& tree);
 
@@ -334,6 +334,11 @@ private:
     // Kept as named helpers so each migration step is easy to review.
     static void migrateOldPitchParams(juce::ValueTree& tree);
     static void injectMissingLFODefaults(juce::ValueTree& tree);
+
+    // v2 → v3: harmonic macros renamed — CORTEX/ICHOR → VORTEX/HELIX.
+    // Rewrites the `id` property of any PARAM child referencing the old IDs
+    // so pre-rename presets and DAW sessions keep their values.
+    static void renameMacroParamIds(juce::ValueTree& tree);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ParasiteProcessor)
 };
