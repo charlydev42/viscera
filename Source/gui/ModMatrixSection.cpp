@@ -18,7 +18,7 @@ ModMatrixSection::ModMatrixSection(juce::AudioProcessorValueTreeState& apvts)
     plasmaAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "PLASMA", plasmaKnob);
 
-    // Plain juce::Slider — no initMod. See header for the rationale.
+    timeKnob.initMod(apvts, bb::LFODest::MacroTime);
     setupKnob(timeKnob, timeLabel, "Time");
     timeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "MACRO_TIME", timeKnob);
