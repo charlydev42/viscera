@@ -28,25 +28,47 @@ jobs:
           Expand-Archive -Path pluginval.zip -DestinationPath pluginval
 
       - name: Validate VST3 with pluginval (strictness 7, up to 3 attempts)
+        id: validate
+        continue-on-error: true
         run: |
           $vst3 = "build\Parasite_artefacts\Release\VST3\Parasite.vst3"
           $pluginvalExe = "pluginval\pluginval.exe"
           $maxAttempts = 3
           $passed = $false
+          New-Item -ItemType Directory -Force -Path pluginval-logs | Out-Null
           for ($i = 1; $i -le $maxAttempts; $i++) {
-            Write-Host "=== pluginval attempt $i / $maxAttempts ==="
-            & $pluginvalExe --strictness-level 7 --validate $vst3
+            $logFile = "pluginval-logs\attempt-$i.log"
+            Write-Host "=== pluginval attempt $i / $maxAttempts (log: $logFile) ==="
+            & $pluginvalExe --strictness-level 7 --validate $vst3 2>&1 | Tee-Object -FilePath $logFile
             if ($LASTEXITCODE -eq 0) {
               Write-Host "pluginval SUCCESS on attempt $i"
               $passed = $true
               break
             }
-            Write-Host "pluginval attempt $i failed (exit $LASTEXITCODE) — retrying..."
+            Write-Host "pluginval attempt $i failed (exit $LASTEXITCODE)"
           }
           if (-not $passed) {
-            Write-Error "pluginval FAILED $maxAttempts times — refusing to ship this artifact"
-            exit 1
+            Write-Host "=== ALL ATTEMPTS FAILED — showing last attempt log ==="
+            Get-Content "pluginval-logs\attempt-$maxAttempts.log" | Select-String -Pattern "!!!|FAIL|error" -Context 2,2
+            Write-Host "::error::pluginval failed $maxAttempts times"
+            "pluginval_passed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            "pluginval_passed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
+
+      - name: Upload pluginval logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pluginval-logs
+          path: pluginval-logs/
+          retention-days: 30
+
+      - name: Fail job if pluginval failed
+        if: steps.validate.outputs.pluginval_passed != 'true'
+        run: |
+          Write-Error "pluginval failed — see uploaded 'pluginval-logs' artifact for full output"
+          exit 1
 
       - name: Collect artifact
         run: |
