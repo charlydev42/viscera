@@ -149,28 +149,12 @@ void FMVoice::startNote(int midiNoteNumber, float velocity,
         // smoothly from the current level, avoiding pops.
     }
 
-    // Lancer les enveloppes
-    env1.setParameters(params.env1A->load(), params.env1D->load(),
-                       params.env1S->load(), params.env1R->load());
-    env2.setParameters(params.env2A->load(), params.env2D->load(),
-                       params.env2S->load(), params.env2R->load());
-    env3.setParameters(params.env3A->load(), params.env3D->load(),
-                       params.env3S->load(), params.env3R->load());
-
-    // Pitch envelope
-    pitchEnv.setParameters(params.pitchEnvA->load(), params.pitchEnvD->load(),
-                           params.pitchEnvS->load(), params.pitchEnvR->load());
-
-    // Invalidate the ADSR cache: setParameters above just re-applied the raw
-    // A/D/S/R (without the time macro multiplier). The next renderNextBlock
-    // must re-push the timeMul-scaled values — otherwise pushIfChanged sees
-    // its cache still at the last scaled values and skips the update,
-    // leaving the envelope at base time for every note after the first.
-    lastEnv1 = {};
-    lastEnv2 = {};
-    lastEnv3 = {};
-    lastPitchEnv = {};
-
+    // Envelope parameters are owned by renderNextBlock via pushIfChanged —
+    // it pushes the timeMul-scaled A/D/S/R before any env.tick() runs, so
+    // startNote deliberately skips setParameters. Re-applying raw values
+    // here would silently override the time macro for every note (the
+    // cache optimisation then skips the re-push when macro values haven't
+    // changed from the last note's scaled cache).
     mod2FeedbackSample = 0.0f;
     env1.noteOn();
     env2.noteOn();
