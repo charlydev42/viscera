@@ -22,6 +22,23 @@ jobs:
       - name: Build VST3
         run: cmake --build build --config Release --target Parasite_VST3
 
+      - name: Download pluginval
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" -OutFile pluginval.zip
+          Expand-Archive -Path pluginval.zip -DestinationPath pluginval
+
+      - name: Validate VST3 with pluginval (strictness 7)
+        run: |
+          $vst3 = "build\Parasite_artefacts\Release\VST3\Parasite.vst3"
+          $pluginvalExe = "pluginval\pluginval.exe"
+          Write-Host "Running pluginval on $vst3"
+          & $pluginvalExe --strictness-level 7 --validate $vst3
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "pluginval FAILED on Windows build — refusing to ship this artifact"
+            exit 1
+          }
+          Write-Host "pluginval SUCCESS"
+
       - name: Collect artifact
         run: |
           New-Item -ItemType Directory -Force -Path dist
