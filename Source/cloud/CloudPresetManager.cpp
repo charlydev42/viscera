@@ -478,6 +478,99 @@ void CloudPresetManager::deletePreset(const juce::String& uuid)
 }
 
 // =====================================================================
+// Sharing — send preset to another user by pseudonym
+// =====================================================================
+
+void CloudPresetManager::sendPresetToUser(const juce::String& presetUuid,
+                                          const juce::String& recipientUsername,
+                                          SendCallback callback)
+{
+    if (presetUuid.isEmpty() || recipientUsername.isEmpty())
+    {
+        if (callback)
+            juce::MessageManager::callAsync([callback]
+                { callback(false, "Missing preset or recipient username."); });
+        return;
+    }
+
+    if (!license_.isLicensed())
+    {
+        if (callback)
+            juce::MessageManager::callAsync([callback]
+                { callback(false, "Activate your license to send presets."); });
+        return;
+    }
+
+    ++pendingThreads_;
+    auto alive = alive_;
+
+    juce::Thread::launch([this, presetUuid, recipientUsername, callback, alive]
+    {
+        auto reportResult = [callback, alive](bool success, juce::String msg)
+        {
+            if (!callback) return;
+            juce::MessageManager::callAsync([callback, alive, success, msg]
+            {
+                if (!alive->load()) return;
+                callback(success, msg);
+            });
+        };
+
+        if (!ensureToken())
+        {
+            reportResult(false, "Could not authenticate with the server.");
+            --pendingThreads_;
+            return;
+        }
+        if (shuttingDown_.load()) { --pendingThreads_; return; }
+
+        // POST /sharing/send { recipientUsername, presetUuid }
+        auto* body = new juce::DynamicObject();
+        body->setProperty("recipientUsername", recipientUsername);
+        body->setProperty("presetUuid",        presetUuid);
+        const auto json = juce::JSON::toString(juce::var(body), true);
+
+        auto resp = httpRequestWithRetries("POST", "/sharing/send", json);
+
+        if (resp.statusCode == 401)
+        {
+            if (shuttingDown_.load()) { --pendingThreads_; return; }
+            refreshTokenSync();
+            resp = httpRequestWithRetries("POST", "/sharing/send", json);
+        }
+
+        if (resp.statusCode == 201)
+        {
+            reportResult(true, "Sent to @" + recipientUsername + ".");
+        }
+        else if (resp.statusCode == 404)
+        {
+            // Could be "recipient not found" or "preset not found" — server tells us
+            auto err = juce::JSON::parse(resp.body).getProperty("error", "User not found.").toString();
+            reportResult(false, err);
+        }
+        else if (resp.statusCode == 400)
+        {
+            // Rate limit, self-send, or validation
+            auto err = juce::JSON::parse(resp.body).getProperty("error", "Send rejected.").toString();
+            reportResult(false, err);
+        }
+        else if (resp.statusCode == 0)
+        {
+            reportResult(false, "Could not reach server. Check your internet.");
+        }
+        else
+        {
+            auto err = juce::JSON::parse(resp.body).getProperty(
+                "error", "Send failed (HTTP " + juce::String(resp.statusCode) + ")").toString();
+            reportResult(false, err);
+        }
+
+        --pendingThreads_;
+    });
+}
+
+// =====================================================================
 // Full bidirectional sync
 // =====================================================================
 

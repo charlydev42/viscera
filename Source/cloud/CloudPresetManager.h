@@ -31,6 +31,14 @@ public:
     void uploadPreset(const juce::String& uuid);  // Fire-and-forget after save
     void deletePreset(const juce::String& uuid);  // Fire-and-forget after delete
 
+    // ── Sharing (Phase 1) ──────────────────────────────────────────
+    // Sends a user preset to another Voidscan user by their pseudonym.
+    // Async; result delivered via callback on the message thread.
+    using SendCallback = std::function<void(bool success, const juce::String& message)>;
+    void sendPresetToUser(const juce::String& presetUuid,
+                          const juce::String& recipientUsername,
+                          SendCallback callback);
+
     // ── JWT ────────────────────────────────────────────────────────
     bool hasValidToken() const;
 

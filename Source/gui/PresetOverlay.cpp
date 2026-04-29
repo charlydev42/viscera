@@ -2,6 +2,7 @@
 #include "PresetOverlay.h"
 #include "ParasiteLookAndFeel.h"
 #include "../PluginProcessor.h"
+#include "../cloud/CloudPresetManager.h"
 #include <algorithm>
 #include <vector>
 
@@ -340,6 +341,28 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
 {
     auto pt = e.getPosition();
 
+    // Right-click on a user preset card → "Send to user…" popup
+    if (e.mods.isPopupMenu())
+    {
+        int idx = cardAtPoint(pt);
+        if (idx >= 0)
+        {
+            auto& reg = proc.getPresetRegistry();
+            const int ri = cards[static_cast<size_t>(idx)].registryIndex;
+            if (ri >= 0 && ri < static_cast<int>(reg.size()))
+            {
+                auto& entry = reg[static_cast<size_t>(ri)];
+                if (!entry.isFactory)
+                {
+                    showSendMenu(ri);
+                    return;
+                }
+            }
+        }
+        // Right-click on empty space or factory preset → no menu
+        return;
+    }
+
     // Heart toggle button
     if (favToggleBounds.contains(pt))
     {
@@ -424,6 +447,80 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
 void PresetOverlay::mouseUp(const juce::MouseEvent&)
 {
     // Selection handled in mouseDown for instant feedback
+}
+
+// ─────────────────────────────────────────────────────────────
+// Right-click "Send to user…" — only on user (non-factory)
+// presets. Uses an AlertWindow for the username input so it
+// fits the existing JUCE LookAndFeel without a custom modal.
+// On confirm, delegates to CloudPresetManager which talks to
+// /sharing/send and reports back via callback (toast).
+// ─────────────────────────────────────────────────────────────
+void PresetOverlay::showSendMenu(int registryIndex)
+{
+    auto& reg = proc.getPresetRegistry();
+    if (registryIndex < 0 || registryIndex >= static_cast<int>(reg.size())) return;
+
+    // Capture the uuid + name by value — the registry can be rebuilt
+    // before the modal callback fires.
+    const auto& entry = reg[static_cast<size_t>(registryIndex)];
+    const juce::String uuid = entry.uuid;
+    const juce::String name = entry.name;
+
+    if (uuid.isEmpty())
+    {
+        proc.setLastLoadError("This preset has no cloud UUID yet — save it first.");
+        return;
+    }
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader("Preset: " + name);
+    menu.addItem(1, "Send to user...");
+
+    auto* self = this;
+    menu.showMenuAsync(juce::PopupMenu::Options(),
+        [self, uuid, name](int result)
+    {
+        if (result != 1) return;
+
+        auto* aw = new juce::AlertWindow(
+            "Send preset",
+            "Send \"" + name + "\" to which Voidscan user?\n"
+            "Enter their username (without the @).",
+            juce::AlertWindow::NoIcon);
+        aw->addTextEditor("recipient", "", "Username");
+        aw->addButton("Send",   1, juce::KeyPress(juce::KeyPress::returnKey));
+        aw->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+        aw->enterModalState(true,
+            juce::ModalCallbackFunction::create(
+                [self, uuid, aw](int btn)
+                {
+                    juce::String username;
+                    if (btn == 1)
+                        username = aw->getTextEditorContents("recipient").trim();
+                    delete aw;
+
+                    if (btn != 1 || username.isEmpty()) return;
+
+                    // Strip any leading @ users naturally type.
+                    if (username.startsWithChar('@'))
+                        username = username.substring(1);
+
+                    self->proc.getCloudPresetManager().sendPresetToUser(
+                        uuid, username,
+                        [self](bool ok, const juce::String& msg)
+                        {
+                            // Surface result via the existing toast pipe in
+                            // ParasiteProcessor::lastLoadError so the editor's
+                            // 5Hz timer picks it up — keeps UI thread-safe and
+                            // consistent with other plugin notifications.
+                            self->proc.setLastLoadError(msg);
+                            (void)ok;
+                        });
+                }),
+            true);
+    });
 }
 
 void PresetOverlay::mouseDoubleClick(const juce::MouseEvent& e)

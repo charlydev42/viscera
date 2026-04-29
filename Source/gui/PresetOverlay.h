@@ -69,5 +69,11 @@ private:
     juce::Rectangle<int> deleteXBounds(int cardIndex) const;
     juce::Rectangle<int> favHeartBounds(int cardIndex) const;
 
+    // Right-click "Send to user…" popup on a user preset card.
+    // Forward-declared friendlessly: uses the registry entry by-value
+    // through a local copy, so the header doesn't need ParasiteProcessor's
+    // PresetEntry struct to be visible at this declaration point.
+    void showSendMenu(int registryIndex);
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetOverlay)
 };
