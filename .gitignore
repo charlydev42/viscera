@@ -45,3 +45,7 @@ JuceLibraryCode/
 /Blood_Bucket_*.md
 /Blood_Bucket_*.dll
 /Adobe Express*
+
+# CI / build artifacts pulled down for inspection — not source
+/Parasite-Windows-*.zip
+/resources/attempt-*.log
