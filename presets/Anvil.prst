@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ParasiteState category="Drums" name="Anvil" schemaVersion="3" shaperTable="0.000,0.100,0.250,0.400,0.550,0.700,0.800,0.880,0.940,0.970,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,0.800,0.400"
+               lfo1Table="1.000,0.397,0.257,0.171,0.100,0.042,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000"
+               lfo1Curve="0.000,1.000;0.036,0.343;0.193,0.000;1.000,0.000" lfo2Table="0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500"
+               lfo2Curve="0.000,0.500;1.000,0.500" lfo3Table="0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500,0.500"
+               lfo3Curve="0.000,0.500;1.000,0.500" mod1Harmonics="1.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+               mod2Harmonics="1.0000,0.0000,0.0000,0.0000,0.0000,0.5524,0.0000,0.0000,0.0000,0.0000,0.0000,0.8952,0.0000,0.0000,0.0000,0.0000,0.0000,0.3048,0.0000,0.0000,0.0000,0.4952,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+               carHarmonics="1.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+               pack="User" uuid="5a40e3155bc44464bfa6515a63235318" version="5"
+               updatedAt="2026-05-03T18:56:42.040+02:00">
+  <PARAM id="MOD1_WAVE" value="0"/>
+  <PARAM id="MOD1_PITCH" value="0"/>
+  <PARAM id="MOD1_KB" value="1"/>
+  <PARAM id="MOD1_LEVEL" value="0.0"/>
+  <PARAM id="MOD1_COARSE" value="1"/>
+  <PARAM id="MOD1_FINE" value="0.0"/>
+  <PARAM id="MOD1_FIXED_FREQ" value="439.9999084472656"/>
+  <PARAM id="MOD1_MULTI" value="4"/>
+  <PARAM id="ENV1_A" value="0.0"/>
+  <PARAM id="ENV1_D" value="0.3"/>
+  <PARAM id="ENV1_S" value="0.7"/>
+  <PARAM id="ENV1_R" value="0.0"/>
+  <PARAM id="MOD2_WAVE" value="5.0"/>
+  <PARAM id="MOD2_PITCH" value="0"/>
+  <PARAM id="MOD2_KB" value="0.0"/>
+  <PARAM id="MOD2_LEVEL" value="0.9359999895095825"/>
+  <PARAM id="MOD2_COARSE" value="4.0"/>
+  <PARAM id="MOD2_FINE" value="-1000.0"/>
+  <PARAM id="MOD2_FIXED_FREQ" value="16000.0"/>
+  <PARAM id="MOD2_MULTI" value="5.0"/>
+  <PARAM id="ENV2_A" value="5.079686360431879e-8"/>
+  <PARAM id="ENV2_D" value="0.5653464198112488"/>
+  <PARAM id="ENV2_S" value="0.0"/>
+  <PARAM id="ENV2_R" value="0.0"/>
+  <PARAM id="CAR_WAVE" value="5.0"/>
+  <PARAM id="CAR_OCTAVE" value="0"/>
+  <PARAM id="ENV3_A" value="0.0"/>
+  <PARAM id="ENV3_D" value="0.1884169578552246"/>
+  <PARAM id="ENV3_S" value="0.0"/>
+  <PARAM id="ENV3_R" value="0.1382700502872467"/>
+  <PARAM id="CAR_DRIFT" value="1.0"/>
+  <PARAM id="CAR_NOISE" value="0.00800000037997961"/>
+  <PARAM id="CAR_SPREAD" value="0.0"/>
+  <PARAM id="CAR_COARSE" value="28.0"/>
+  <PARAM id="CAR_FINE" value="-240.0"/>
+  <PARAM id="CAR_FIXED_FREQ" value="295.144287109375"/>
+  <PARAM id="CAR_KB" value="1.0"/>
+  <PARAM id="TREMOR" value="0"/>
+  <PARAM id="VEIN" value="0"/>
+  <PARAM id="FLUX" value="0"/>
+  <PARAM id="FM_ALGO" value="1.0"/>
+  <PARAM id="XOR_ON" value="0.0"/>
+  <PARAM id="SYNC" value="0.0"/>
+  <PARAM id="PENV_ON" value="1.0"/>
+  <PARAM id="PENV_AMT" value="96.0"/>
+  <PARAM id="PENV_A" value="0.0"/>
+  <PARAM id="PENV_D" value="0.01340906508266926"/>
+  <PARAM id="PENV_S" value="0.01200000010430813"/>
+  <PARAM id="PENV_R" value="0.03742741793394089"/>
+  <PARAM id="FILT_ON" value="1"/>
+  <PARAM id="FILT_CUTOFF" value="1434.320678710938"/>
+  <PARAM id="FILT_RES" value="0.02000012435019016"/>
+  <PARAM id="FILT_TYPE" value="0"/>
+  <PARAM id="DLY_ON" value="1.0"/>
+  <PARAM id="DLY_TIME" value="0.01360226422548294"/>
+  <PARAM id="DLY_FEED" value="0.593999981880188"/>
+  <PARAM id="DLY_DAMP" value="0.8600003123283386"/>
+  <PARAM id="DLY_MIX" value="0.6160001158714294"/>
+  <PARAM id="DLY_PING" value="0.0"/>
+  <PARAM id="REV_ON" value="0.0"/>
+  <PARAM id="REV_SIZE" value="0.0"/>
+  <PARAM id="REV_DAMP" value="0.00800000037997961"/>
+  <PARAM id="REV_MIX" value="0.2440000027418137"/>
+  <PARAM id="VOLUME" value="0.2720000743865967"/>
+  <PARAM id="DRIVE" value="4.920000076293945"/>
+  <PARAM id="MONO" value="0.0"/>
+  <PARAM id="RETRIG" value="0.0"/>
+  <PARAM id="SHAPER_ON" value="0.0"/>
+  <PARAM id="SHAPER_SYNC" value="0"/>
+  <PARAM id="SHAPER_RATE" value="4.0"/>
+  <PARAM id="SHAPER_DEPTH" value="0.75"/>
+  <PARAM id="DISP_AMT" value="0.3999998867511749"/>
+  <PARAM id="LIQ_ON" value="0.0"/>
+  <PARAM id="LIQ_RATE" value="0.05000000074505806"/>
+  <PARAM id="LIQ_DEPTH" value="1.0"/>
+  <PARAM id="LIQ_TONE" value="0.0"/>
+  <PARAM id="LIQ_FEED" value="0.555200457572937"/>
+  <PARAM id="LIQ_MIX" value="0.06399984657764435"/>
+  <PARAM id="RUB_ON" value="1.0"/>
+  <PARAM id="RUB_TONE" value="0.05200000107288361"/>
+  <PARAM id="RUB_STRETCH" value="0.4199998676776886"/>
+  <PARAM id="RUB_WARP" value="0.0"/>
+  <PARAM id="RUB_MIX" value="0.1679999828338623"/>
+  <PARAM id="LFO1_RATE" value="0.9999997615814209"/>
+  <PARAM id="LFO1_WAVE" value="5.0"/>
+  <PARAM id="LFO1_SYNC" value="4.0"/>
+  <PARAM id="LFO1_RETRIG" value="1.0"/>
+  <PARAM id="LFO1_VEL" value="0.0"/>
+  <PARAM id="LFO1_DEST1" value="6.0"/>
+  <PARAM id="LFO1_AMT1" value="1.0"/>
+  <PARAM id="LFO1_DEST2" value="28.0"/>
+  <PARAM id="LFO1_AMT2" value="-0.4200000166893005"/>
+  <PARAM id="LFO1_DEST3" value="17.0"/>
+  <PARAM id="LFO1_AMT3" value="-0.5400000214576721"/>
+  <PARAM id="LFO1_DEST4" value="2.0"/>
+  <PARAM id="LFO1_AMT4" value="0.5"/>
+  <PARAM id="LFO1_DEST5" value="16.0"/>
+  <PARAM id="LFO1_AMT5" value="0.2899999618530273"/>
+  <PARAM id="LFO1_DEST6" value="0.0"/>
+  <PARAM id="LFO1_AMT6" value="0.0"/>
+  <PARAM id="LFO1_DEST7" value="0.0"/>
+  <PARAM id="LFO1_AMT7" value="0.0"/>
+  <PARAM id="LFO1_DEST8" value="0.0"/>
+  <PARAM id="LFO1_AMT8" value="0.0"/>
+  <PARAM id="LFO2_RATE" value="0.9999997615814209"/>
+  <PARAM id="LFO2_WAVE" value="0.0"/>
+  <PARAM id="LFO2_SYNC" value="3.0"/>
+  <PARAM id="LFO2_RETRIG" value="0.0"/>
+  <PARAM id="LFO2_VEL" value="0.0"/>
+  <PARAM id="LFO2_DEST1" value="0.0"/>
+  <PARAM id="LFO2_AMT1" value="0.0"/>
+  <PARAM id="LFO2_DEST2" value="0.0"/>
+  <PARAM id="LFO2_AMT2" value="0.0"/>
+  <PARAM id="LFO2_DEST3" value="0.0"/>
+  <PARAM id="LFO2_AMT3" value="0.0"/>
+  <PARAM id="LFO2_DEST4" value="0.0"/>
+  <PARAM id="LFO2_AMT4" value="0.0"/>
+  <PARAM id="LFO2_DEST5" value="0.0"/>
+  <PARAM id="LFO2_AMT5" value="0.0"/>
+  <PARAM id="LFO2_DEST6" value="0.0"/>
+  <PARAM id="LFO2_AMT6" value="0.0"/>
+  <PARAM id="LFO2_DEST7" value="0.0"/>
+  <PARAM id="LFO2_AMT7" value="0.0"/>
+  <PARAM id="LFO2_DEST8" value="0.0"/>
+  <PARAM id="LFO2_AMT8" value="0.0"/>
+  <PARAM id="LFO3_RATE" value="0.9999997615814209"/>
+  <PARAM id="LFO3_WAVE" value="0.0"/>
+  <PARAM id="LFO3_SYNC" value="3.0"/>
+  <PARAM id="LFO3_RETRIG" value="0.0"/>
+  <PARAM id="LFO3_VEL" value="0.0"/>
+  <PARAM id="LFO3_DEST1" value="0.0"/>
+  <PARAM id="LFO3_AMT1" value="0.0"/>
+  <PARAM id="LFO3_DEST2" value="0.0"/>
+  <PARAM id="LFO3_AMT2" value="0.0"/>
+  <PARAM id="LFO3_DEST3" value="0.0"/>
+  <PARAM id="LFO3_AMT3" value="0.0"/>
+  <PARAM id="LFO3_DEST4" value="0.0"/>
+  <PARAM id="LFO3_AMT4" value="0.0"/>
+  <PARAM id="LFO3_DEST5" value="0.0"/>
+  <PARAM id="LFO3_AMT5" value="0.0"/>
+  <PARAM id="LFO3_DEST6" value="0.0"/>
+  <PARAM id="LFO3_AMT6" value="0.0"/>
+  <PARAM id="LFO3_DEST7" value="0.0"/>
+  <PARAM id="LFO3_AMT7" value="0.0"/>
+  <PARAM id="LFO3_DEST8" value="0.0"/>
+  <PARAM id="LFO3_AMT8" value="0.0"/>
+  <PARAM id="CAR_H00"/>
+  <PARAM id="CAR_H01"/>
+  <PARAM id="CAR_H02" value="0.0"/>
+  <PARAM id="CAR_H03" value="0.0"/>
+  <PARAM id="CAR_H04"/>
+  <PARAM id="CAR_H05"/>
+  <PARAM id="CAR_H06" value="0.0"/>
+  <PARAM id="CAR_H07"/>
+  <PARAM id="CAR_H08"/>
+  <PARAM id="CAR_H09"/>
+  <PARAM id="CAR_H10"/>
+  <PARAM id="CAR_H11"/>
+  <PARAM id="CAR_H12"/>
+  <PARAM id="CAR_H13" value="0.0"/>
+  <PARAM id="CAR_H14"/>
+  <PARAM id="CAR_H15"/>
+  <PARAM id="CAR_H16"/>
+  <PARAM id="CAR_H17"/>
+  <PARAM id="CAR_H18"/>
+  <PARAM id="CAR_H19"/>
+  <PARAM id="CAR_H20"/>
+  <PARAM id="CAR_H21"/>
+  <PARAM id="CAR_H22"/>
+  <PARAM id="CAR_H23"/>
+  <PARAM id="CAR_H24"/>
+  <PARAM id="CAR_H25"/>
+  <PARAM id="CAR_H26"/>
+  <PARAM id="CAR_H27"/>
+  <PARAM id="CAR_H28"/>
+  <PARAM id="CAR_H29"/>
+  <PARAM id="CAR_H30"/>
+  <PARAM id="CAR_H31"/>
+  <PARAM id="CAR_MULTI"/>
+  <PARAM id="VORTEX" value="0.5479999780654907"/>
+  <PARAM id="DLY_SPREAD" value="0.7200000882148743"/>
+  <PARAM id="HELIX" value="0.3800000250339508"/>
+  <PARAM id="MACRO_TIME" value="0.429999977350235"/>
+  <PARAM id="MOD1_H00"/>
+  <PARAM id="MOD1_H01"/>
+  <PARAM id="MOD1_H02"/>
+  <PARAM id="MOD1_H03"/>
+  <PARAM id="MOD1_H04"/>
+  <PARAM id="MOD1_H05"/>
+  <PARAM id="MOD1_H06"/>
+  <PARAM id="MOD1_H07"/>
+  <PARAM id="MOD1_H08"/>
+  <PARAM id="MOD1_H09"/>
+  <PARAM id="MOD1_H10"/>
+  <PARAM id="MOD1_H11"/>
+  <PARAM id="MOD1_H12"/>
+  <PARAM id="MOD1_H13"/>
+  <PARAM id="MOD1_H14"/>
+  <PARAM id="MOD1_H15"/>
+  <PARAM id="MOD1_H16"/>
+  <PARAM id="MOD1_H17"/>
+  <PARAM id="MOD1_H18"/>
+  <PARAM id="MOD1_H19"/>
+  <PARAM id="MOD1_H20"/>
+  <PARAM id="MOD1_H21"/>
+  <PARAM id="MOD1_H22"/>
+  <PARAM id="MOD1_H23"/>
+  <PARAM id="MOD1_H24"/>
+  <PARAM id="MOD1_H25"/>
+  <PARAM id="MOD1_H26"/>
+  <PARAM id="MOD1_H27"/>
+  <PARAM id="MOD1_H28"/>
+  <PARAM id="MOD1_H29"/>
+  <PARAM id="MOD1_H30"/>
+  <PARAM id="MOD1_H31"/>
+  <PARAM id="MOD1_ON"/>
+  <PARAM id="MOD2_H00" value="1.0"/>
+  <PARAM id="MOD2_H01" value="0.0"/>
+  <PARAM id="MOD2_H02"/>
+  <PARAM id="MOD2_H03"/>
+  <PARAM id="MOD2_H04"/>
+  <PARAM id="MOD2_H05" value="0.5523999929428101"/>
+  <PARAM id="MOD2_H06" value="0.0"/>
+  <PARAM id="MOD2_H07"/>
+  <PARAM id="MOD2_H08" value="0.0"/>
+  <PARAM id="MOD2_H09" value="0.0"/>
+  <PARAM id="MOD2_H10"/>
+  <PARAM id="MOD2_H11" value="0.8952000141143799"/>
+  <PARAM id="MOD2_H12" value="0.0"/>
+  <PARAM id="MOD2_H13" value="0.0"/>
+  <PARAM id="MOD2_H14"/>
+  <PARAM id="MOD2_H15"/>
+  <PARAM id="MOD2_H16"/>
+  <PARAM id="MOD2_H17" value="0.3048000037670135"/>
+  <PARAM id="MOD2_H18"/>
+  <PARAM id="MOD2_H19"/>
+  <PARAM id="MOD2_H20"/>
+  <PARAM id="MOD2_H21" value="0.4952000081539154"/>
+  <PARAM id="MOD2_H22"/>
+  <PARAM id="MOD2_H23"/>
+  <PARAM id="MOD2_H24"/>
+  <PARAM id="MOD2_H25"/>
+  <PARAM id="MOD2_H26"/>
+  <PARAM id="MOD2_H27"/>
+  <PARAM id="MOD2_H28"/>
+  <PARAM id="MOD2_H29"/>
+  <PARAM id="MOD2_H30"/>
+  <PARAM id="MOD2_H31"/>
+  <PARAM id="MOD2_ON"/>
+  <PARAM id="OCTAVE"/>
+  <PARAM id="PLASMA" value="0.6439997553825378"/>
+  <PARAM id="PORTA" value="0.0"/>
+  <PARAM id="REV_PDLY" value="0.0"/>
+  <PARAM id="REV_WIDTH" value="0.0"/>
+  <PARAM id="RUB_FEED" value="0.7119999527931213"/>
+  <PARAM id="SHAPER_S00" value="0.0"/>
+  <PARAM id="SHAPER_S01" value="0.1000000014901161"/>
+  <PARAM id="SHAPER_S02" value="0.25"/>
+  <PARAM id="SHAPER_S03" value="0.4000000059604645"/>
+  <PARAM id="SHAPER_S04" value="0.550000011920929"/>
+  <PARAM id="SHAPER_S05" value="0.699999988079071"/>
+  <PARAM id="SHAPER_S06" value="0.800000011920929"/>
+  <PARAM id="SHAPER_S07" value="0.8799999952316284"/>
+  <PARAM id="SHAPER_S08" value="0.9399999976158142"/>
+  <PARAM id="SHAPER_S09" value="0.9700000286102295"/>
+  <PARAM id="SHAPER_S10" value="1.0"/>
+  <PARAM id="SHAPER_S11" value="1.0"/>
+  <PARAM id="SHAPER_S12" value="1.0"/>
+  <PARAM id="SHAPER_S13" value="1.0"/>
+  <PARAM id="SHAPER_S14" value="1.0"/>
+  <PARAM id="SHAPER_S15" value="1.0"/>
+  <PARAM id="SHAPER_S16" value="1.0"/>
+  <PARAM id="SHAPER_S17" value="1.0"/>
+  <PARAM id="SHAPER_S18" value="1.0"/>
+  <PARAM id="SHAPER_S19" value="1.0"/>
+  <PARAM id="SHAPER_S20" value="1.0"/>
+  <PARAM id="SHAPER_S21" value="1.0"/>
+  <PARAM id="SHAPER_S22" value="1.0"/>
+  <PARAM id="SHAPER_S23" value="1.0"/>
+  <PARAM id="SHAPER_S24" value="1.0"/>
+  <PARAM id="SHAPER_S25" value="1.0"/>
+  <PARAM id="SHAPER_S26" value="1.0"/>
+  <PARAM id="SHAPER_S27" value="1.0"/>
+  <PARAM id="SHAPER_S28" value="1.0"/>
+  <PARAM id="SHAPER_S29" value="1.0"/>
+  <PARAM id="SHAPER_S30" value="0.800000011920929"/>
+  <PARAM id="SHAPER_S31" value="0.4000000059604645"/>
+  <PARAM id="DLY_SYNC"/>
+</ParasiteState>

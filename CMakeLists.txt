@@ -79,8 +79,25 @@ juce_add_binary_data(ParasiteData SOURCES
     graphics/parasite_logo_neutral_dark.png
     graphics/parasite_advanced_light.png
     graphics/parasite_advanced_dark.png
-    # Factory preset (Init only — user presets synced via cloud)
+    # Factory presets — Init plus the Mleuc preset pack baked in for
+    # this build so the sound designer can test on macOS without the
+    # cloud sync round-trip. User presets normally sync via the cloud.
     presets/Init.prst
+    "presets/Aggrotuff.prst"
+    "presets/Anvil.prst"
+    "presets/Brainperc.prst"
+    "presets/Bubbler Bump.prst"
+    "presets/Bulldog.prst"
+    "presets/Droid.prst"
+    "presets/How Minus.prst"
+    "presets/Inharmolead.prst"
+    "presets/Intermod.prst"
+    "presets/Psyop.prst"
+    "presets/Rizzler.prst"
+    "presets/Stack Me.prst"
+    "presets/Stomper.prst"
+    "presets/Thinkpad.prst"
+    "presets/Zoning Out.prst"
 )
 
 target_include_directories(Parasite PRIVATE Source)
