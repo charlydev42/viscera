@@ -217,7 +217,6 @@ public:
         float ghostClampMax = baseRotAngle;
 
         const auto& ids = detail::lfoSlotIds();
-        const bb::VoiceParams* vp = ctx ? ctx->voiceParams : nullptr;
 
         for (int l = 0; l < 3; ++l)
         {
@@ -230,13 +229,10 @@ public:
 
                 float amt = statePtr->getRawParameterValue(ids.amtIds[l][s])->load();
 
-                // Scale arc by actual LFO peak (custom curves may not reach 1.0)
-                float peak = vp
-                    ? vp->lfoPeak[l].load(std::memory_order_relaxed)
-                    : 1.0f;
-                // Arc endpoint in rotary space, clamped to knob range
-                float arcEnd = juce::jlimit(rotStart, rotEnd,
-                                             baseRotAngle + amt * peak * rotRange);
+                // Single source of truth for arc geometry — same call path as
+                // hitTestRingDrag, so the click zone always matches what's drawn.
+                float arcEnd = computeArcEndAngle(l, amt, baseRotAngle,
+                                                   rotStart, rotEnd, rotRange);
 
                 // Track total arc extent for ghost clamping
                 ghostClampMin = std::min(ghostClampMin, arcEnd);
@@ -423,6 +419,23 @@ private:
             repaint();
     }
 
+    // Single source of truth for "where does LFO `lfoIdx`'s arc visually
+    // terminate?" — both paint() and hitTestRingDrag() route through this so
+    // the visible arc and the click zone never drift apart. Custom LFO
+    // curves whose unipolar peak is < 1 produce a shorter arc, and the hit
+    // test must match that shorter arc, otherwise multi-LFO assignments on
+    // the same knob get the wrong slot when the user clicks on what they
+    // see. Returns rotary-space angle, clamped to the knob's slider range.
+    float computeArcEndAngle(int lfoIdx, float amt, float baseRotAngle,
+                             float rotStart, float rotEnd, float rotRange) const
+    {
+        float peak = (ctx && ctx->voiceParams && lfoIdx >= 0 && lfoIdx < 3)
+            ? ctx->voiceParams->lfoPeak[lfoIdx].load(std::memory_order_relaxed)
+            : 1.0f;
+        return juce::jlimit(rotStart, rotEnd,
+                             baseRotAngle + amt * peak * rotRange);
+    }
+
     // --- Ring drag helpers ---
     bool hitTestRingDrag(juce::Point<float> pos)
     {
@@ -459,8 +472,8 @@ private:
                 if (dest != static_cast<int>(myDest)) continue;
 
                 float amt = statePtr->getRawParameterValue(ids.amtIds[l][s])->load();
-                float arcEnd = juce::jlimit(rotStart, rotEnd,
-                                             baseRotAngle + amt * rotRange);
+                float arcEnd = computeArcEndAngle(l, amt, baseRotAngle,
+                                                   rotStart, rotEnd, rotRange);
                 assignments[numAssignments++] = { l, s + 1, arcEnd }; // slot stays 1-indexed downstream
             }
         }
