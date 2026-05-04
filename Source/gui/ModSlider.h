@@ -300,7 +300,10 @@ public:
 
         // Check for ring drag (click near an arc endpoint)
         if (statePtr && hitTestRingDrag(e.position))
+        {
+            lastDragPos = e.position; // baseline for incremental delta in mouseDrag
             return;
+        }
 
         customDrag = true;
         customDragValue = getValue();
@@ -312,13 +315,21 @@ public:
     {
         if (isRingDrag)
         {
-            // Combined X+Y drag: right/up = increase, left/down = decrease
-            float dx = static_cast<float>(e.getDistanceFromDragStartX());
-            float dy = static_cast<float>(-e.getDistanceFromDragStartY()); // invert Y (up = positive)
+            // Incremental delta — same model as the knob's customDrag path.
+            // Using cumulative-from-start (getDistanceFromDragStart*) caused
+            // visible jumps when the dominant axis flipped mid-drag: dx_total
+            // and dy_total can differ by a lot, so swapping which one drives
+            // `delta` produced a discontinuity in the output amt. Per-frame
+            // deltas are tiny, so the same axis-pick logic is jump-free.
+            float dx = e.position.x - lastDragPos.x;
+            float dy = -(e.position.y - lastDragPos.y);
             float delta = (std::abs(dx) > std::abs(dy)) ? dx : dy;
-            float sensitivity = 1.0f / static_cast<float>(getWidth() * 2);
-            float newAmt = ringDragStartAmt + delta * sensitivity * 2.0f;
-            newAmt = juce::jlimit(-1.0f, 1.0f, newAmt);
+            lastDragPos = e.position;
+
+            float sensitivity = 1.0f / (static_cast<float>(getWidth()) * 2.0f);
+            float newAmt = juce::jlimit(-1.0f, 1.0f,
+                ringDragAmt + delta * sensitivity * 2.0f);
+            ringDragAmt = newAmt; // running value for next frame
 
             const auto& amtId = detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1];
             if (auto* p = statePtr->getParameter(amtId))
@@ -385,7 +396,7 @@ private:
     bool isRingDrag = false;
     int ringDragLfo = -1;   // 0-2
     int ringDragSlot = -1;  // 0-3
-    float ringDragStartAmt = 0.0f;
+    float ringDragAmt = 0.0f; // running amt during a ring drag (updated per frame)
     bool wasShowingDropTargets = false; // track transition to clear residual glow
 
     void timerCallback() override
@@ -486,7 +497,7 @@ private:
             isRingDrag = true;
             ringDragLfo = assignments[0].lfo;
             ringDragSlot = assignments[0].slot;
-            ringDragStartAmt = statePtr->getRawParameterValue(
+            ringDragAmt = statePtr->getRawParameterValue(
                 detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1])->load();
             return true;
         }
@@ -508,7 +519,7 @@ private:
         isRingDrag = true;
         ringDragLfo = assignments[bestIdx].lfo;
         ringDragSlot = assignments[bestIdx].slot;
-        ringDragStartAmt = statePtr->getRawParameterValue(
+        ringDragAmt = statePtr->getRawParameterValue(
             detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1])->load();
         return true;
     }
