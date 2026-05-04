@@ -313,6 +313,14 @@ void PresetOverlay::ensureCardVisible(int cardIndex)
 
 void PresetOverlay::mouseMove(const juce::MouseEvent& e)
 {
+    // Repaint while the panel is open so the Send/Cancel buttons get
+    // hover feedback. Skip the grid hover update — cards are obscured.
+    if (sendPanelOpen)
+    {
+        repaint();
+        return;
+    }
+
     int newHover = cardAtPoint(e.getPosition());
     if (newHover != hoveredCard)
     {
@@ -341,7 +349,34 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
 {
     auto pt = e.getPosition();
 
-    // Right-click on a user preset card → "Send to user…" popup
+    // Send panel is open → it eats clicks. Buttons handled here, click
+    // outside the panel cancels (modal-style without a native popup).
+    if (sendPanelOpen)
+    {
+        if (!sendInFlight)
+        {
+            if (sendButtonBounds.contains(pt))
+            {
+                submitSendPanel();
+                return;
+            }
+            if (sendCancelBounds.contains(pt))
+            {
+                closeSendPanel();
+                return;
+            }
+            // Click outside the panel chrome → cancel
+            if (!sendPanelBounds.contains(pt))
+            {
+                closeSendPanel();
+                return;
+            }
+        }
+        // Click on the editor / panel surface itself → swallow
+        return;
+    }
+
+    // Right-click on a user preset card → inline "Send to user…" panel
     if (e.mods.isPopupMenu())
     {
         int idx = cardAtPoint(pt);
@@ -354,7 +389,7 @@ void PresetOverlay::mouseDown(const juce::MouseEvent& e)
                 auto& entry = reg[static_cast<size_t>(ri)];
                 if (!entry.isFactory)
                 {
-                    showSendMenu(ri);
+                    openSendPanel(ri);
                     return;
                 }
             }
@@ -450,81 +485,219 @@ void PresetOverlay::mouseUp(const juce::MouseEvent&)
 }
 
 // ─────────────────────────────────────────────────────────────
-// Right-click "Send to user…" — only on user (non-factory)
-// presets. Uses an AlertWindow for the username input so it
-// fits the existing JUCE LookAndFeel without a custom modal.
-// On confirm, delegates to CloudPresetManager which talks to
-// /sharing/send and reports back via callback (toast).
+// Inline "Send to user…" panel — paints over the preset grid in
+// the same window. No native AlertWindow / PopupMenu — keeps the
+// whole flow inside the plugin's editor surface so DAWs that
+// blur or hide the plugin window on focus loss don't kill the
+// modal mid-input.
+//
+// State machine: openSendPanel (right-click)
+//                  → user types username, hits Send (Enter) or Cancel (Esc)
+//                  → submitSendPanel calls CloudPresetManager async,
+//                    keeps panel open with sendInFlight=true
+//                  → callback marshals back to message thread, posts
+//                    result via proc.setLastLoadError (existing toast)
+//                    and closes the panel.
 // ─────────────────────────────────────────────────────────────
-void PresetOverlay::showSendMenu(int registryIndex)
+void PresetOverlay::openSendPanel(int registryIndex)
 {
     auto& reg = proc.getPresetRegistry();
     if (registryIndex < 0 || registryIndex >= static_cast<int>(reg.size())) return;
 
     // Capture the uuid + name by value — the registry can be rebuilt
-    // before the modal callback fires.
+    // while the panel is open (e.g. background sync).
     const auto& entry = reg[static_cast<size_t>(registryIndex)];
-    const juce::String uuid = entry.uuid;
-    const juce::String name = entry.name;
+    sendPresetUuid = entry.uuid;
+    sendPresetName = entry.name;
 
-    if (uuid.isEmpty())
+    if (sendPresetUuid.isEmpty())
     {
         proc.setLastLoadError("This preset has no cloud UUID yet — save it first.");
         return;
     }
 
-    juce::PopupMenu menu;
-    menu.addSectionHeader("Preset: " + name);
-    menu.addItem(1, "Send to user...");
+    sendPanelOpen     = true;
+    sendInFlight      = false;
+    sendStatusMessage = {};
 
-    auto* self = this;
-    menu.showMenuAsync(juce::PopupMenu::Options(),
-        [self, uuid, name](int result)
+    if (sendUsernameEditor == nullptr)
     {
-        if (result != 1) return;
+        sendUsernameEditor = std::make_unique<juce::TextEditor>();
+        sendUsernameEditor->setMouseClickGrabsKeyboardFocus(true);
+        sendUsernameEditor->setSelectAllWhenFocused(true);
+        sendUsernameEditor->setTextToShowWhenEmpty("username", juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.35f));
+        sendUsernameEditor->setColour(juce::TextEditor::backgroundColourId, juce::Colour(ParasiteLookAndFeel::kBgColor).darker(0.05f));
+        sendUsernameEditor->setColour(juce::TextEditor::textColourId,        juce::Colour(ParasiteLookAndFeel::kTextColor));
+        sendUsernameEditor->setColour(juce::TextEditor::outlineColourId,     juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.4f));
+        sendUsernameEditor->setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(ParasiteLookAndFeel::kAccentColor));
+        sendUsernameEditor->setColour(juce::TextEditor::highlightColourId,   juce::Colour(ParasiteLookAndFeel::kAccentColor).withAlpha(0.25f));
+        sendUsernameEditor->setColour(juce::CaretComponent::caretColourId,   juce::Colour(ParasiteLookAndFeel::kAccentColor));
+        sendUsernameEditor->setJustification(juce::Justification::centredLeft);
+        sendUsernameEditor->setIndents(8, 4);
+        sendUsernameEditor->onReturnKey = [this] { submitSendPanel(); };
+        sendUsernameEditor->onEscapeKey = [this] { closeSendPanel();  };
+        addChildComponent(*sendUsernameEditor);
+    }
 
-        auto* aw = new juce::AlertWindow(
-            "Send preset",
-            "Send \"" + name + "\" to which Voidscan user?\n"
-            "Enter their username (without the @).",
-            juce::AlertWindow::NoIcon);
-        aw->addTextEditor("recipient", "", "Username");
-        aw->addButton("Send",   1, juce::KeyPress(juce::KeyPress::returnKey));
-        aw->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    sendUsernameEditor->setText(juce::String(), juce::dontSendNotification);
+    sendUsernameEditor->setVisible(true);
+    layoutSendPanel();
+    sendUsernameEditor->grabKeyboardFocus();
+    repaint();
+}
 
-        aw->enterModalState(true,
-            juce::ModalCallbackFunction::create(
-                [self, uuid, aw](int btn)
+void PresetOverlay::closeSendPanel()
+{
+    sendPanelOpen     = false;
+    sendInFlight      = false;
+    sendStatusMessage = {};
+    sendPresetUuid    = {};
+    sendPresetName    = {};
+    if (sendUsernameEditor != nullptr)
+        sendUsernameEditor->setVisible(false);
+    repaint();
+}
+
+void PresetOverlay::submitSendPanel()
+{
+    if (!sendPanelOpen || sendInFlight || sendUsernameEditor == nullptr)
+        return;
+
+    juce::String username = sendUsernameEditor->getText().trim();
+    if (username.startsWithChar('@'))
+        username = username.substring(1);
+
+    if (username.isEmpty())
+    {
+        sendStatusMessage = "Enter a username.";
+        repaint();
+        return;
+    }
+
+    sendInFlight      = true;
+    sendStatusMessage = "Sending...";
+    repaint();
+
+    // Capture a Component::SafePointer so the callback is a no-op if the
+    // overlay (or its editor) is destroyed while the request is in flight.
+    juce::Component::SafePointer<PresetOverlay> safe(this);
+
+    proc.getCloudPresetManager().sendPresetToUser(
+        sendPresetUuid, username,
+        [safe](bool ok, const juce::String& msg)
+        {
+            juce::MessageManager::callAsync([safe, ok, msg]()
+            {
+                if (auto* self = safe.getComponent())
                 {
-                    juce::String username;
-                    if (btn == 1)
-                        username = aw->getTextEditorContents("recipient").trim();
-                    delete aw;
+                    self->sendInFlight = false;
+                    self->proc.setLastLoadError(msg);     // existing toast pipe
+                    self->closeSendPanel();
+                }
+                (void)ok;
+            });
+        });
+}
 
-                    if (btn != 1 || username.isEmpty()) return;
+void PresetOverlay::layoutSendPanel()
+{
+    if (!sendPanelOpen) return;
 
-                    // Strip any leading @ users naturally type.
-                    if (username.startsWithChar('@'))
-                        username = username.substring(1);
+    auto area = getLocalBounds();
 
-                    self->proc.getCloudPresetManager().sendPresetToUser(
-                        uuid, username,
-                        [self](bool ok, const juce::String& msg)
-                        {
-                            // Surface result via the existing toast pipe in
-                            // ParasiteProcessor::lastLoadError so the editor's
-                            // 5Hz timer picks it up — keeps UI thread-safe and
-                            // consistent with other plugin notifications.
-                            self->proc.setLastLoadError(msg);
-                            (void)ok;
-                        });
-                }),
-            true);
-    });
+    // Panel is centred horizontally, anchored just below the pill row,
+    // covering most of the grid. Keep it bounded so it doesn't sprawl.
+    const int desiredW = juce::jmin(area.getWidth() - 32, 360);
+    const int desiredH = 180;
+    const int x = area.getX() + (area.getWidth() - desiredW) / 2;
+    const int y = juce::jmax(gridTop + 12, area.getCentreY() - desiredH / 2);
+
+    sendPanelBounds = { x, y, desiredW, desiredH };
+
+    auto inner = sendPanelBounds.reduced(20);
+    // Layout: title (top, ~36px) → editor (28px) → status (16px) → buttons (32px) at bottom.
+    inner.removeFromTop(40);
+    sendEditorBounds = inner.removeFromTop(28);
+    inner.removeFromTop(8);
+    inner.removeFromTop(16); // status row reserved (drawn in paint)
+
+    auto buttonRow = inner.removeFromBottom(32);
+    const int btnW = 90;
+    sendCancelBounds = buttonRow.removeFromLeft(btnW);
+    sendButtonBounds = buttonRow.removeFromRight(btnW);
+
+    if (sendUsernameEditor != nullptr)
+        sendUsernameEditor->setBounds(sendEditorBounds);
+}
+
+void PresetOverlay::drawSendPanel(juce::Graphics& g)
+{
+    if (!sendPanelOpen) return;
+
+    // Dim everything behind the panel so the overlay reads as modal.
+    g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor).withAlpha(0.78f));
+    g.fillRect(getLocalBounds());
+
+    auto bf = sendPanelBounds.toFloat();
+
+    // Neumorphic raised card for the panel
+    ParasiteLookAndFeel::drawNeumorphicRect(g, bf, 10.0f, false);
+
+    auto accent = juce::Colour(ParasiteLookAndFeel::kAccentColor);
+    auto textCol = juce::Colour(ParasiteLookAndFeel::kTextColor);
+
+    // Title row: "Send <name>"
+    g.setColour(textCol);
+    g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold));
+    auto titleArea = sendPanelBounds.withHeight(32).reduced(20, 0).translated(0, 16);
+    g.drawText("Send  \"" + sendPresetName + "\"  to:", titleArea, juce::Justification::centredLeft, true);
+
+    // Status row (between editor and buttons)
+    auto statusArea = sendEditorBounds.translated(0, sendEditorBounds.getHeight() + 10).withHeight(16);
+    if (sendStatusMessage.isNotEmpty())
+    {
+        g.setColour(sendInFlight ? accent : juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.7f));
+        g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::plain));
+        g.drawText(sendStatusMessage, statusArea, juce::Justification::centredLeft);
+    }
+
+    // Buttons (Cancel left, Send right)
+    auto pt = getMouseXYRelative();
+
+    auto drawBtn = [&](juce::Rectangle<int> b, const juce::String& label, bool primary, bool disabled)
+    {
+        auto rf = b.toFloat().reduced(2.0f);
+        bool hover = !disabled && b.contains(pt);
+
+        // Pill background
+        if (primary)
+        {
+            g.setColour(disabled ? accent.withAlpha(0.25f)
+                                 : (hover ? accent : accent.withAlpha(0.85f)));
+            g.fillRoundedRectangle(rf, rf.getHeight() * 0.5f);
+        }
+        else
+        {
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kBgColor).darker(hover ? 0.04f : 0.0f));
+            g.fillRoundedRectangle(rf, rf.getHeight() * 0.5f);
+            g.setColour(juce::Colour(ParasiteLookAndFeel::kShadowDark).withAlpha(0.35f));
+            g.drawRoundedRectangle(rf, rf.getHeight() * 0.5f, 1.0f);
+        }
+
+        g.setColour(primary ? juce::Colour(ParasiteLookAndFeel::kBgColor)
+                            : (disabled ? textCol.withAlpha(0.4f) : textCol));
+        g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 10.0f, juce::Font::bold));
+        g.drawText(label, b, juce::Justification::centred);
+    };
+
+    drawBtn(sendCancelBounds, "Cancel", false, sendInFlight);
+    drawBtn(sendButtonBounds, sendInFlight ? "Sending..." : "Send", true, sendInFlight);
 }
 
 void PresetOverlay::mouseDoubleClick(const juce::MouseEvent& e)
 {
+    if (sendPanelOpen) return;   // modal: swallow
+
     int idx = cardAtPoint(e.getPosition());
     if (idx >= 0)
     {
@@ -535,6 +708,8 @@ void PresetOverlay::mouseDoubleClick(const juce::MouseEvent& e)
 
 void PresetOverlay::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
 {
+    if (sendPanelOpen) return;   // modal: don't scroll the grid behind the panel
+
     int visibleH = getHeight() - gridTop;
     int maxScroll = juce::jmax(0, totalContentHeight - visibleH);
     scrollOffset = juce::jlimit(0, maxScroll, scrollOffset - static_cast<int>(wheel.deltaY * 200.0f));
@@ -544,6 +719,15 @@ void PresetOverlay::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWhe
 
 bool PresetOverlay::keyPressed(const juce::KeyPress& key)
 {
+    // While the send panel is open, the editor handles Enter/Escape via
+    // its own callbacks. Swallow grid-nav keys so up/down/left/right
+    // don't move the focused preset card behind the modal.
+    if (sendPanelOpen)
+    {
+        if (key == juce::KeyPress::escapeKey) { closeSendPanel(); return true; }
+        return true;
+    }
+
     int total = static_cast<int>(cards.size());
     if (total == 0) return false;
 
@@ -621,6 +805,7 @@ void PresetOverlay::resized()
     }
 
     rebuildCards();
+    layoutSendPanel();
 }
 
 void PresetOverlay::paint(juce::Graphics& g)
@@ -842,4 +1027,7 @@ void PresetOverlay::paint(juce::Graphics& g)
     }
 
     g.restoreState();
+
+    // Inline send panel — drawn last so it sits above the grid.
+    drawSendPanel(g);
 }

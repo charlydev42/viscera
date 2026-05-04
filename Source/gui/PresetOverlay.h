@@ -69,11 +69,26 @@ private:
     juce::Rectangle<int> deleteXBounds(int cardIndex) const;
     juce::Rectangle<int> favHeartBounds(int cardIndex) const;
 
-    // Right-click "Send to user…" popup on a user preset card.
-    // Forward-declared friendlessly: uses the registry entry by-value
-    // through a local copy, so the header doesn't need ParasiteProcessor's
-    // PresetEntry struct to be visible at this declaration point.
-    void showSendMenu(int registryIndex);
+    // Right-click "Send to user…" — opens an inline panel that paints
+    // over the preset grid (no native AlertWindow). State below.
+    void openSendPanel(int registryIndex);
+    void closeSendPanel();
+    void submitSendPanel();
+
+    bool sendPanelOpen = false;
+    juce::String sendPresetUuid;
+    juce::String sendPresetName;
+    juce::String sendStatusMessage;     // shown under the editor (errors / progress)
+    bool         sendInFlight = false;  // disable buttons while request runs
+    std::unique_ptr<juce::TextEditor> sendUsernameEditor;
+
+    juce::Rectangle<int> sendPanelBounds;
+    juce::Rectangle<int> sendEditorBounds;
+    juce::Rectangle<int> sendButtonBounds;
+    juce::Rectangle<int> sendCancelBounds;
+
+    void layoutSendPanel();             // recompute bounds from current size
+    void drawSendPanel(juce::Graphics& g);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetOverlay)
 };
