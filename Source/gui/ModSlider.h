@@ -326,9 +326,15 @@ public:
             float delta = (std::abs(dx) > std::abs(dy)) ? dx : dy;
             lastDragPos = e.position;
 
-            float sensitivity = 1.0f / (static_cast<float>(getWidth()) * 2.0f);
+            // Same pixel-to-value sensitivity as the knob's customDrag (1px =
+            // 1/500 of normalised range, /4000 with Shift). Ring amt lives in
+            // [-1, 1] which is two normalised units, so a full bipolar sweep
+            // takes 1000px — the user can always release and re-drag for
+            // larger jumps. Crucially this is independent of getWidth() so
+            // the feel is identical across knobs of different sizes.
+            double sens = e.mods.isShiftDown() ? 4000.0 : 500.0;
             float newAmt = juce::jlimit(-1.0f, 1.0f,
-                ringDragAmt + delta * sensitivity * 2.0f);
+                ringDragAmt + static_cast<float>(delta / sens));
             ringDragAmt = newAmt; // running value for next frame
 
             const auto& amtId = detail::lfoSlotIds().amtIds[ringDragLfo][ringDragSlot - 1];
