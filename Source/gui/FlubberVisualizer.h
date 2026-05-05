@@ -17,16 +17,26 @@ public:
     // Force GL context to re-render (call after dark mode switch)
     void triggerGLRepaint() { glContext.triggerRepaint(); }
 
-    // Suspend/resume GL rendering when not visible (saves GPU/CPU)
-    void visibilityChanged() override
-    {
-        glContext.setContinuousRepainting(isVisible());
-    }
+    // Suspend/resume GL rendering based on the full visibility chain.
+    // isShowing() returns false if any ancestor is hidden or the top-level
+    // peer is invisible (window closed/minimised) — strictly stronger than
+    // isVisible(), which only checks this component's own flag. We toggle
+    // continuous repainting from a single hook (visibilityChanged) so the
+    // GL thread is never asked to flip state mid-frame; that previously
+    // caused flicker. parentHierarchyChanged covers reparenting cases.
+    void visibilityChanged() override         { updateRenderState(); }
+    void parentHierarchyChanged() override    { updateRenderState(); }
 
     // OpenGLRenderer callbacks (called on GL thread)
     void newOpenGLContextCreated() override;
     void renderOpenGL() override;
     void openGLContextClosing() override;
+
+private:
+    void updateRenderState()
+    {
+        glContext.setContinuousRepainting(isShowing());
+    }
 
 private:
     bb::AudioVisualBuffer& audioL;

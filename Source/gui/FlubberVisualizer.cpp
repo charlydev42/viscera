@@ -542,8 +542,15 @@ FlubberVisualizer::FlubberVisualizer(bb::AudioVisualBuffer& bufL,
 
     glContext.setOpenGLVersionRequired(juce::OpenGLContext::openGL3_2);
     glContext.setRenderer(this);
-    glContext.setContinuousRepainting(true);
-    glContext.setSwapInterval(1); // vsync — cap at 60fps to avoid CPU hog
+    // Continuous repainting is enabled/disabled from visibilityChanged
+    // based on isShowing() — see updateRenderState() in the header.
+    glContext.setContinuousRepainting(false);
+    // Half-rate vsync: 30 fps instead of 60. The blob is a raymarched
+    // shader; full vsync × N visible instances burns more GPU than the
+    // visualiser is worth. 30 fps is the de-facto standard rate for
+    // plugin visualisers (Serum, Vital, Phase Plant) and the animation
+    // looks identical to anyone not staring at a frame counter.
+    glContext.setSwapInterval(2);
     glContext.setComponentPaintingEnabled(false);
     glContext.attachTo(*this);
     setInterceptsMouseClicks(false, false);
@@ -681,8 +688,11 @@ void FlubberVisualizer::updateAudioTexture()
 
 void FlubberVisualizer::renderOpenGL()
 {
-    // Skip rendering when not visible (e.g. edit page)
-    if (!isVisible()) return;
+    // Defensive guard against a stray frame on the GL thread after the
+    // message thread toggled continuous repainting off — visibilityChanged
+    // is the authoritative gate, this just bails out cleanly if a frame is
+    // already in flight when we go off-screen.
+    if (!isShowing()) return;
 
     // Pick shader based on current dark mode. If the chosen one failed to
     // compile, fall back to the other so the user still sees something. If
