@@ -282,9 +282,13 @@ void FMVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     smoothGLfoNoise.setTargetValue(params.lfoModNoise.load(std::memory_order_relaxed));
     smoothGLfoSpread.setTargetValue(params.lfoModSpread.load(std::memory_order_relaxed));
     smoothGLfoFold.setTargetValue(params.lfoModFold.load(std::memory_order_relaxed));
-    // HemoFold's setAmount is per-block only, so we still need a scalar for
-    // the fold amount this block. Sampling the smooth value at block start
-    // gives us a ramped value without touching the fold DSP.
+    // HemoFold's setAmount is per-block only, so we sample a scalar for the
+    // fold amount this block. SmoothedValue::getCurrentValue() does NOT
+    // advance the ramp — only getNextValue() (per-sample) and skip(N) do —
+    // so we step it explicitly by the block size before reading. Without
+    // this the smoother stays stuck at 0 and the LFO never reaches the
+    // target value, which is why mapping an LFO onto Fold appeared inert.
+    smoothGLfoFold.skip(numSamples);
     const float gLfoModFoldBlock = smoothGLfoFold.getCurrentValue();
 
     bool xorEnabled    = params.xorOn->load() > 0.5f;
