@@ -353,11 +353,42 @@ ParasiteEditor::ParasiteEditor(ParasiteProcessor& processor)
 ParasiteEditor::~ParasiteEditor()
 {
     stopTimer();
-    // Drop any lambda the LFOSection may have registered before children
-    // start destroying — the lambda's SafePointer already handles stale
-    // access but clearing here keeps the context in a clean state.
+
+    // Drop every callback we registered with `[this]` captures BEFORE the
+    // child components start destroying. Two reasons:
+    //   1. Defensive against any in-flight async dispatch that fires
+    //      mid-destruction — once the std::function is nulled, the lambda
+    //      body never runs and the dangling `this` is never dereferenced.
+    //   2. JUCE destroys children in reverse construction order; if a
+    //      child component's destructor synchronously fires its callback
+    //      (rare but legal), the lambda would touch a half-destroyed
+    //      ParasiteEditor. Nulling here closes that hole.
+    // ModSliderContext lambda + flag reset already lived in this slot.
     modSliderContext.onLearnClick = nullptr;
     modSliderContext.showDropTargets = false;
+
+    algoLeftBtn.onClick               = nullptr;
+    algoRightBtn.onClick              = nullptr;
+    octLeftBtn.onClick                = nullptr;
+    octRightBtn.onClick               = nullptr;
+    pageToggleBtn.onClick             = nullptr;
+    menuBtn.onClick                   = nullptr;
+    demoBanner.onClick                = nullptr;
+
+    presetBrowser.onRandomize         = nullptr;
+    presetBrowser.onPresetChanged     = nullptr;
+    presetBrowser.onBrowse            = nullptr;
+    presetBrowser.onSave              = nullptr;
+
+    presetOverlay.onClose             = nullptr;
+    presetOverlay.onCancel            = nullptr;
+    presetOverlay.onPresetChanged     = nullptr;
+
+    saveOverlay.onSave                = nullptr;
+    saveOverlay.onCancel              = nullptr;
+
+    licenseOverlay.onLicensed         = nullptr;
+    licenseOverlay.onDemoRequested    = nullptr;
 
     // Only un-set the global default LaF if we're still the current one.
     // Another plugin instance may have overwritten it in its constructor,
