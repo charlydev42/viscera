@@ -985,9 +985,12 @@ void PresetOverlay::paint(juce::Graphics& g)
                              : juce::Colour(ParasiteLookAndFeel::kTextColor));
         g.setFont(monoFont);
 
-        // Show category subtitle in All, User, and for user presets in category tabs
+        // Show category subtitle in All, User, and for user presets in category tabs.
+        // Always show subtitle when an author credit is present, so the designer
+        // gets the name on the card no matter which tab the user is browsing.
         bool showSubtitle = (selectedCategory == "All")
-                         || (!entry.isFactory);
+                         || (!entry.isFactory)
+                         || entry.author.isNotEmpty();
 
         if (showSubtitle)
         {
@@ -996,7 +999,10 @@ void PresetOverlay::paint(juce::Graphics& g)
             g.drawText(entry.name, nameArea, juce::Justification::centred);
             g.setFont(smallFont);
             g.setColour(juce::Colour(ParasiteLookAndFeel::kTextColor).withAlpha(0.5f));
-            g.drawText(entry.category, catArea, juce::Justification::centred);
+            juce::String subtitle = entry.category;
+            if (entry.author.isNotEmpty())
+                subtitle += juce::String(L" · ") + entry.author;
+            g.drawText(subtitle, catArea, juce::Justification::centred);
         }
         else
         {

@@ -71,6 +71,7 @@ public:
         juce::String category;
         juce::String pack;           // "Factory", "User", or pack name (e.g. "Dua Lipa")
         juce::String uuid;           // Cloud sync UUID (empty for factory presets)
+        juce::String author;         // Optional sound designer credit (shown on the card)
         bool isFactory = true;
         juce::String resourceName;   // BinaryData resource name (factory)
         juce::String userFileName;   // filename without extension (user)

@@ -1588,6 +1588,7 @@ void ParasiteProcessor::buildPresetRegistry()
         entry.category = xml->getStringAttribute("category", "Init");
         entry.name = xml->getStringAttribute("name", origName.upToLastOccurrenceOf(".", false, false));
         entry.pack = xml->getStringAttribute("pack", "Factory");
+        entry.author = xml->getStringAttribute("author", "");
         entry.isFactory = true;
         entry.resourceName = resName;
         presetRegistry.push_back(std::move(entry));
@@ -1634,6 +1635,7 @@ void ParasiteProcessor::buildPresetRegistry()
             if (p.isNotEmpty()) entry.pack = p;
             auto u = xml->getStringAttribute("uuid", "");
             if (u.isNotEmpty()) entry.uuid = u;
+            entry.author = xml->getStringAttribute("author", "");
         }
 
         presetRegistry.push_back(std::move(entry));
