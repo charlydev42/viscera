@@ -6,7 +6,8 @@
 #include "../dsp/AudioVisualBuffer.h"
 
 class FlubberVisualizer : public juce::Component,
-                          public juce::OpenGLRenderer
+                          public juce::OpenGLRenderer,
+                          private juce::Timer
 {
 public:
     FlubberVisualizer(bb::AudioVisualBuffer& bufL, bb::AudioVisualBuffer& bufR);
@@ -17,15 +18,18 @@ public:
     // Force GL context to re-render (call after dark mode switch)
     void triggerGLRepaint() { glContext.triggerRepaint(); }
 
-    // Suspend/resume GL rendering based on the full visibility chain.
-    // isShowing() returns false if any ancestor is hidden or the top-level
-    // peer is invisible (window closed/minimised) — strictly stronger than
-    // isVisible(), which only checks this component's own flag. We toggle
-    // continuous repainting from a single hook (visibilityChanged) so the
-    // GL thread is never asked to flip state mid-frame; that previously
-    // caused flicker. parentHierarchyChanged covers reparenting cases.
-    void visibilityChanged() override         { updateRenderState(); }
-    void parentHierarchyChanged() override    { updateRenderState(); }
+    // Heartbeat hook called by ParasiteEditor::paint(). The parent
+    // editor is repainted by JUCE only when the OS reports its surface
+    // needs to be drawn; we use that as the cross-platform "is the user
+    // really seeing this instance?" signal. The visualiser's own paint()
+    // doesn't work for this purpose because setComponentPaintingEnabled
+    // is off, which means JUCE routes Component::repaint() straight to
+    // the GL render path without ever calling paint().
+    void noteHostPainted() noexcept
+    {
+        lastHostPaintMs.store(juce::Time::getMillisecondCounter(),
+                              std::memory_order_relaxed);
+    }
 
     // OpenGLRenderer callbacks (called on GL thread)
     void newOpenGLContextCreated() override;
@@ -33,10 +37,23 @@ public:
     void openGLContextClosing() override;
 
 private:
-    void updateRenderState()
-    {
-        glContext.setContinuousRepainting(isShowing());
-    }
+    // Cross-platform "is this editor actually being drawn to the screen?"
+    // detection. JUCE's Component::isShowing() can lie when a host (e.g.
+    // Ableton's device-view tab swap) keeps the JUCE visibility chain
+    // intact while hiding the OS-level NSView/HWND of the inactive editor
+    // — all the stale editors think they're showing and burn GPU.
+    //
+    // The signal we trust instead: the OS only emits paint events for
+    // surfaces actually on screen, so JUCE only calls Component::paint()
+    // when this editor is genuinely visible to the user. Each timer tick
+    // we ping JUCE with a 1-px repaint(); if our paint() runs in time,
+    // the heartbeat timestamp stays fresh and we trigger a GL frame.
+    // Stale heartbeat → freeze on the last frame, zero GPU. Works on
+    // Mac, Windows and Linux without any platform-specific code.
+    void timerCallback() override;
+
+    std::atomic<juce::uint32> lastHostPaintMs { 0 };
+    static constexpr juce::uint32 kPaintFreshnessMs = 500;
 
 private:
     bb::AudioVisualBuffer& audioL;

@@ -436,6 +436,13 @@ void ParasiteEditor::showErrorToast(const juce::String& msg)
 
 void ParasiteEditor::timerCallback()
 {
+    // Tiny heartbeat invalidation for the FlubberVisualizer's render
+    // throttle. JUCE only actually calls paint() in response to this when
+    // the editor is on screen — when the host (Ableton) tab-swaps us off,
+    // the OS drops the redraw silently, paint() never fires, and the GL
+    // throttle goes idle. 1-px region keeps the on-screen cost trivial.
+    repaint(0, 0, 1, 1);
+
     updateAlgoLabel();
     updateOctaveLabel();
     proc.getUndoManager().beginNewTransaction();
@@ -1039,6 +1046,12 @@ void ParasiteEditor::drawSectionHeader(juce::Graphics& g, juce::Rectangle<int> b
 
 void ParasiteEditor::paint(juce::Graphics& g)
 {
+    // Heartbeat for the FlubberVisualizer's render throttle. The OS only
+    // calls JUCE's paint cycle on this editor when it's actually on screen
+    // for the user — so a recent paint() means "show GL", and going stale
+    // means "freeze GL" (host has tab-swapped or hidden us).
+    flubberVisualizer.noteHostPainted();
+
     g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
 
     if (!showAdvanced)

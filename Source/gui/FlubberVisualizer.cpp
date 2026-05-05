@@ -542,22 +542,32 @@ FlubberVisualizer::FlubberVisualizer(bb::AudioVisualBuffer& bufL,
 
     glContext.setOpenGLVersionRequired(juce::OpenGLContext::openGL3_2);
     glContext.setRenderer(this);
-    // Continuous repainting is enabled/disabled from visibilityChanged
-    // based on isShowing() — see updateRenderState() in the header.
+    // Manual repaint mode for the whole lifetime — the timer below decides
+    // when to triggerRepaint() based on the JUCE paint heartbeat. Toggling
+    // setContinuousRepainting at runtime races with the GL thread and was
+    // the source of the earlier flicker; we set it once and never touch it.
     glContext.setContinuousRepainting(false);
-    // Half-rate vsync: 30 fps instead of 60. The blob is a raymarched
-    // shader; full vsync × N visible instances burns more GPU than the
-    // visualiser is worth. 30 fps is the de-facto standard rate for
-    // plugin visualisers (Serum, Vital, Phase Plant) and the animation
-    // looks identical to anyone not staring at a frame counter.
+    // 30 fps vsync cap when we do render — de-facto standard rate for
+    // plugin visualisers (Serum, Vital, Phase Plant), visually identical
+    // to 60 for an audio-reactive blob.
     glContext.setSwapInterval(2);
     glContext.setComponentPaintingEnabled(false);
     glContext.attachTo(*this);
     setInterceptsMouseClicks(false, false);
+
+    // Bootstrap the heartbeat to "now" so we render during the first
+    // ~500 ms while we wait for ParasiteEditor::paint() to fire. After
+    // that the editor's 5 Hz timer pings repaint() and JUCE only actually
+    // calls paint() when the editor is on screen — so the heartbeat
+    // stays fresh exactly when this instance is visible to the user.
+    lastHostPaintMs.store(juce::Time::getMillisecondCounter(),
+                          std::memory_order_relaxed);
+    startTimerHz(30);
 }
 
 FlubberVisualizer::~FlubberVisualizer()
 {
+    stopTimer();
     glContext.detach();
 }
 
@@ -566,6 +576,14 @@ void FlubberVisualizer::paint(juce::Graphics& g)
     // Fill with current bg colour so mode switches look instant
     // (the GL thread overwrites this on its next frame)
     g.fillAll(juce::Colour(ParasiteLookAndFeel::kBgColor));
+}
+
+void FlubberVisualizer::timerCallback()
+{
+    const auto now  = juce::Time::getMillisecondCounter();
+    const auto last = lastHostPaintMs.load(std::memory_order_relaxed);
+    if (now - last <= kPaintFreshnessMs)
+        glContext.triggerRepaint();
 }
 
 bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
