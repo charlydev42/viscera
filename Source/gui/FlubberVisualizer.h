@@ -54,6 +54,13 @@ private:
 
     std::atomic<juce::uint32> lastHostPaintMs { 0 };
     static constexpr juce::uint32 kPaintFreshnessMs = 500;
+    // After this long without a paint heartbeat we fully detach the GL
+    // context, freeing the shader programs / textures / VBO / render
+    // thread / CALayer composite. Re-attach on the next paint pings JUCE
+    // to recompile shaders (~20–50 ms first frame). The hysteresis is
+    // generous so quick track switches don't thrash detach/attach.
+    static constexpr juce::uint32 kDetachAfterMs    = 5000;
+    bool glAttached = false;
 
 private:
     bb::AudioVisualBuffer& audioL;

@@ -278,7 +278,7 @@ uniform sampler2D iChannel0;
 uniform vec3 uBgColor;
 out vec4 fragColorOut;
 
-#define MAX_STEPS 128
+#define MAX_STEPS 96
 #define MAX_DIST 30.0
 #define SURF_DIST 0.0005
 #define PI 3.14159265
@@ -517,7 +517,9 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
     ro.x+=noise3D(vec3(iTime*2.0))*sh;ro.y+=noise3D(vec3(iTime*2.0+100.0))*sh;ro.z+=noise3D(vec3(iTime*2.0+200.0))*sh*0.5;
     mat3 cam=camera(ro,vec3(0));
 
-    // 2x2 supersampling for smooth blob silhouette
+    // 2x2 supersampling — dark mode has higher silhouette contrast than
+    // light, so single-sample shows visible aliasing on the blob edge.
+    // Light mode shader runs single-sample without issue (softer contrast).
     vec3 col = traceSample(ro, cam, bg, fragCoord+vec2(-0.25,-0.25), loud)
              + traceSample(ro, cam, bg, fragCoord+vec2( 0.25,-0.25), loud)
              + traceSample(ro, cam, bg, fragCoord+vec2(-0.25, 0.25), loud)
@@ -542,17 +544,15 @@ FlubberVisualizer::FlubberVisualizer(bb::AudioVisualBuffer& bufL,
 
     glContext.setOpenGLVersionRequired(juce::OpenGLContext::openGL3_2);
     glContext.setRenderer(this);
-    // Manual repaint mode for the whole lifetime — the timer below decides
-    // when to triggerRepaint() based on the JUCE paint heartbeat. Toggling
-    // setContinuousRepainting at runtime races with the GL thread and was
-    // the source of the earlier flicker; we set it once and never touch it.
+    // Manual repaint mode for the GL context's whole lifetime — the timer
+    // decides when to triggerRepaint() based on the JUCE paint heartbeat.
+    // Toggling setContinuousRepainting at runtime races with the GL thread
+    // and was the source of an earlier flicker.
     glContext.setContinuousRepainting(false);
-    // 30 fps vsync cap when we do render — de-facto standard rate for
-    // plugin visualisers (Serum, Vital, Phase Plant), visually identical
-    // to 60 for an audio-reactive blob.
-    glContext.setSwapInterval(2);
+    glContext.setSwapInterval(2); // 30 fps vsync cap
     glContext.setComponentPaintingEnabled(false);
     glContext.attachTo(*this);
+    glAttached = true;
     setInterceptsMouseClicks(false, false);
 
     // Bootstrap the heartbeat to "now" so we render during the first
@@ -568,7 +568,8 @@ FlubberVisualizer::FlubberVisualizer(bb::AudioVisualBuffer& bufL,
 FlubberVisualizer::~FlubberVisualizer()
 {
     stopTimer();
-    glContext.detach();
+    if (glAttached)
+        glContext.detach();
 }
 
 void FlubberVisualizer::paint(juce::Graphics& g)
@@ -580,10 +581,35 @@ void FlubberVisualizer::paint(juce::Graphics& g)
 
 void FlubberVisualizer::timerCallback()
 {
-    const auto now  = juce::Time::getMillisecondCounter();
-    const auto last = lastHostPaintMs.load(std::memory_order_relaxed);
-    if (now - last <= kPaintFreshnessMs)
+    const auto now     = juce::Time::getMillisecondCounter();
+    const auto last    = lastHostPaintMs.load(std::memory_order_relaxed);
+    const auto staleMs = now - last;
+
+    if (staleMs <= kPaintFreshnessMs)
+    {
+        // Visible: ensure the GL context is attached, then drive a frame.
+        // Re-attach is only paid once on a transition from hidden→visible
+        // (~20–50 ms shader recompile on the GL thread) — for the common
+        // case of an editor that's been on screen the whole time, the
+        // attached check is a single bool read.
+        if (! glAttached)
+        {
+            glContext.attachTo(*this);
+            glAttached = true;
+        }
         glContext.triggerRepaint();
+    }
+    else if (glAttached && staleMs > kDetachAfterMs)
+    {
+        // Hidden long enough that the cost of keeping the context warm
+        // (CALayer composite, shaders + textures in VRAM, idle render
+        // thread) is no longer worth the fast resume. Detach fully —
+        // openGLContextClosing handles the resource teardown and
+        // newOpenGLContextCreated re-creates everything on the next
+        // attach. paint() keeps painting the bg colour in the meantime.
+        glContext.detach();
+        glAttached = false;
+    }
 }
 
 bool FlubberVisualizer::compileShader(ShaderSet& ss, const char* fragSrc)
